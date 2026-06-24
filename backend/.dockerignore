@@ -1,0 +1,8 @@
+.air.toml
+.env
+.env.*
+!.env.example
+.git
+tmp/
+coverage/
+*.test

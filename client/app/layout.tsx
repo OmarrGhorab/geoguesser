@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GeoGuessr",
-  description: "Guess the location shown on the map. A minimal geography guessing game.",
+  title: "GeoGuess",
+  description: "A free-first geography guessing game.",
 };
 
 export default function RootLayout({
@@ -23,12 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      {/* Immersive GeoGuessr layout: fixed, non-scrolling dark canvas so the
-          Street View panorama can fill the viewport behind the overlays. */}
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="h-screen w-screen overflow-hidden bg-zinc-900 text-white">
         {children}
       </body>

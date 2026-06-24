@@ -2,10 +2,14 @@
   "name": "geoguess-workspace",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "dev": "npm --prefix client run dev",
-    "build": "npm --prefix client run build",
-    "start": "npm --prefix client run start",
-    "lint": "npm --prefix client run lint"
+    "dev": "pnpm --dir client dev",
+    "build": "pnpm --dir client build",
+    "start": "pnpm --dir client start",
+    "lint": "pnpm --dir client lint",
+    "typecheck": "pnpm --dir client typecheck",
+    "backend:run": "cd backend && go run ./cmd/api",
+    "backend:test": "cd backend && go test ./..."
   }
 }
