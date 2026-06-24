@@ -1,0 +1,13 @@
+{
+  "files.exclude": {
+    "client/.next": true,
+    "client/node_modules": true
+  },
+  "search.exclude": {
+    "client/.next": true,
+    "client/node_modules": true
+  },
+  "git.ignoredRepositories": [
+    "client/node_modules"
+  ]
+}
