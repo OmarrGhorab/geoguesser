@@ -1,0 +1,36 @@
+<svg width="720" height="480" viewBox="0 0 720 480" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder pin pattern</title>
+  <desc id="desc">A repeating pattern of map pins, terrain curves, and route dots.</desc>
+  <rect width="720" height="480" fill="#F8FAFC"/>
+  <g opacity=".16" stroke="#0F172A" stroke-width="2">
+    <path d="M0 80H720"/>
+    <path d="M0 160H720"/>
+    <path d="M0 240H720"/>
+    <path d="M0 320H720"/>
+    <path d="M0 400H720"/>
+    <path d="M80 0V480"/>
+    <path d="M160 0V480"/>
+    <path d="M240 0V480"/>
+    <path d="M320 0V480"/>
+    <path d="M400 0V480"/>
+    <path d="M480 0V480"/>
+    <path d="M560 0V480"/>
+    <path d="M640 0V480"/>
+  </g>
+  <path d="M47 368C135 298 211 280 276 315C369 365 417 232 503 259C566 279 607 329 684 292" stroke="#0F766E" stroke-width="18" stroke-linecap="round" opacity=".22"/>
+  <path d="M33 155C106 100 176 92 242 132C315 176 388 168 461 109C529 55 599 48 671 88" stroke="#0EA5E9" stroke-width="16" stroke-linecap="round" opacity=".2"/>
+  <g fill="#F97316">
+    <path d="M160 96C181.539 96 199 113.461 199 135C199 164 160 198 160 198C160 198 121 164 121 135C121 113.461 138.461 96 160 96Z"/>
+    <path d="M530 307C551.539 307 569 324.461 569 346C569 375 530 409 530 409C530 409 491 375 491 346C491 324.461 508.461 307 530 307Z"/>
+  </g>
+  <g fill="#0F766E">
+    <path d="M374 186C395.539 186 413 203.461 413 225C413 254 374 288 374 288C374 288 335 254 335 225C335 203.461 352.461 186 374 186Z"/>
+    <path d="M650 120C671.539 120 689 137.461 689 159C689 188 650 222 650 222C650 222 611 188 611 159C611 137.461 628.461 120 650 120Z"/>
+  </g>
+  <g fill="#F8FAFC">
+    <circle cx="160" cy="135" r="15"/>
+    <circle cx="374" cy="225" r="15"/>
+    <circle cx="530" cy="346" r="15"/>
+    <circle cx="650" cy="159" r="15"/>
+  </g>
+</svg>

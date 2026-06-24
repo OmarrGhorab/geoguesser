@@ -1,0 +1,57 @@
+<svg width="1920" height="980" viewBox="0 0 1920 980" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder learning hero</title>
+  <desc id="desc">A bright teal learning scene with a tiny explorer, clue icons, and city silhouettes.</desc>
+  <rect width="1920" height="980" fill="#0D9488"/>
+  <path d="M0 730C178 668 327 653 447 684C604 724 713 817 893 788C1033 766 1129 682 1297 663C1496 641 1669 718 1920 702V980H0V730Z" fill="#0F766E" opacity=".42"/>
+  <path d="M183 493H289L323 693H127L183 493Z" fill="#0F766E" opacity=".22"/>
+  <path d="M364 536H514L581 694H304L364 536Z" fill="#0F766E" opacity=".18"/>
+  <path d="M769 506H948L1059 694H704L769 506Z" fill="#0F766E" opacity=".2"/>
+  <path d="M1102 474H1274L1319 694H1034L1102 474Z" fill="#0F766E" opacity=".18"/>
+  <g filter="url(#soft)">
+    <ellipse cx="671" cy="680" rx="106" ry="19" fill="#064E3B" opacity=".36"/>
+    <circle cx="670" cy="423" r="70" fill="#0F172A"/>
+    <rect x="604" y="476" width="125" height="177" rx="54" fill="#7C2D12"/>
+    <path d="M620 503C673 539 708 539 735 505" stroke="#FED7AA" stroke-width="24" stroke-linecap="round"/>
+    <rect x="615" y="641" width="36" height="89" rx="18" fill="#0F172A"/>
+    <rect x="684" y="641" width="36" height="89" rx="18" fill="#0F172A"/>
+    <path d="M728 481L798 450L821 551L733 562L728 481Z" fill="#F8FAFC"/>
+    <path d="M756 489L801 477M761 513L809 501M767 538L797 530" stroke="#0F766E" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g stroke="#E0F2FE" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" opacity=".9">
+    <path d="M742 259C742 219.788 773.788 188 813 188C852.212 188 884 219.788 884 259C884 291 862 313 843 324L840 349H786L783 324C764 313 742 291 742 259Z"/>
+    <path d="M793 374H834"/>
+    <path d="M802 399H825"/>
+    <path d="M815 222C795 241 790 266 800 298"/>
+    <path d="M815 222C835 241 840 266 830 298"/>
+    <path d="M714 200L694 181"/>
+    <path d="M913 200L933 181"/>
+    <path d="M689 271H661"/>
+    <path d="M938 271H966"/>
+    <path d="M720 341L700 360"/>
+    <path d="M907 341L927 360"/>
+  </g>
+  <g stroke="#064E3B" stroke-width="6" opacity=".55">
+    <path d="M459 313C487 290 515 291 543 316C567 338 595 339 626 319"/>
+    <path d="M892 165C940 116 992 113 1048 156C1076 177 1103 186 1130 183"/>
+    <path d="M1108 559C1140 521 1185 519 1243 554C1210 576 1165 580 1108 559Z"/>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="1216" y="304" width="356" height="356" rx="30" fill="#19163D"/>
+    <rect x="1216" y="304" width="356" height="356" rx="30" stroke="#5B50A6" stroke-width="2"/>
+    <text x="1394" y="375" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="28" font-weight="850" font-style="italic">Sign up to play</text>
+    <rect x="1246" y="416" width="296" height="38" rx="19" fill="#F8FAFC"/>
+    <rect x="1246" y="466" width="296" height="38" rx="19" fill="#0B1020"/>
+    <rect x="1246" y="516" width="296" height="38" rx="19" fill="#2563EB"/>
+    <rect x="1246" y="566" width="296" height="38" rx="19" fill="#211D4D" stroke="#6B63A8" stroke-width="2"/>
+  </g>
+  <text x="352" y="704" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="78" font-weight="950" font-style="italic">Learn the clues</text>
+  <text x="356" y="758" fill="#CCFBF1" font-family="Inter, ui-sans-serif, system-ui" font-size="23" font-weight="750">Train your eye for road signs, skylines, languages, and landscapes.</text>
+  <defs>
+    <filter id="soft" x="510" y="336" width="340" height="414" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="26" stdDeviation="24" flood-color="#064E3B" flood-opacity=".3"/>
+    </filter>
+    <filter id="cardShadow" x="1166" y="264" width="456" height="456" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+</svg>

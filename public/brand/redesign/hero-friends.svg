@@ -1,0 +1,51 @@
+<svg width="1920" height="980" viewBox="0 0 1920 980" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder friends hero</title>
+  <desc id="desc">A playful blue scene showing two teammates fist bumping over a shared map route.</desc>
+  <rect width="1920" height="980" fill="#155E75"/>
+  <rect width="1920" height="980" fill="url(#bg)"/>
+  <g opacity=".18" stroke="#BAE6FD" stroke-width="8" stroke-linecap="round">
+    <path d="M362 607C448 504 553 471 676 508C792 544 858 631 1003 605C1124 583 1212 512 1268 392"/>
+    <path d="M461 295L420 329L471 350L430 384"/>
+    <path d="M852 266L917 233L899 304L964 272"/>
+  </g>
+  <ellipse cx="646" cy="663" rx="270" ry="38" fill="#082F49" opacity=".38"/>
+  <g filter="url(#people)">
+    <rect x="502" y="356" width="112" height="233" rx="54" fill="#172554"/>
+    <circle cx="556" cy="303" r="72" fill="#111827"/>
+    <path d="M490 354H622L610 505H502L490 354Z" fill="#1E40AF"/>
+    <rect x="515" y="573" width="37" height="98" rx="18.5" fill="#111827"/>
+    <rect x="577" y="573" width="37" height="98" rx="18.5" fill="#111827"/>
+    <path d="M613 430C661 461 690 459 717 428" stroke="#FED7AA" stroke-width="25" stroke-linecap="round"/>
+    <rect x="739" y="348" width="118" height="237" rx="58" fill="#0F172A"/>
+    <circle cx="798" cy="292" r="75" fill="#FDE68A"/>
+    <path d="M724 351H871L849 514H740L724 351Z" fill="#1E3A8A"/>
+    <rect x="748" y="572" width="39" height="101" rx="19.5" fill="#111827"/>
+    <rect x="817" y="572" width="39" height="101" rx="19.5" fill="#111827"/>
+    <path d="M739 429C693 461 661 461 630 430" stroke="#FED7AA" stroke-width="25" stroke-linecap="round"/>
+    <path d="M665 400L642 357L693 374L744 357L721 400L744 443L693 426L642 443L665 400Z" fill="#FFFFFF"/>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="1216" y="306" width="356" height="356" rx="30" fill="#19163D"/>
+    <rect x="1216" y="306" width="356" height="356" rx="30" stroke="#5B50A6" stroke-width="2"/>
+    <text x="1394" y="377" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="28" font-weight="850" font-style="italic">Sign up to play</text>
+    <rect x="1246" y="418" width="296" height="38" rx="19" fill="#F8FAFC"/>
+    <rect x="1246" y="468" width="296" height="38" rx="19" fill="#0B1020"/>
+    <rect x="1246" y="518" width="296" height="38" rx="19" fill="#2563EB"/>
+    <rect x="1246" y="568" width="296" height="38" rx="19" fill="#211D4D" stroke="#6B63A8" stroke-width="2"/>
+  </g>
+  <text x="352" y="712" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="78" font-weight="950" font-style="italic">Play with friends</text>
+  <text x="356" y="766" fill="#DBEAFE" font-family="Inter, ui-sans-serif, system-ui" font-size="23" font-weight="750">Create private rooms, race rounds, and compare your map instincts.</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset=".52" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#1E3A8A"/>
+    </linearGradient>
+    <filter id="people" x="445" y="200" width="484" height="505" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#082F49" flood-opacity=".35"/>
+    </filter>
+    <filter id="cardShadow" x="1166" y="266" width="456" height="456" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+</svg>

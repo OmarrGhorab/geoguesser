@@ -1,0 +1,56 @@
+<svg width="1920" height="980" viewBox="0 0 1920 980" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder explore hero</title>
+  <desc id="desc">A cinematic globe and map pin landing page hero for a geography guessing game.</desc>
+  <rect width="1920" height="980" fill="#111827"/>
+  <rect width="1920" height="980" fill="url(#sky)"/>
+  <circle cx="623" cy="588" r="505" fill="url(#globe)" opacity=".82"/>
+  <path d="M158 693C362 563 534 519 674 560C860 614 961 769 1185 724C1363 689 1463 570 1768 592" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" stroke-dasharray="4 34" opacity=".6"/>
+  <path d="M249 361C438 254 640 229 854 286C1065 342 1256 319 1428 219C1566 139 1701 118 1833 155" stroke="#F97316" stroke-width="9" stroke-linecap="round" stroke-dasharray="2 32" opacity=".55"/>
+  <g opacity=".23" stroke="#E0F2FE" stroke-width="3">
+    <path d="M220 462C409 526 592 543 770 511C943 480 1095 408 1226 295"/>
+    <path d="M217 623C447 692 669 702 883 653C1074 609 1220 521 1322 388"/>
+    <path d="M478 119C392 254 353 410 362 586C370 740 416 867 500 967"/>
+    <path d="M714 97C629 265 589 432 594 598C599 751 645 878 732 979"/>
+    <path d="M947 177C887 337 862 485 871 621C882 774 934 892 1026 974"/>
+  </g>
+  <g filter="url(#pinShadow)">
+    <path d="M488 146C578.575 146 652 219.425 652 310C652 431 488 564 488 564C488 564 324 431 324 310C324 219.425 397.425 146 488 146Z" fill="#F43F5E"/>
+    <circle cx="488" cy="307" r="65" fill="#FFF7ED"/>
+    <circle cx="488" cy="307" r="24" fill="#F97316"/>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="1216" y="286" width="356" height="378" rx="30" fill="#19163D"/>
+    <rect x="1216" y="286" width="356" height="378" rx="30" stroke="#5B50A6" stroke-width="2"/>
+    <text x="1394" y="357" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="28" font-weight="850" font-style="italic">Sign up to play</text>
+    <rect x="1246" y="398" width="296" height="38" rx="19" fill="#F8FAFC"/>
+    <rect x="1246" y="448" width="296" height="38" rx="19" fill="#0B1020"/>
+    <rect x="1246" y="498" width="296" height="38" rx="19" fill="#2563EB"/>
+    <rect x="1246" y="548" width="296" height="38" rx="19" fill="#211D4D" stroke="#6B63A8" stroke-width="2"/>
+    <text x="1394" y="423" text-anchor="middle" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="800">Continue with Google</text>
+    <text x="1394" y="473" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="800">Continue with Apple</text>
+    <text x="1394" y="523" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="800">Continue with Facebook</text>
+    <text x="1394" y="573" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="800">Continue with Email</text>
+    <path d="M1248 614H1359M1429 614H1540" stroke="#4B4777" stroke-width="2" stroke-dasharray="4 5"/>
+    <text x="1394" y="620" text-anchor="middle" fill="#A7A3C8" font-family="Inter, ui-sans-serif, system-ui" font-size="12" font-weight="800">OR</text>
+  </g>
+  <text x="352" y="674" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="82" font-weight="950" font-style="italic">Explore the world</text>
+  <text x="357" y="728" fill="#D1FAE5" font-family="Inter, ui-sans-serif, system-ui" font-size="23" font-weight="750">Drop into unknown streets, read the clues, and pin the place.</text>
+  <defs>
+    <radialGradient id="globe" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(486 463) rotate(49) scale(622)">
+      <stop stop-color="#2DD4BF"/>
+      <stop offset=".45" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </radialGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="1920" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#312E81"/>
+      <stop offset=".45" stop-color="#1E1B4B"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <filter id="pinShadow" x="244" y="96" width="488" height="538" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="32" stdDeviation="30" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+    <filter id="cardShadow" x="1166" y="246" width="456" height="478" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+</svg>

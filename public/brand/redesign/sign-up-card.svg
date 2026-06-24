@@ -1,0 +1,17 @@
+<svg width="420" height="430" viewBox="0 0 420 430" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder sign up card</title>
+  <desc id="desc">A standalone dark sign-up card UI asset.</desc>
+  <rect x="21" y="21" width="378" height="388" rx="32" fill="#19163D"/>
+  <rect x="21" y="21" width="378" height="388" rx="32" stroke="#5B50A6" stroke-width="2"/>
+  <text x="210" y="92" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="30" font-weight="850" font-style="italic">Sign up to play</text>
+  <rect x="56" y="136" width="308" height="42" rx="21" fill="#F8FAFC"/>
+  <rect x="56" y="192" width="308" height="42" rx="21" fill="#0B1020"/>
+  <rect x="56" y="248" width="308" height="42" rx="21" fill="#2563EB"/>
+  <rect x="56" y="304" width="308" height="42" rx="21" fill="#211D4D" stroke="#6B63A8" stroke-width="2"/>
+  <text x="210" y="163" text-anchor="middle" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="800">Continue with Google</text>
+  <text x="210" y="219" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="800">Continue with Apple</text>
+  <text x="210" y="275" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="800">Continue with Facebook</text>
+  <text x="210" y="331" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="800">Continue with Email</text>
+  <path d="M58 374H178M242 374H362" stroke="#4B4777" stroke-width="2" stroke-dasharray="4 5"/>
+  <text x="210" y="380" text-anchor="middle" fill="#A7A3C8" font-family="Inter, ui-sans-serif, system-ui" font-size="12" font-weight="800">OR</text>
+</svg>

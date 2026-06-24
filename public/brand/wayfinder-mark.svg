@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder compass mark</title>
+  <desc id="desc">A map pin, compass, and globe grid symbol for a geography guessing game.</desc>
+  <rect width="512" height="512" rx="112" fill="#0F172A"/>
+  <circle cx="256" cy="246" r="155" fill="#E0F2FE"/>
+  <path d="M256 74C336.081 74 401 138.919 401 219C401 328 256 440 256 440C256 440 111 328 111 219C111 138.919 175.919 74 256 74Z" fill="#F97316"/>
+  <circle cx="256" cy="220" r="79" fill="#F8FAFC"/>
+  <path d="M177 230C210.7 196.4 260.3 176.2 335 181C313.5 218.9 282.7 249.6 239 274C225.5 254.2 206.2 239.7 177 230Z" fill="#0F766E"/>
+  <path d="M256 106C229.333 154.571 216 202.905 216 251C216 299.095 229.333 347.429 256 396" stroke="#F8FAFC" stroke-width="17" stroke-linecap="round" opacity=".95"/>
+  <path d="M256 106C282.667 154.571 296 202.905 296 251C296 299.095 282.667 347.429 256 396" stroke="#F8FAFC" stroke-width="17" stroke-linecap="round" opacity=".95"/>
+  <path d="M126 207C161.5 189.667 204.833 181 256 181C307.167 181 350.5 189.667 386 207" stroke="#F8FAFC" stroke-width="17" stroke-linecap="round" opacity=".95"/>
+  <path d="M151 337C181.2 319.667 216.2 311 256 311C295.8 311 330.8 319.667 361 337" stroke="#F8FAFC" stroke-width="17" stroke-linecap="round" opacity=".95"/>
+</svg>

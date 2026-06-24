@@ -1,0 +1,29 @@
+<svg width="960" height="720" viewBox="0 0 960 720" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder guessing card</title>
+  <desc id="desc">A stylized game preview with a street view frame and guess map.</desc>
+  <rect width="960" height="720" rx="36" fill="#0F172A"/>
+  <rect x="44" y="44" width="872" height="632" rx="28" fill="#F8FAFC"/>
+  <rect x="76" y="76" width="808" height="378" rx="22" fill="#BAE6FD"/>
+  <path d="M76 323C174 264 269 256 361 300C455 346 550 352 647 295C736 243 815 246 884 304V454H76V323Z" fill="#A7F3D0"/>
+  <path d="M76 378C206 323 337 315 470 355C590 391 726 379 884 300V454H76V378Z" fill="#34D399" opacity=".65"/>
+  <rect x="108" y="108" width="160" height="32" rx="16" fill="#F8FAFC" opacity=".86"/>
+  <rect x="108" y="154" width="246" height="18" rx="9" fill="#F8FAFC" opacity=".65"/>
+  <rect x="587" y="242" width="252" height="176" rx="22" fill="#F8FAFC"/>
+  <path d="M620 368C662 322 712 298 770 294C788 293 806 295 825 301" stroke="#0F766E" stroke-width="15" stroke-linecap="round"/>
+  <path d="M624 321C671 345 718 352 766 341C789 336 810 326 830 313" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="678" cy="334" r="13" fill="#F97316"/>
+  <path d="M783 273C806.196 273 825 291.804 825 315C825 346 783 382 783 382C783 382 741 346 741 315C741 291.804 759.804 273 783 273Z" fill="#0EA5E9"/>
+  <circle cx="783" cy="315" r="16" fill="#F8FAFC"/>
+  <rect x="76" y="490" width="252" height="130" rx="22" fill="#E2E8F0"/>
+  <rect x="110" y="524" width="112" height="18" rx="9" fill="#0F172A" opacity=".75"/>
+  <rect x="110" y="558" width="184" height="14" rx="7" fill="#64748B"/>
+  <rect x="110" y="589" width="146" height="14" rx="7" fill="#64748B"/>
+  <rect x="354" y="490" width="252" height="130" rx="22" fill="#CCFBF1"/>
+  <circle cx="410" cy="555" r="25" fill="#0F766E"/>
+  <rect x="456" y="527" width="100" height="17" rx="8.5" fill="#0F172A" opacity=".75"/>
+  <rect x="456" y="560" width="116" height="14" rx="7" fill="#475569"/>
+  <rect x="632" y="490" width="252" height="130" rx="22" fill="#FED7AA"/>
+  <circle cx="688" cy="555" r="25" fill="#F97316"/>
+  <rect x="734" y="527" width="100" height="17" rx="8.5" fill="#0F172A" opacity=".75"/>
+  <rect x="734" y="560" width="116" height="14" rx="7" fill="#475569"/>
+</svg>

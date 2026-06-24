@@ -1,0 +1,39 @@
+<svg width="1920" height="980" viewBox="0 0 1920 980" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder versus hero</title>
+  <desc id="desc">A dark esports-style versus scene for competitive geo guessing.</desc>
+  <rect width="1920" height="980" fill="#080B16"/>
+  <path d="M122 865C315 621 449 456 524 371C633 247 774 231 928 321C1040 386 1163 445 1298 497" stroke="#7C3AED" stroke-width="190" stroke-linecap="round" opacity=".18"/>
+  <path d="M276 761C415 614 535 516 636 467C766 403 878 410 972 488C1081 578 1193 621 1307 618" stroke="#F43F5E" stroke-width="112" stroke-linecap="round" opacity=".2"/>
+  <g opacity=".9">
+    <path d="M470 320L393 376L496 403L421 462" stroke="#F8FAFC" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M873 290L963 234L929 347L1020 301" stroke="#A78BFA" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g filter="url(#glow)">
+    <rect x="392" y="318" width="184" height="218" rx="42" fill="#19163D" stroke="#A78BFA" stroke-width="5"/>
+    <path d="M484 276C532.601 276 572 315.399 572 364C572 429 484 497 484 497C484 497 396 429 396 364C396 315.399 435.399 276 484 276Z" fill="#F43F5E"/>
+    <circle cx="484" cy="363" r="33" fill="#FFF7ED"/>
+    <text x="482" y="597" text-anchor="middle" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui" font-size="72" font-weight="950">VS</text>
+    <rect x="748" y="318" width="184" height="218" rx="42" fill="#19163D" stroke="#38BDF8" stroke-width="5"/>
+    <path d="M840 276C888.601 276 928 315.399 928 364C928 429 840 497 840 497C840 497 752 429 752 364C752 315.399 791.399 276 840 276Z" fill="#0EA5E9"/>
+    <circle cx="840" cy="363" r="33" fill="#EFF6FF"/>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="1216" y="306" width="356" height="356" rx="30" fill="#19163D"/>
+    <rect x="1216" y="306" width="356" height="356" rx="30" stroke="#5B50A6" stroke-width="2"/>
+    <text x="1394" y="377" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="28" font-weight="850" font-style="italic">Sign up to play</text>
+    <rect x="1246" y="418" width="296" height="38" rx="19" fill="#F8FAFC"/>
+    <rect x="1246" y="468" width="296" height="38" rx="19" fill="#0B1020"/>
+    <rect x="1246" y="518" width="296" height="38" rx="19" fill="#2563EB"/>
+    <rect x="1246" y="568" width="296" height="38" rx="19" fill="#211D4D" stroke="#6B63A8" stroke-width="2"/>
+  </g>
+  <text x="352" y="712" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="78" font-weight="950" font-style="italic">Compete head to head</text>
+  <text x="356" y="766" fill="#E9D5FF" font-family="Inter, ui-sans-serif, system-ui" font-size="23" font-weight="750">Win duels with faster reads, smarter guesses, and cleaner routes.</text>
+  <defs>
+    <filter id="glow" x="344" y="228" width="628" height="412" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0" stdDeviation="28" flood-color="#8B5CF6" flood-opacity=".45"/>
+    </filter>
+    <filter id="cardShadow" x="1166" y="266" width="456" height="456" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+</svg>

@@ -1,0 +1,40 @@
+<svg width="1920" height="980" viewBox="0 0 1920 980" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder championship hero</title>
+  <desc id="desc">A championship badge and spotlight section for a geography game event.</desc>
+  <rect width="1920" height="980" fill="#110F2E"/>
+  <path d="M255 0H742L512 980H0L255 0Z" fill="#312E81" opacity=".32"/>
+  <path d="M1030 0H1394L1138 980H821L1030 0Z" fill="#7C3AED" opacity=".16"/>
+  <g filter="url(#badgeShadow)">
+    <path d="M642 149L807 245V430C807 571 642 674 642 674C642 674 477 571 477 430V245L642 149Z" fill="#19163D" stroke="url(#badgeStroke)" stroke-width="12"/>
+    <path d="M642 194C694.467 194 737 236.533 737 289C737 359 642 438 642 438C642 438 547 359 547 289C547 236.533 589.533 194 642 194Z" fill="#F43F5E"/>
+    <circle cx="642" cy="289" r="36" fill="#FFF7ED"/>
+    <text x="642" y="532" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="120" font-weight="950" font-style="italic">26</text>
+    <path d="M577 579C612 594 655 599 707 579" stroke="#38BDF8" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="1216" y="306" width="356" height="356" rx="30" fill="#19163D"/>
+    <rect x="1216" y="306" width="356" height="356" rx="30" stroke="#5B50A6" stroke-width="2"/>
+    <text x="1394" y="377" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="28" font-weight="850" font-style="italic">Sign up to play</text>
+    <rect x="1246" y="418" width="296" height="38" rx="19" fill="#F8FAFC"/>
+    <rect x="1246" y="468" width="296" height="38" rx="19" fill="#0B1020"/>
+    <rect x="1246" y="518" width="296" height="38" rx="19" fill="#2563EB"/>
+    <rect x="1246" y="568" width="296" height="38" rx="19" fill="#211D4D" stroke="#6B63A8" stroke-width="2"/>
+  </g>
+  <text x="352" y="724" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="74" font-weight="950" font-style="italic">World Championship 2026</text>
+  <text x="356" y="778" fill="#DDD6FE" font-family="Inter, ui-sans-serif, system-ui" font-size="23" font-weight="750">Follow the best map readers as they race for the global title.</text>
+  <rect x="354" y="820" width="142" height="46" rx="23" fill="transparent" stroke="#A78BFA" stroke-width="2"/>
+  <text x="425" y="850" text-anchor="middle" fill="#FFFFFF" font-family="Inter, ui-sans-serif, system-ui" font-size="15" font-weight="900">READ MORE</text>
+  <defs>
+    <linearGradient id="badgeStroke" x1="477" y1="149" x2="807" y2="674" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset=".48" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <filter id="badgeShadow" x="415" y="103" width="454" height="643" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#000000" flood-opacity=".38"/>
+    </filter>
+    <filter id="cardShadow" x="1166" y="266" width="456" height="456" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+</svg>

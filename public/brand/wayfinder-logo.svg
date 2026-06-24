@@ -1,0 +1,15 @@
+<svg width="640" height="160" viewBox="0 0 640 160" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Wayfinder logo</title>
+  <desc id="desc">A compass pin over a globe grid with the word Wayfinder.</desc>
+  <rect width="640" height="160" rx="28" fill="#F8FAFC"/>
+  <circle cx="82" cy="80" r="47" fill="#0F766E"/>
+  <path d="M82 31C104.091 31 122 48.9086 122 71C122 101 82 132 82 132C82 132 42 101 42 71C42 48.9086 59.9086 31 82 31Z" fill="#F97316"/>
+  <circle cx="82" cy="72" r="19" fill="#F8FAFC"/>
+  <path d="M62 73.5C70.5 66 83.5 61.2 103 62.5C97.5 71.8 89.7 79.3 78.5 85.5C74.6 80.7 69.7 77 62 73.5Z" fill="#0F766E"/>
+  <path d="M46 107C55.778 101.525 68.0438 98.5 82 98.5C95.9562 98.5 108.222 101.525 118 107" stroke="#F8FAFC" stroke-width="5" stroke-linecap="round"/>
+  <path d="M49 62.5C59.3125 57.1667 70.3125 54.5 82 54.5C93.6875 54.5 104.688 57.1667 115 62.5" stroke="#F8FAFC" stroke-width="5" stroke-linecap="round"/>
+  <path d="M82 35C75.3333 47.7593 72 60.9259 72 74.5C72 88.0741 75.3333 101.241 82 114" stroke="#F8FAFC" stroke-width="5" stroke-linecap="round"/>
+  <path d="M82 35C88.6667 47.7593 92 60.9259 92 74.5C92 88.0741 88.6667 101.241 82 114" stroke="#F8FAFC" stroke-width="5" stroke-linecap="round"/>
+  <text x="154" y="91" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="54" font-weight="800" letter-spacing="0">Wayfinder</text>
+  <text x="157" y="121" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600" letter-spacing="3">A GEO GUESSING GAME</text>
+</svg>
