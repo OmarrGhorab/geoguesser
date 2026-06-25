@@ -64,3 +64,26 @@ func TestValidateTimeouts(t *testing.T) {
 		t.Fatal("expected validation error for non-positive timeout")
 	}
 }
+
+func TestValidateProductionRequiresMetricsToken(t *testing.T) {
+	cfg := config.Config{
+		AppEnv:        "production",
+		Version:       "0.0.0",
+		HTTPAddr:      ":8080",
+		DatabaseURL:   "postgres://localhost/db",
+		RedisURL:      "redis://localhost:6379/0",
+		AllowedOrigin: "https://example.com",
+		ReadTimeout:   10,
+		WriteTimeout:  10,
+		IdleTimeout:   10,
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for missing production metrics token")
+	}
+
+	cfg.MetricsAuthToken = "secret-token"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid config with metrics token, got %v", err)
+	}
+}

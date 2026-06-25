@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
 )
@@ -16,13 +17,15 @@ func TestMetricsMiddleware(t *testing.T) {
 	}
 
 	mw := middleware.Metrics(metrics)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r := chi.NewRouter()
+	r.Use(mw)
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
-	}))
+	})
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
-	handler.ServeHTTP(w, r)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusTeapot {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusTeapot)

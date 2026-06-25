@@ -34,12 +34,12 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 	router.Route("/api/v1", func(api chi.Router) {
 		api.Get("/health", healthHandler.Health)
 		api.Get("/ready", healthHandler.Ready)
-		api.Get("/metrics", healthHandler.Metrics)
+		api.With(appmiddleware.MetricsAuth(cfg.MetricsAuthToken)).Get("/metrics", healthHandler.Metrics)
 	})
 
 	router.Get("/health", healthHandler.Health)
 	router.Get("/ready", healthHandler.Ready)
-	router.Get("/metrics", healthHandler.Metrics)
+	router.With(appmiddleware.MetricsAuth(cfg.MetricsAuthToken)).Get("/metrics", healthHandler.Metrics)
 
 	return router
 }

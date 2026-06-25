@@ -90,7 +90,7 @@ func TestDecodeJSON(t *testing.T) {
 			var dst struct {
 				Name string `json:"name"`
 			}
-			err := apphttp.DecodeJSON(r, &dst)
+			err := apphttp.DecodeJSON(httptest.NewRecorder(), r, &dst)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DecodeJSON error = %v, wantErr = %v", err, tt.wantErr)
 			}

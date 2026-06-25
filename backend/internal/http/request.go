@@ -14,15 +14,20 @@ import (
 const DefaultMaxBodyBytes = 1 << 20 // 1 MiB
 
 // DecodeJSON reads and validates a JSON request body into dst. It enforces a
-// maximum body size and returns a stable APIError for malformed input.
-func DecodeJSON(r *http.Request, dst any) error {
-	body := http.MaxBytesReader(nil, r.Body, DefaultMaxBodyBytes)
+// maximum body size and returns stable API errors for malformed or oversized
+// input.
+func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	body := http.MaxBytesReader(w, r.Body, DefaultMaxBodyBytes)
 	defer func() { _ = body.Close() }()
 
 	decoder := json.NewDecoder(body)
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(dst); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return ErrRequestTooLarge.WithCause(err)
+		}
 		return ErrInvalidJSON.WithCause(err)
 	}
 
