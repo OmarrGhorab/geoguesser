@@ -46,19 +46,19 @@ func NewCookieOptions(cfg config.Config) CookieOptions {
 
 // SetAuthCookies writes access and refresh token cookies.
 func SetAuthCookies(w http.ResponseWriter, opts CookieOptions, accessToken, refreshToken string, accessExpiresAt, refreshExpiresAt time.Time) {
-	setCookie(w, opts, AccessTokenCookieName, accessToken, accessExpiresAt, "/")
-	setCookie(w, opts, RefreshTokenCookieName, refreshToken, refreshExpiresAt, "/api/v1/auth/refresh")
+	setSensitiveCookie(w, opts, AccessTokenCookieName, accessToken, accessExpiresAt, "/")
+	setSensitiveCookie(w, opts, RefreshTokenCookieName, refreshToken, refreshExpiresAt, "/api/v1/auth/refresh")
 }
 
 // ClearAuthCookies clears access and refresh token cookies.
 func ClearAuthCookies(w http.ResponseWriter, opts CookieOptions) {
-	clearCookie(w, opts, AccessTokenCookieName, "/")
-	clearCookie(w, opts, RefreshTokenCookieName, "/api/v1/auth/refresh")
+	clearSensitiveCookie(w, opts, AccessTokenCookieName, "/")
+	clearSensitiveCookie(w, opts, RefreshTokenCookieName, "/api/v1/auth/refresh")
 }
 
 // SetCSRFCookie writes the readable CSRF token cookie.
 func (opts CookieOptions) SetCSRFCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
-	setCookie(w, opts, CSRFTokenCookieName, token, expiresAt, "/")
+	setReadableCookie(w, opts, CSRFTokenCookieName, token, expiresAt, "/")
 }
 
 // SetCSRFCookieWithOptions is the standalone version for callers that prefer it.
@@ -68,54 +68,83 @@ func SetCSRFCookie(w http.ResponseWriter, opts CookieOptions, token string, expi
 
 // ClearCSRFCookie clears the CSRF token cookie.
 func ClearCSRFCookie(w http.ResponseWriter, opts CookieOptions) {
-	clearCookie(w, opts, CSRFTokenCookieName, "/")
+	clearReadableCookie(w, opts, CSRFTokenCookieName, "/")
 }
 
 // SetGuestCookie writes the signed guest session cookie.
 func SetGuestCookie(w http.ResponseWriter, opts CookieOptions, token string, expiresAt time.Time) {
-	setCookie(w, opts, GuestSessionCookieName, token, expiresAt, "/")
+	setSensitiveCookie(w, opts, GuestSessionCookieName, token, expiresAt, "/")
 }
 
 // ClearGuestCookie clears the guest session cookie.
 func ClearGuestCookie(w http.ResponseWriter, opts CookieOptions) {
-	clearCookie(w, opts, GuestSessionCookieName, "/")
+	clearSensitiveCookie(w, opts, GuestSessionCookieName, "/")
 }
 
-func setCookie(w http.ResponseWriter, opts CookieOptions, name, value string, expiresAt time.Time, path string) {
-	maxAge := int(time.Until(expiresAt).Seconds())
-	if maxAge < 0 {
-		maxAge = 0
-	}
-	cookie := &http.Cookie{
+func setSensitiveCookie(w http.ResponseWriter, opts CookieOptions, name, value string, expiresAt time.Time, path string) {
+	maxAge := cookieMaxAge(expiresAt)
+	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
 		Path:     path,
 		Domain:   opts.Domain,
 		Expires:  expiresAt,
 		MaxAge:   maxAge,
-		HttpOnly: name != CSRFTokenCookieName,
+		HttpOnly: true,
 		Secure:   opts.Secure,
 		SameSite: opts.SameSite,
-	}
-	if name == CSRFTokenCookieName {
-		cookie.HttpOnly = false
-	}
-	http.SetCookie(w, cookie)
+	})
 }
 
-func clearCookie(w http.ResponseWriter, opts CookieOptions, name, path string) {
-	cookie := &http.Cookie{
+func setReadableCookie(w http.ResponseWriter, opts CookieOptions, name, value string, expiresAt time.Time, path string) {
+	maxAge := cookieMaxAge(expiresAt)
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     path,
+		Domain:   opts.Domain,
+		Expires:  expiresAt,
+		MaxAge:   maxAge,
+		HttpOnly: false,
+		Secure:   opts.Secure,
+		SameSite: opts.SameSite,
+	})
+}
+
+func clearSensitiveCookie(w http.ResponseWriter, opts CookieOptions, name, path string) {
+	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    "",
 		Path:     path,
 		Domain:   opts.Domain,
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
-		HttpOnly: name != CSRFTokenCookieName,
+		HttpOnly: true,
 		Secure:   opts.Secure,
 		SameSite: opts.SameSite,
+	})
+}
+
+func clearReadableCookie(w http.ResponseWriter, opts CookieOptions, name, path string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Path:     path,
+		Domain:   opts.Domain,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: false,
+		Secure:   opts.Secure,
+		SameSite: opts.SameSite,
+	})
+}
+
+func cookieMaxAge(expiresAt time.Time) int {
+	maxAge := int(time.Until(expiresAt).Seconds())
+	if maxAge < 0 {
+		return 0
 	}
-	http.SetCookie(w, cookie)
+	return maxAge
 }
 
 // ReadCookieValue returns the value of the named cookie or an empty string.
