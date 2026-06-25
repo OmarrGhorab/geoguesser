@@ -13,6 +13,8 @@ import (
 
 	"github.com/raven/geoguess/backend/internal/app"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/platform/observability"
 	"github.com/raven/geoguess/backend/internal/platform/postgres"
 	redisplatform "github.com/raven/geoguess/backend/internal/platform/redis"
 )
@@ -28,15 +30,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("failed to load configuration", slog.Any("error", err))
+		slog.Default().Error("failed to load configuration", slog.Any("error", err))
 		os.Exit(1)
 	}
+
+	obs, err := observability.New("geoguess-api", cfg.Version)
+	if err != nil {
+		slog.Default().Error("failed to initialize observability", slog.Any("error", err))
+		os.Exit(1)
+	}
+	logger := obs.Logger
 
 	db, err := postgres.Open(cfg.DatabaseURL)
 	if err != nil {
@@ -55,7 +60,9 @@ func main() {
 		}
 	}()
 
-	server := app.NewServer(cfg, logger, db, redisClient)
+	healthHandler := health.NewHandlerWithObservability(cfg.Version, logger, obs, health.NewDefaultPingers(db, redisClient))
+
+	server := app.NewServer(cfg, logger, obs, healthHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

@@ -29,17 +29,29 @@ jobs:
           go-version: "1.25.x"
           cache-dependency-path: backend/go.sum
 
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
       - name: Download modules
         run: go mod download
 
       - name: Verify formatting
         run: test -z "$(gofmt -l .)"
 
+      - name: Lint
+        run: golangci-lint run
+
       - name: Test
         run: go test ./...
 
       - name: Build
         run: go build ./cmd/api
+
+      - name: Validate OpenAPI contract
+        working-directory: backend
+        run: npx -y @redocly/cli lint ./openapi/openapi.yaml
 
   frontend:
     name: Frontend

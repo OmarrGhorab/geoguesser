@@ -5,14 +5,14 @@ import (
 	"net/http"
 
 	"github.com/raven/geoguess/backend/internal/config"
-	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
+	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/platform/observability"
 )
 
-func NewServer(cfg config.Config, logger *slog.Logger, db *gorm.DB, redisClient *redis.Client) *http.Server {
+func NewServer(cfg config.Config, logger *slog.Logger, obs *observability.Observability, healthHandler *health.Handler) *http.Server {
 	return &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      NewRouter(cfg, logger, db, redisClient),
+		Handler:      NewRouter(cfg, logger, obs, healthHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
