@@ -20,6 +20,7 @@ security: []
 tags:
   - name: Auth
   - name: Profile
+  - name: Uploads
   - name: Maps
   - name: Games
   - name: Rooms
@@ -161,6 +162,183 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionResponse'
+
+  /auth/oauth/{provider}:
+    get:
+      tags: [Auth]
+      summary: Initiate OAuth sign-in
+      description: Redirects the browser to the selected OAuth provider authorization endpoint.
+      operationId: initiateOAuth
+      parameters:
+        - $ref: '#/components/parameters/OAuthProvider'
+      responses:
+        '302':
+          description: Redirect to OAuth provider.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/oauth/{provider}/callback:
+    get:
+      tags: [Auth]
+      summary: OAuth callback
+      description: Completes the OAuth flow, creates or links the account, and sets auth cookies.
+      operationId: oauthCallback
+      parameters:
+        - $ref: '#/components/parameters/OAuthProvider'
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authenticated via OAuth.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset OTP
+      description: Sends a one-time password to the registered email address. Returns success even if the email is not registered to prevent enumeration.
+      operationId: requestPasswordReset
+      security:
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '204':
+          description: OTP request accepted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with OTP
+      description: Validates the OTP and updates the user's password. Invalidates all existing sessions.
+      operationId: resetPassword
+      security:
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '204':
+          description: Password updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: Create upload
+      description: Creates a pending upload and returns a presigned URL for direct upload to R2.
+      operationId: createUpload
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUploadRequest'
+      responses:
+        '201':
+          description: Upload created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /uploads/complete:
+    post:
+      tags: [Uploads]
+      summary: Complete upload
+      description: Verifies the object exists in storage and records the file.
+      operationId: completeUpload
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteUploadRequest'
+      responses:
+        '200':
+          description: Upload completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /files/{fileId}/signed-url:
+    get:
+      tags: [Uploads]
+      summary: Get signed download URL
+      description: Returns a time-limited signed URL to download a private file.
+      operationId: getSignedURL
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/FileId'
+      responses:
+        '200':
+          description: Signed URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedURLResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /profile:
     get:
@@ -970,6 +1148,19 @@ components:
       schema:
         type: string
         format: uuid
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OAuthProvider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/OAuthProvider'
     RoomCode:
       name: roomCode
       in: path
@@ -1135,6 +1326,9 @@ components:
           type: string
           minLength: 1
           maxLength: 256
+    OAuthProvider:
+      type: string
+      enum: [google, discord]
     AuthResponse:
       type: object
       required: [user]
@@ -1300,6 +1494,102 @@ components:
     MapAccessTier:
       type: string
       enum: [free, premium, admin]
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+    ResetPasswordRequest:
+      type: object
+      required: [email, otp, new_password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 256
+    CreateUploadRequest:
+      type: object
+      required: [file_name, content_type, size_bytes]
+      additionalProperties: false
+      properties:
+        file_name:
+          type: string
+          maxLength: 255
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/gif, image/webp, image/svg+xml]
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+    CreateUploadResponse:
+      type: object
+      required: [upload_id, upload_url, expires_at, storage_key]
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        upload_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+        storage_key:
+          type: string
+    CompleteUploadRequest:
+      type: object
+      required: [upload_id]
+      additionalProperties: false
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+    FileResponse:
+      type: object
+      required: [file]
+      properties:
+        file:
+          $ref: '#/components/schemas/File'
+    File:
+      type: object
+      required: [id, file_name, content_type, size_bytes, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    SignedURLResponse:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
     MapDifficulty:
       type: string
       enum: [mixed, easy, medium, hard]
