@@ -10,11 +10,10 @@ import (
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/health"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
-	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
+	"github.com/raven/geoguess/backend/internal/platform/observability"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, db *gorm.DB, redisClient *redis.Client) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, healthHandler *health.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -30,16 +29,17 @@ func NewRouter(cfg config.Config, logger *slog.Logger, db *gorm.DB, redisClient 
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-
-	healthHandler := health.NewHandler(db, redisClient)
+	router.Use(appmiddleware.Metrics(obs.Metrics))
 
 	router.Route("/api/v1", func(api chi.Router) {
 		api.Get("/health", healthHandler.Health)
 		api.Get("/ready", healthHandler.Ready)
+		api.With(appmiddleware.MetricsAuth(cfg.MetricsAuthToken)).Get("/metrics", healthHandler.Metrics)
 	})
 
 	router.Get("/health", healthHandler.Health)
 	router.Get("/ready", healthHandler.Ready)
+	router.With(appmiddleware.MetricsAuth(cfg.MetricsAuthToken)).Get("/metrics", healthHandler.Metrics)
 
 	return router
 }
