@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       - name: Set up Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           package-manager-cache: false
@@ -73,7 +73,7 @@ jobs:
         run: npm install -g pnpm@10.24.0
 
       - name: Set up Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: pnpm
