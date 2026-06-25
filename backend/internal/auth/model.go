@@ -27,14 +27,14 @@ func (User) TableName() string {
 
 // UserProfile is the public profile for a registered account.
 type UserProfile struct {
-	UserID      uuid.UUID  `gorm:"type:uuid;primary_key"`
-	DisplayName string     `gorm:"type:text;not null"`
-	AvatarURL   *string    `gorm:"type:text"`
-	CountryCode *string    `gorm:"type:text"`
-	Locale      string     `gorm:"type:text;not null;default:'en'"`
-	Timezone    *string    `gorm:"type:text"`
-	CreatedAt   time.Time  `gorm:"type:timestamptz;not null;default:now()"`
-	UpdatedAt   time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+	UserID      uuid.UUID `gorm:"type:uuid;primary_key"`
+	DisplayName string    `gorm:"type:text;not null"`
+	AvatarURL   *string   `gorm:"type:text"`
+	CountryCode *string   `gorm:"type:text"`
+	Locale      string    `gorm:"type:text;not null;default:'en'"`
+	Timezone    *string   `gorm:"type:text"`
+	CreatedAt   time.Time `gorm:"type:timestamptz;not null;default:now()"`
+	UpdatedAt   time.Time `gorm:"type:timestamptz;not null;default:now()"`
 }
 
 // TableName returns the table name for the model.

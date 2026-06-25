@@ -13,9 +13,9 @@ import (
 
 // R2Provider implements storage.Provider for Cloudflare R2.
 type R2Provider struct {
-	client     *s3.Client
-	bucket     string
-	publicURL  string
+	client    *s3.Client
+	bucket    string
+	publicURL string
 }
 
 // NewR2Provider returns an R2 storage provider.

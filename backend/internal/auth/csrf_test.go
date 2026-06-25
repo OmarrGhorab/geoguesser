@@ -36,7 +36,7 @@ func TestCSRFManagerRejectsInvalidToken(t *testing.T) {
 	}
 
 	token, _ := manager.Generate()
-	if manager.Validate(token+"x") {
+	if manager.Validate(token + "x") {
 		t.Fatal("expected tampered token to be rejected")
 	}
 }

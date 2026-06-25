@@ -7,8 +7,8 @@ type UserStatsResponse struct {
 
 // UserStats contains aggregate gameplay statistics.
 type UserStats struct {
-	GamesPlayed   int     `json:"games_played"`
-	TotalScore    int     `json:"total_score"`
-	AverageScore  float64 `json:"average_score"`
-	BestScore     int     `json:"best_score"`
+	GamesPlayed  int     `json:"games_played"`
+	TotalScore   int     `json:"total_score"`
+	AverageScore float64 `json:"average_score"`
+	BestScore    int     `json:"best_score"`
 }

@@ -26,15 +26,15 @@ func (Upload) TableName() string {
 
 // File represents a completed file.
 type File struct {
-	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	ID          uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	UploadID    *uuid.UUID `gorm:"type:uuid;uniqueIndex"`
-	OwnerUserID uuid.UUID `gorm:"type:uuid;not null;index:files_owner_created_at"`
-	FileName    string    `gorm:"type:text;not null"`
-	ContentType string    `gorm:"type:text;not null"`
-	SizeBytes   int64     `gorm:"type:bigint;not null"`
-	StorageKey  string    `gorm:"type:text;not null;uniqueIndex"`
-	IsPublic    bool      `gorm:"type:boolean;not null;default:false"`
-	CreatedAt   time.Time `gorm:"type:timestamptz;not null;default:now()"`
+	OwnerUserID uuid.UUID  `gorm:"type:uuid;not null;index:files_owner_created_at"`
+	FileName    string     `gorm:"type:text;not null"`
+	ContentType string     `gorm:"type:text;not null"`
+	SizeBytes   int64      `gorm:"type:bigint;not null"`
+	StorageKey  string     `gorm:"type:text;not null;uniqueIndex"`
+	IsPublic    bool       `gorm:"type:boolean;not null;default:false"`
+	CreatedAt   time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 }
 
 // TableName returns the table name.

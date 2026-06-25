@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/raven/geoguess/backend/internal/session"
 	apphttp "github.com/raven/geoguess/backend/internal/http"
+	"github.com/raven/geoguess/backend/internal/session"
 )
 
 // sessionContextKey is the request context key for the resolved session.

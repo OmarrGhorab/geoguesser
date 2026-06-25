@@ -10,22 +10,22 @@ import (
 )
 
 type Config struct {
-	AppEnv            string
-	Version           string
-	HTTPAddr          string
-	DatabaseURL       string
-	RedisURL          string
-	AllowedOrigin     string
-	MetricsAuthToken  string
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	AccessTokenSecret string
-	AccessTokenTTL    time.Duration
-	RefreshTokenTTL   time.Duration
-	RefreshTokenSecret string
-	CSRFSecret        string
-	GuestSessionSecret string
+	AppEnv              string
+	Version             string
+	HTTPAddr            string
+	DatabaseURL         string
+	RedisURL            string
+	AllowedOrigin       string
+	MetricsAuthToken    string
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
+	IdleTimeout         time.Duration
+	AccessTokenSecret   string
+	AccessTokenTTL      time.Duration
+	RefreshTokenTTL     time.Duration
+	RefreshTokenSecret  string
+	CSRFSecret          string
+	GuestSessionSecret  string
 	CookieDomain        string
 	CookieSecure        bool
 	CookieSameSite      string
@@ -37,16 +37,16 @@ type Config struct {
 	DiscordRedirectURL  string
 	OAuthStateTTL       time.Duration
 
-	EmailProvider   string
-	EmailFrom       string
-	ResendAPIKey    string
-	SMTPHost        string
-	SMTPPort        int
-	SMTPUser        string
-	SMTPPassword    string
-	OTPTTL          time.Duration
-	OTPMaxAttempts  int
-	OTPRateLimit    int
+	EmailProvider  string
+	EmailFrom      string
+	ResendAPIKey   string
+	SMTPHost       string
+	SMTPPort       int
+	SMTPUser       string
+	SMTPPassword   string
+	OTPTTL         time.Duration
+	OTPMaxAttempts int
+	OTPRateLimit   int
 
 	R2AccountID       string
 	R2AccessKeyID     string
@@ -60,29 +60,29 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:             getEnv("APP_ENV", "development"),
-		Version:            getEnv("VERSION", "0.1.0"),
-		HTTPAddr:           getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:        getEnv("DATABASE_URL", "postgres://geoguess:geoguess@localhost:5432/geoguess?sslmode=disable"),
-		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		AllowedOrigin:      getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
-		MetricsAuthToken:   strings.TrimSpace(os.Getenv("METRICS_AUTH_TOKEN")),
-		ReadTimeout:        durationSeconds("HTTP_READ_TIMEOUT_SECONDS", 10),
-		WriteTimeout:       durationSeconds("HTTP_WRITE_TIMEOUT_SECONDS", 15),
-		IdleTimeout:        durationSeconds("HTTP_IDLE_TIMEOUT_SECONDS", 60),
-		AccessTokenSecret:  strings.TrimSpace(os.Getenv("ACCESS_TOKEN_SECRET")),
-		AccessTokenTTL:     durationSeconds("ACCESS_TOKEN_TTL_SECONDS", 15*60),
-		RefreshTokenTTL:    durationSeconds("REFRESH_TOKEN_TTL_SECONDS", 7*24*60*60),
-		RefreshTokenSecret: strings.TrimSpace(os.Getenv("REFRESH_TOKEN_SECRET")),
-		CSRFSecret:         strings.TrimSpace(os.Getenv("CSRF_SECRET")),
-		GuestSessionSecret: strings.TrimSpace(os.Getenv("GUEST_SESSION_SECRET")),
-		CookieDomain:       strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
-		CookieSecure:       strings.EqualFold(getEnv("COOKIE_SECURE", "false"), "true"),
-		CookieSameSite:     getEnv("COOKIE_SAME_SITE", "lax"),
-		GoogleClientID:     strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")),
-		GoogleClientSecret: strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")),
-		GoogleRedirectURL:  strings.TrimSpace(os.Getenv("GOOGLE_REDIRECT_URL")),
-		DiscordClientID:    strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID")),
+		AppEnv:              getEnv("APP_ENV", "development"),
+		Version:             getEnv("VERSION", "0.1.0"),
+		HTTPAddr:            getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:         getEnv("DATABASE_URL", "postgres://geoguess:geoguess@localhost:5432/geoguess?sslmode=disable"),
+		RedisURL:            getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		AllowedOrigin:       getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
+		MetricsAuthToken:    strings.TrimSpace(os.Getenv("METRICS_AUTH_TOKEN")),
+		ReadTimeout:         durationSeconds("HTTP_READ_TIMEOUT_SECONDS", 10),
+		WriteTimeout:        durationSeconds("HTTP_WRITE_TIMEOUT_SECONDS", 15),
+		IdleTimeout:         durationSeconds("HTTP_IDLE_TIMEOUT_SECONDS", 60),
+		AccessTokenSecret:   strings.TrimSpace(os.Getenv("ACCESS_TOKEN_SECRET")),
+		AccessTokenTTL:      durationSeconds("ACCESS_TOKEN_TTL_SECONDS", 15*60),
+		RefreshTokenTTL:     durationSeconds("REFRESH_TOKEN_TTL_SECONDS", 7*24*60*60),
+		RefreshTokenSecret:  strings.TrimSpace(os.Getenv("REFRESH_TOKEN_SECRET")),
+		CSRFSecret:          strings.TrimSpace(os.Getenv("CSRF_SECRET")),
+		GuestSessionSecret:  strings.TrimSpace(os.Getenv("GUEST_SESSION_SECRET")),
+		CookieDomain:        strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
+		CookieSecure:        strings.EqualFold(getEnv("COOKIE_SECURE", "false"), "true"),
+		CookieSameSite:      getEnv("COOKIE_SAME_SITE", "lax"),
+		GoogleClientID:      strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")),
+		GoogleClientSecret:  strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")),
+		GoogleRedirectURL:   strings.TrimSpace(os.Getenv("GOOGLE_REDIRECT_URL")),
+		DiscordClientID:     strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID")),
 		DiscordClientSecret: strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET")),
 		DiscordRedirectURL:  strings.TrimSpace(os.Getenv("DISCORD_REDIRECT_URL")),
 		OAuthStateTTL:       durationSeconds("OAUTH_STATE_TTL_SECONDS", 10*60),

@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/raven/geoguess/backend/internal/config"
-	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	apphttp "github.com/raven/geoguess/backend/internal/http"
+	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 )
 
 // Handler handles authentication HTTP endpoints.

@@ -9,10 +9,10 @@ type CreateUploadRequest struct {
 
 // CreateUploadResponse returns the upload details and presigned URL.
 type CreateUploadResponse struct {
-	UploadID    string `json:"upload_id"`
-	UploadURL   string `json:"upload_url"`
-	ExpiresAt   string `json:"expires_at"`
-	StorageKey  string `json:"storage_key"`
+	UploadID   string `json:"upload_id"`
+	UploadURL  string `json:"upload_url"`
+	ExpiresAt  string `json:"expires_at"`
+	StorageKey string `json:"storage_key"`
 }
 
 // CompleteUploadRequest is the payload to complete an upload.

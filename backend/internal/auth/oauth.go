@@ -33,12 +33,12 @@ func IsValidOAuthProvider(p string) bool {
 
 // OAuthUserInfo is the normalized profile returned by an OAuth provider.
 type OAuthUserInfo struct {
-	Provider        OAuthProvider
+	Provider          OAuthProvider
 	ProviderAccountID string
-	Email           *string
-	DisplayName     *string
-	AvatarURL       *string
-	VerifiedEmail   bool
+	Email             *string
+	DisplayName       *string
+	AvatarURL         *string
+	VerifiedEmail     bool
 }
 
 // OAuthClient handles the authorization-code flow for an OAuth provider.
@@ -266,12 +266,12 @@ func (d *discordClient) ExchangeCode(code string) (*OAuthUserInfo, error) {
 	}
 
 	var user struct {
-		ID            string `json:"id"`
-		Email         string `json:"email"`
-		Verified      bool   `json:"verified"`
-		Username      string `json:"username"`
-		GlobalName    string `json:"global_name"`
-		Avatar        string `json:"avatar"`
+		ID         string `json:"id"`
+		Email      string `json:"email"`
+		Verified   bool   `json:"verified"`
+		Username   string `json:"username"`
+		GlobalName string `json:"global_name"`
+		Avatar     string `json:"avatar"`
 	}
 	if err := json.Unmarshal(userBody, &user); err != nil {
 		return nil, fmt.Errorf("failed to decode discord user: %w", err)
