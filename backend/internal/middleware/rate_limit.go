@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	apphttp "github.com/raven/geoguess/backend/internal/http"
@@ -46,7 +48,7 @@ func RateLimit(limiter RateLimiter, config RateLimitConfig, keyFunc func(r *http
 // RateLimitByIP returns a key extractor using the request IP.
 func RateLimitByIP(prefix string) func(r *http.Request) string {
 	return func(r *http.Request) string {
-		return fmt.Sprintf("%s:%s", prefix, r.RemoteAddr)
+		return fmt.Sprintf("%s:%s", prefix, remoteHost(r))
 	}
 }
 
@@ -55,8 +57,16 @@ func RateLimitByCookie(prefix, cookieName string) func(r *http.Request) string {
 	return func(r *http.Request) string {
 		c, err := r.Cookie(cookieName)
 		if err != nil || c.Value == "" {
-			return fmt.Sprintf("%s:%s", prefix, r.RemoteAddr)
+			return fmt.Sprintf("%s:%s", prefix, remoteHost(r))
 		}
 		return fmt.Sprintf("%s:%s", prefix, c.Value)
 	}
+}
+
+func remoteHost(r *http.Request) string {
+	host := strings.TrimSpace(r.RemoteAddr)
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		return parsedHost
+	}
+	return host
 }

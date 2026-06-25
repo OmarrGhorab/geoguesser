@@ -21,7 +21,6 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
 	router.Use(appmiddleware.RequestLogger(logger))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(cfg.WriteTimeout))

@@ -34,7 +34,7 @@ func TestCreateUploadValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := service.CreateUpload(nil, "0197a1f0-0000-7000-8000-000000000001", tc.req)
+			_, err := service.CreateUpload(context.Background(), "0197a1f0-0000-7000-8000-000000000001", tc.req)
 			if err == nil {
 				t.Fatal("expected validation error")
 			}
