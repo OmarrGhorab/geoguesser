@@ -19,7 +19,7 @@ func TestJSONResponse(t *testing.T) {
 	apphttp.OK(w, r, map[string]string{"status": "ok"})
 
 	res := w.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want %d", res.StatusCode, http.StatusOK)
@@ -48,7 +48,7 @@ func TestErrorResponse(t *testing.T) {
 	apphttp.Error(w, r, logger, apiErr)
 
 	res := w.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", res.StatusCode, http.StatusBadRequest)

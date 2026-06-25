@@ -35,7 +35,7 @@ func TestHealth(t *testing.T) {
 	h.Health(w, r)
 
 	res := w.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want %d", res.StatusCode, http.StatusOK)
@@ -64,7 +64,7 @@ func TestReadyAllHealthy(t *testing.T) {
 	h.Ready(w, r)
 
 	res := w.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want %d", res.StatusCode, http.StatusOK)
@@ -96,7 +96,7 @@ func TestReadyDependencyFailure(t *testing.T) {
 	h.Ready(w, r)
 
 	res := w.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want %d", res.StatusCode, http.StatusServiceUnavailable)

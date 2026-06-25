@@ -17,7 +17,7 @@ const DefaultMaxBodyBytes = 1 << 20 // 1 MiB
 // maximum body size and returns a stable APIError for malformed input.
 func DecodeJSON(r *http.Request, dst any) error {
 	body := http.MaxBytesReader(nil, r.Body, DefaultMaxBodyBytes)
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	decoder := json.NewDecoder(body)
 	decoder.DisallowUnknownFields()
