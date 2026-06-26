@@ -421,6 +421,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MapListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /maps/{mapId}:
     get:
@@ -448,6 +450,7 @@ paths:
       security:
         - accessCookie: []
         - guestSession: []
+        - {}
       parameters:
         - $ref: '#/components/parameters/LocationId'
       responses:
@@ -457,8 +460,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoundMediaResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -1470,7 +1471,7 @@ components:
           $ref: '#/components/schemas/Map'
     Map:
       type: object
-      required: [id, slug, name, visibility, access_tier, difficulty, status]
+      required: [id, slug, name, visibility, access_tier, difficulty, status, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1491,6 +1492,12 @@ components:
         status:
           type: string
           enum: [draft, active, archived]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     MapAccessTier:
       type: string
       enum: [free, premium, admin]

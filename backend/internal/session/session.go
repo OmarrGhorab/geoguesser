@@ -15,6 +15,7 @@ type Context struct {
 	UserID    *string
 	GuestID   *string
 	SessionID *string
+	Role      string
 }
 
 // IsRegistered returns true for registered user sessions.
@@ -25,4 +26,9 @@ func (s Context) IsRegistered() bool {
 // IsGuest returns true for guest sessions.
 func (s Context) IsGuest() bool {
 	return s.Kind == KindGuest && s.GuestID != nil
+}
+
+// IsAdmin returns true for admin sessions.
+func (s Context) IsAdmin() bool {
+	return s.IsRegistered() && s.Role == "admin"
 }
