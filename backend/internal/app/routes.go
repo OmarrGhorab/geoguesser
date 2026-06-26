@@ -11,13 +11,15 @@ import (
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/locations"
+	"github.com/raven/geoguess/backend/internal/maps"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
 	"github.com/raven/geoguess/backend/internal/uploads"
 	"github.com/raven/geoguess/backend/internal/users"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -66,6 +68,14 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 			api.Route("/files", func(u chi.Router) {
 				uploadsHandler.RegisterFileRoutes(u)
 			})
+		}
+
+		if mapsHandler != nil {
+			mapsHandler.RegisterRoutes(api)
+		}
+
+		if locationsHandler != nil {
+			locationsHandler.RegisterRoutes(api)
 		}
 	})
 

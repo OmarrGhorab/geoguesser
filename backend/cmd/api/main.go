@@ -16,6 +16,8 @@ import (
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/locations"
+	"github.com/raven/geoguess/backend/internal/maps"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/email"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
@@ -72,6 +74,8 @@ func main() {
 	authRepo := auth.NewRepository(db)
 	usersRepo := users.NewRepository(db)
 	uploadsRepo := uploads.NewRepository(db)
+	mapsRepo := maps.NewRepository(db)
+	locationsRepo := locations.NewRepository(db)
 
 	hasher := auth.NewBCryptHasher()
 	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
@@ -92,7 +96,7 @@ func main() {
 	oauthManager := auth.NewOAuthManager(cfg)
 
 	otpStore := auth.NewOTPStore(redisClient, cfg.OTPTTL)
-	sessionStore := auth.NewPostgresSessionStore(db)
+	sessionStore := auth.NewRedisSessionStore(redisClient)
 	var emailSender email.Sender
 	switch strings.ToLower(cfg.EmailProvider) {
 	case "resend":
@@ -107,6 +111,8 @@ func main() {
 
 	authService := auth.NewService(authRepo, hasher, tokenManager, guestManager, csrfManager, oauthManager, sessionStore, otpStore, emailSender, redisClient, cfg, clock.NewSystem())
 	usersService := users.NewService(usersRepo)
+	mapsService := maps.NewService(mapsRepo)
+	locationsService := locations.NewService(locationsRepo, locations.StaticProvider{})
 
 	var storageProvider storage.Provider
 	if cfg.R2AccountID != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
@@ -129,8 +135,10 @@ func main() {
 	authHandler := auth.NewHandler(authService, cfg, logger)
 	usersHandler := users.NewHandler(usersService, logger)
 	uploadsHandler := uploads.NewHandler(uploadsService, logger)
+	mapsHandler := maps.NewHandler(mapsService, logger)
+	locationsHandler := locations.NewHandler(locationsService, logger)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

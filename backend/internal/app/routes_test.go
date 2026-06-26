@@ -33,7 +33,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -64,7 +64,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	usersHandler := users.NewHandler(users.NewService(nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))

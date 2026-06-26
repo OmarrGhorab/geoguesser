@@ -353,6 +353,7 @@ func (s *Service) ResolveSession(ctx context.Context, accessToken string) (*sess
 	return &session.Context{
 		Kind:   session.KindUser,
 		UserID: &claims.UserID,
+		Role:   claims.Role,
 	}, nil
 }
 
