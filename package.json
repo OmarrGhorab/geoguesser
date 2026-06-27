@@ -10,6 +10,8 @@
     "lint": "pnpm --dir client lint",
     "typecheck": "pnpm --dir client typecheck",
     "backend:run": "cd backend && go run ./cmd/api",
-    "backend:test": "cd backend && go test ./..."
+    "backend:test": "cd backend && go test ./...",
+    "check:openapi": "cd backend && npx -y @redocly/cli lint ./openapi/openapi.yaml",
+    "check": "pnpm check:openapi && pnpm backend:test && pnpm lint && pnpm typecheck"
   }
 }

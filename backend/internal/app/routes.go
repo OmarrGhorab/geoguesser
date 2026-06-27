@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
@@ -19,7 +20,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/users"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -76,6 +77,19 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 
 		if locationsHandler != nil {
 			locationsHandler.RegisterRoutes(api)
+		}
+
+		if gamesHandler != nil {
+			gameCreateLimit := appmiddleware.RateLimitConfig{Limit: 20, Window: 1 * time.Minute}
+			guessLimit := appmiddleware.RateLimitConfig{Limit: 120, Window: 1 * time.Minute}
+			api.Route("/games", func(g chi.Router) {
+				g.With(appmiddleware.RateLimit(rateLimiter, gameCreateLimit, appmiddleware.RateLimitByIP("game-create"), logger)).Post("/", gamesHandler.CreateGame)
+				g.Get("/{gameId}", gamesHandler.GetGame)
+				g.Post("/{gameId}/start", gamesHandler.StartGame)
+				g.Get("/{gameId}/rounds/current", gamesHandler.GetCurrentRound)
+				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess"), logger)).Post("/{gameId}/rounds/{roundId}/guesses", gamesHandler.SubmitGuess)
+				g.Get("/{gameId}/results", gamesHandler.GetResults)
+			})
 		}
 	})
 

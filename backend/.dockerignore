@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .git
+node_modules/
 tmp/
 coverage/
 *.test

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -48,10 +49,12 @@ func NewLogger(level slog.Leveler) *slog.Logger {
 type Metrics struct {
 	registry *prometheus.Registry
 
-	HTTPRequestDuration *prometheus.HistogramVec
-	HTTPRequestsTotal   *prometheus.CounterVec
-	PostgresErrorsTotal prometheus.Counter
-	RedisErrorsTotal    prometheus.Counter
+	HTTPRequestDuration  *prometheus.HistogramVec
+	HTTPRequestsTotal    *prometheus.CounterVec
+	PostgresErrorsTotal  prometheus.Counter
+	RedisErrorsTotal     prometheus.Counter
+	GameGuessDuration    *prometheus.HistogramVec
+	GameCompletionsTotal prometheus.Counter
 }
 
 // NewMetrics creates a fresh Prometheus registry with baseline collectors.
@@ -84,6 +87,15 @@ func NewMetrics(serviceName string) (*Metrics, error) {
 			Name: "redis_errors_total",
 			Help: "Total Redis errors.",
 		}),
+		GameGuessDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "game_guess_submission_duration_seconds",
+			Help:    "Solo game guess submission duration in seconds.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"outcome"}),
+		GameCompletionsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "game_completions_total",
+			Help: "Total completed solo games.",
+		}),
 	}
 
 	for _, c := range []prometheus.Collector{
@@ -91,6 +103,8 @@ func NewMetrics(serviceName string) (*Metrics, error) {
 		m.HTTPRequestsTotal,
 		m.PostgresErrorsTotal,
 		m.RedisErrorsTotal,
+		m.GameGuessDuration,
+		m.GameCompletionsTotal,
 	} {
 		if err := reg.Register(c); err != nil {
 			return nil, err
@@ -104,6 +118,22 @@ func NewMetrics(serviceName string) (*Metrics, error) {
 // Registry returns the Prometheus registry for the metrics endpoint.
 func (m *Metrics) Registry() *prometheus.Registry {
 	return m.registry
+}
+
+// ObserveGuessSubmission records solo game guess submission latency.
+func (m *Metrics) ObserveGuessSubmission(outcome string, duration time.Duration) {
+	if m == nil || m.GameGuessDuration == nil {
+		return
+	}
+	m.GameGuessDuration.WithLabelValues(outcome).Observe(duration.Seconds())
+}
+
+// RecordGameCompleted records a completed solo game.
+func (m *Metrics) RecordGameCompleted() {
+	if m == nil || m.GameCompletionsTotal == nil {
+		return
+	}
+	m.GameCompletionsTotal.Inc()
 }
 
 // Tracer is a thin abstraction over distributed tracing.
