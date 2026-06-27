@@ -11,6 +11,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/app"
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
@@ -33,7 +34,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -64,7 +65,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	usersHandler := users.NewHandler(users.NewService(nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -94,6 +95,40 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	router.ServeHTTP(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected documented auth route to reach handler validation with 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
+	cfg := testConfig()
+
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler)
+
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/games"},
+		{http.MethodGet, "/api/v1/games/not-a-uuid"},
+		{http.MethodPost, "/api/v1/games/not-a-uuid/start"},
+		{http.MethodGet, "/api/v1/games/not-a-uuid/rounds/current"},
+		{http.MethodPost, "/api/v1/games/not-a-uuid/rounds/not-a-uuid/guesses"},
+		{http.MethodGet, "/api/v1/games/not-a-uuid/results"},
+	}
+
+	for _, endpoint := range endpoints {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader("{}"))
+		router.ServeHTTP(w, r)
+		if contentType := w.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
+			t.Fatalf("%s %s did not reach JSON handler, got status %d content-type %q body %q", endpoint.method, endpoint.path, w.Code, contentType, w.Body.String())
+		}
 	}
 }
 

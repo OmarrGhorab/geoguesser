@@ -15,6 +15,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/app"
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
@@ -76,6 +77,7 @@ func main() {
 	uploadsRepo := uploads.NewRepository(db)
 	mapsRepo := maps.NewRepository(db)
 	locationsRepo := locations.NewRepository(db)
+	gamesRepo := games.NewRepository(db)
 
 	hasher := auth.NewBCryptHasher()
 	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
@@ -113,6 +115,7 @@ func main() {
 	usersService := users.NewService(usersRepo)
 	mapsService := maps.NewService(mapsRepo)
 	locationsService := locations.NewService(locationsRepo, locations.StaticProvider{})
+	gamesService := games.NewServiceWithOptions(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics)
 
 	var storageProvider storage.Provider
 	if cfg.R2AccountID != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
@@ -137,8 +140,9 @@ func main() {
 	uploadsHandler := uploads.NewHandler(uploadsService, logger)
 	mapsHandler := maps.NewHandler(mapsService, logger)
 	locationsHandler := locations.NewHandler(locationsService, logger)
+	gamesHandler := games.NewHandler(gamesService, logger)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

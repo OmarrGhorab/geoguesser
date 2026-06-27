@@ -469,7 +469,7 @@ paths:
     post:
       tags: [Games]
       summary: Create a game
-      description: Creates a solo game or a game shell for supported modes. Supports registered or guest sessions.
+      description: Creates a Phase 04 solo game for a registered or guest session. The backend selects all round locations, stores durable game state, and rejects maps without enough unique active locations.
       operationId: createGame
       security:
         - accessCookie: []
@@ -499,6 +499,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /games/{gameId}:
     get:
@@ -528,6 +530,7 @@ paths:
     post:
       tags: [Games]
       summary: Start a game
+      description: Starts a pending solo game, sets server-owned timestamps, and activates the first round.
       operationId: startGame
       security:
         - accessCookie: []
@@ -552,12 +555,14 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /games/{gameId}/rounds/current:
     get:
       tags: [Games]
       summary: Get current round
-      description: Returns current round data without true latitude or longitude.
+      description: Returns current round data without true latitude, true longitude, location id, provider refs, or any hidden answer metadata.
       operationId: getCurrentRound
       security:
         - accessCookie: []
@@ -582,7 +587,7 @@ paths:
     post:
       tags: [Games]
       summary: Submit a guess
-      description: Submits one guess for the player in the round and returns score plus revealed location.
+      description: Submits one server-scored guess for the current round and returns score plus revealed location. Repeating the same Idempotency-Key with the same coordinates returns the original result; reusing it with different coordinates returns conflict.
       operationId: submitGuess
       security:
         - accessCookie: []
@@ -628,6 +633,7 @@ paths:
     get:
       tags: [Games]
       summary: Get game results
+      description: Returns durable final results for the owning player after a solo game is completed.
       operationId: getGameResults
       security:
         - accessCookie: []
@@ -647,6 +653,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /rooms:
     post:
@@ -1194,6 +1202,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
+      description: Stable retry key for replay-safe writes. Guess submission replays identical requests and rejects conflicting reuse.
       schema:
         type: string
         minLength: 16
@@ -1624,6 +1633,7 @@ components:
       type: object
       required: [mode, map_id, round_count]
       additionalProperties: false
+      description: Phase 04 accepts solo games only, even though the shared GameMode enum includes future modes.
       properties:
         mode:
           $ref: '#/components/schemas/GameMode'
