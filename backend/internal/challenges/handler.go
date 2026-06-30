@@ -25,7 +25,7 @@ type ServiceAPI interface {
 	GetShared(context.Context, *session.Context, string) (*ChallengeMetadataResponse, error)
 	StartChallengeAttempt(context.Context, *session.Context, string) (*ChallengeAttemptResponse, error)
 	GetResults(context.Context, *session.Context, string) (*ResultResponse, error)
-	GetLeaderboard(context.Context, *session.Context, string, int) (*LeaderboardResponse, error)
+	GetLeaderboard(context.Context, *session.Context, string, int, string) (*LeaderboardResponse, error)
 	GetDailyStreak(context.Context, *session.Context) (*StreakSummary, error)
 	GetMissions(context.Context, *session.Context) ([]MissionSummary, error)
 	ClaimMission(context.Context, *session.Context, string) (*MissionSummary, error)
@@ -109,7 +109,8 @@ func (h *Handler) GetResults(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	resp, err := h.service.GetLeaderboard(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "challengeId"), limit)
+	cursor := r.URL.Query().Get("cursor")
+	resp, err := h.service.GetLeaderboard(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "challengeId"), limit, cursor)
 	if err != nil {
 		h.mapError(w, r, err)
 		return

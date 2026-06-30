@@ -210,7 +210,7 @@ func (stubChallengeService) StartChallengeAttempt(context.Context, *session.Cont
 func (stubChallengeService) GetResults(context.Context, *session.Context, string) (*challenges.ResultResponse, error) {
 	return nil, challenges.ErrResultsNotReady
 }
-func (stubChallengeService) GetLeaderboard(context.Context, *session.Context, string, int) (*challenges.LeaderboardResponse, error) {
+func (stubChallengeService) GetLeaderboard(context.Context, *session.Context, string, int, string) (*challenges.LeaderboardResponse, error) {
 	return nil, challenges.ErrResultsNotReady
 }
 func (stubChallengeService) GetDailyStreak(context.Context, *session.Context) (*challenges.StreakSummary, error) {

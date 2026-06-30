@@ -118,6 +118,70 @@ func (r *Repository) GetAttemptForOwner(ctx context.Context, challengeID uuid.UU
 	return &attempt, nil
 }
 
+func (r *Repository) GetAttemptByGameID(ctx context.Context, gameID uuid.UUID) (*ChallengeAttempt, error) {
+	var attempt ChallengeAttempt
+	if err := r.db.WithContext(ctx).Where("game_id = ?", gameID).First(&attempt).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get attempt by game: %w", err)
+	}
+	return &attempt, nil
+}
+
+func (r *Repository) UpdateAttemptCompletion(ctx context.Context, attemptID uuid.UUID, totalScore int, totalDistanceMeters int, completionDurationMS *int64, completedAt time.Time) error {
+	result := r.db.WithContext(ctx).Model(&ChallengeAttempt{}).Where("id = ?", attemptID).Updates(map[string]any{
+		"status":                 AttemptStatusCompleted,
+		"total_score":            totalScore,
+		"total_distance_meters":  totalDistanceMeters,
+		"completion_duration_ms": completionDurationMS,
+		"completed_at":           completedAt,
+		"updated_at":             completedAt,
+	})
+	if result.Error != nil {
+		return fmt.Errorf("update attempt completion: %w", result.Error)
+	}
+	return nil
+}
+
+func (r *Repository) LoadGameRoundResults(ctx context.Context, gameID uuid.UUID) ([]gameRoundResult, error) {
+	var rows []gameRoundResult
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			r.round_number,
+			COALESCE(g.score, 0) AS score,
+			COALESCE(g.distance_meters, 0) AS distance_meters
+		FROM rounds r
+		LEFT JOIN guesses g ON g.round_id = r.id
+		WHERE r.game_id = ?
+		ORDER BY r.round_number ASC
+	`, gameID).Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("load game round results: %w", err)
+	}
+	return rows, nil
+}
+
+func (r *Repository) GetGameCompletionData(ctx context.Context, gameID uuid.UUID) (*gameCompletionData, error) {
+	var data gameCompletionData
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			g.total_score,
+			g.started_at,
+			g.completed_at
+		FROM games g
+		WHERE g.id = ?
+	`, gameID).Scan(&data).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get game completion data: %w", err)
+	}
+	if data.CompletedAt == nil {
+		return nil, fmt.Errorf("game %s not completed", gameID)
+	}
+	return &data, nil
+}
+
 func (r *Repository) CreateAttemptWithGame(ctx context.Context, challenge Challenge, owner ownerIdentity, selected []maps.SelectedLocation, settings SettingsSnapshot, now time.Time) (*ChallengeAttempt, *games.Game, error) {
 	var attempt ChallengeAttempt
 	var game games.Game
@@ -244,13 +308,28 @@ func (r *Repository) CountLeaderboardEntries(ctx context.Context, challengeID uu
 	return int(count), nil
 }
 
-func (r *Repository) ListLeaderboardEntries(ctx context.Context, challengeID uuid.UUID, limit int) ([]LeaderboardEntry, error) {
+func (r *Repository) ListLeaderboardEntries(ctx context.Context, challengeID uuid.UUID, limit int, cursor string) ([]LeaderboardEntry, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 	var entries []LeaderboardEntry
-	if err := r.db.WithContext(ctx).Where("challenge_id = ?", challengeID).Order("rank ASC, attempt_id ASC").Limit(limit).Find(&entries).Error; err != nil {
+	query := r.db.WithContext(ctx).Where("challenge_id = ?", challengeID)
+	if cursor != "" {
+		var cursorAttemptID uuid.UUID
+		if err := cursorAttemptID.UnmarshalText([]byte(cursor)); err == nil {
+			query = query.Where("attempt_id > ?", cursorAttemptID)
+		}
+	}
+	if err := query.Order("rank ASC, attempt_id ASC").Limit(limit).Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("list leaderboard entries: %w", err)
+	}
+	return entries, nil
+}
+
+func (r *Repository) ListLeaderboardEntriesForUser(ctx context.Context, challengeID uuid.UUID, userID uuid.UUID) ([]LeaderboardEntry, error) {
+	var entries []LeaderboardEntry
+	if err := r.db.WithContext(ctx).Where("challenge_id = ? AND user_id = ?", challengeID, userID).Order("rank ASC").Find(&entries).Error; err != nil {
+		return nil, fmt.Errorf("list leaderboard entries for user: %w", err)
 	}
 	return entries, nil
 }
@@ -331,6 +410,13 @@ func (r *Repository) UpsertStreak(ctx context.Context, owner ownerIdentity, stre
 	}).Create(&streak).Error
 }
 
+func (r *Repository) CreateStreakEvent(ctx context.Context, event StreakEvent) error {
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: ownerColumn(ownerIdentity{userID: event.OwnerUserID, guestHash: event.GuestIdentityHash})}, {Name: "challenge_date"}, {Name: "event_type"}},
+		DoNothing: true,
+	}).Create(&event).Error
+}
+
 func (r *Repository) ApplyMissionProgressEvent(ctx context.Context, mission Mission, owner ownerIdentity, event MissionProgressEvent, now time.Time) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&mission).Error; err != nil {
@@ -365,6 +451,86 @@ func (r *Repository) ApplyMissionProgressEvent(ctx context.Context, mission Miss
 			}),
 		}).Create(&progress).Error
 	})
+}
+
+func (r *Repository) ListMissionProgressForOwner(ctx context.Context, owner ownerIdentity) ([]MissionProgress, error) {
+	query := r.db.WithContext(ctx)
+	if owner.userID != nil {
+		query = query.Where("owner_user_id = ?", *owner.userID)
+	} else if owner.guestHash != nil {
+		query = query.Where("guest_identity_hash = ?", *owner.guestHash)
+	} else {
+		return nil, ErrForbidden
+	}
+	var progress []MissionProgress
+	if err := query.Order("mission_id ASC").Find(&progress).Error; err != nil {
+		return nil, fmt.Errorf("list mission progress: %w", err)
+	}
+	return progress, nil
+}
+
+func (r *Repository) GetMissionProgress(ctx context.Context, missionID uuid.UUID, owner ownerIdentity) (*MissionProgress, error) {
+	query := r.db.WithContext(ctx).Where("mission_id = ?", missionID)
+	if owner.userID != nil {
+		query = query.Where("owner_user_id = ?", *owner.userID)
+	} else if owner.guestHash != nil {
+		query = query.Where("guest_identity_hash = ?", *owner.guestHash)
+	} else {
+		return nil, ErrForbidden
+	}
+	var progress MissionProgress
+	if err := query.First(&progress).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get mission progress: %w", err)
+	}
+	return &progress, nil
+}
+
+func (r *Repository) ClaimMissionProgress(ctx context.Context, missionID uuid.UUID, owner ownerIdentity, now time.Time) error {
+	query := r.db.WithContext(ctx).Model(&MissionProgress{}).Where("mission_id = ? AND status = ?", missionID, "completed")
+	if owner.userID != nil {
+		query = query.Where("owner_user_id = ?", *owner.userID)
+	} else if owner.guestHash != nil {
+		query = query.Where("guest_identity_hash = ?", *owner.guestHash)
+	} else {
+		return ErrForbidden
+	}
+	result := query.Where("claimed_at IS NULL").Update("claimed_at", now)
+	if result.Error != nil {
+		return fmt.Errorf("claim mission progress: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrChallengeNotFound
+	}
+	return nil
+}
+
+func (r *Repository) ListActiveMissions(ctx context.Context, now time.Time) ([]Mission, error) {
+	var missions []Mission
+	if err := r.db.WithContext(ctx).Where("status = ? AND active_starts_at <= ? AND (active_ends_at IS NULL OR active_ends_at > ?)", "active", now, now).Order("active_starts_at ASC").Find(&missions).Error; err != nil {
+		return nil, fmt.Errorf("list active missions: %w", err)
+	}
+	return missions, nil
+}
+
+func (r *Repository) GetMissionByCode(ctx context.Context, code string) (*Mission, error) {
+	var mission Mission
+	if err := r.db.WithContext(ctx).Where("code = ?", code).First(&mission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get mission by code: %w", err)
+	}
+	return &mission, nil
+}
+
+func (r *Repository) UpsertMission(ctx context.Context, mission *Mission) error {
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "code"}},
+		DoNothing: true,
+	}).Create(mission).Error
 }
 
 func (r *Repository) recomputeRanksTx(tx *gorm.DB, challengeID uuid.UUID) error {
@@ -479,4 +645,16 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type gameRoundResult struct {
+	RoundNumber    int `gorm:"column:round_number"`
+	Score          int `gorm:"column:score"`
+	DistanceMeters int `gorm:"column:distance_meters"`
+}
+
+type gameCompletionData struct {
+	TotalScore int        `gorm:"column:total_score"`
+	StartedAt  *time.Time `gorm:"column:started_at"`
+	CompletedAt *time.Time `gorm:"column:completed_at"`
 }

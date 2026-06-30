@@ -173,3 +173,15 @@ type MissionProgressEvent struct {
 }
 
 func (MissionProgressEvent) TableName() string { return "mission_progress_events" }
+
+type StreakEvent struct {
+	ID                uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	OwnerUserID       *uuid.UUID `gorm:"type:uuid"`
+	GuestIdentityHash *string    `gorm:"type:text"`
+	ChallengeDate     *time.Time `gorm:"type:date"`
+	EventType         string     `gorm:"type:text;not null"`
+	CurrentStreak     int        `gorm:"type:int;not null;default:0"`
+	CreatedAt         time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+}
+
+func (StreakEvent) TableName() string { return "streak_events" }

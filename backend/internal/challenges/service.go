@@ -194,7 +194,7 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, challen
 	}, nil
 }
 
-func (s *Service) GetLeaderboard(ctx context.Context, sess *session.Context, challengeID string, limit int) (*LeaderboardResponse, error) {
+func (s *Service) GetLeaderboard(ctx context.Context, sess *session.Context, challengeID string, limit int, cursor string) (*LeaderboardResponse, error) {
 	id, err := uuid.Parse(challengeID)
 	if err != nil {
 		return nil, ErrChallengeNotFound
@@ -210,16 +210,31 @@ func (s *Service) GetLeaderboard(ctx context.Context, sess *session.Context, cha
 	if err != nil {
 		return nil, err
 	}
-	entries, err := s.repo.ListLeaderboardEntries(ctx, id, limit)
+	entries, err := s.repo.ListLeaderboardEntries(ctx, id, limit, cursor)
 	if err != nil {
 		return nil, err
 	}
+	var nextCursor *string
+	if len(entries) == limit {
+		lastAttemptID := entries[len(entries)-1].AttemptID.String()
+		nextCursor = &lastAttemptID
+	}
+	var currentUserID *uuid.UUID
+	if sess != nil && sess.IsRegistered() {
+		if uid, parseErr := uuid.Parse(*sess.UserID); parseErr == nil {
+			currentUserID = &uid
+		}
+	}
 	dtos := make([]LeaderboardEntryDTO, len(entries))
 	for i, entry := range entries {
-		dtos[i] = LeaderboardEntryDTO{Rank: entry.Rank, DisplayName: entry.DisplayNameSnapshot, Score: entry.Score, CompletionDurationMS: entry.CompletionDurationMS, CompletedAt: entry.CompletedAt}
+		dto := LeaderboardEntryDTO{Rank: entry.Rank, DisplayName: entry.DisplayNameSnapshot, Score: entry.Score, CompletionDurationMS: entry.CompletionDurationMS, CompletedAt: entry.CompletedAt}
+		if currentUserID != nil && entry.UserID == *currentUserID {
+			dto.CurrentPlayer = true
+		}
+		dtos[i] = dto
 	}
 	s.logger.InfoContext(ctx, "challenge leaderboard read", slog.String("challenge_id", id.String()), slog.Int("entries", len(entries)))
-	return &LeaderboardResponse{Challenge: toChallengeSummary(*challenge, settings), Entries: dtos, Page: PageInfo{Limit: limit}}, nil
+	return &LeaderboardResponse{Challenge: toChallengeSummary(*challenge, settings), Entries: dtos, Page: PageInfo{Limit: limit, NextCursor: nextCursor}}, nil
 }
 
 func (s *Service) GetDailyStreak(ctx context.Context, sess *session.Context) (*StreakSummary, error) {
@@ -236,23 +251,100 @@ func (s *Service) GetDailyStreak(ctx context.Context, sess *session.Context) (*S
 }
 
 func (s *Service) GetMissions(ctx context.Context, sess *session.Context) ([]MissionSummary, error) {
-	if _, err := ownerFromSession(sess); err != nil {
+	owner, err := ownerFromSession(sess)
+	if err != nil {
 		return nil, err
 	}
-	return DefaultMissionSummaries(s.clock.Now()), nil
+	now := s.clock.Now()
+	missions, err := s.repo.ListActiveMissions(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	progressList, err := s.repo.ListMissionProgressForOwner(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	progressByMission := make(map[uuid.UUID]MissionProgress, len(progressList))
+	for _, p := range progressList {
+		progressByMission[p.MissionID] = p
+	}
+	if len(missions) == 0 {
+		defaults := DefaultMissionSummaries(now)
+		for _, m := range defaults {
+			if existing, lookupErr := s.repo.GetMissionByCode(ctx, m.Code); lookupErr == nil && existing == nil {
+				dbMission := Mission{
+					Code:           m.Code,
+					TitleKey:       m.TitleKey,
+					DescriptionKey: m.DescriptionKey,
+					MissionType:    m.MissionType,
+					TargetValue:    m.TargetValue,
+					ActiveStartsAt: now,
+					ActiveEndsAt:   m.ActiveEndsAt,
+					RewardSnapshot: json.RawMessage("{}"),
+					Status:         "active",
+				}
+				_ = s.repo.UpsertMission(ctx, &dbMission)
+			}
+		}
+		missions, err = s.repo.ListActiveMissions(ctx, now)
+		if err != nil {
+			return nil, err
+		}
+	}
+	summaries := make([]MissionSummary, len(missions))
+	for i, m := range missions {
+		summaries[i] = MissionSummary{
+			ID:             m.ID,
+			Code:           m.Code,
+			TitleKey:       m.TitleKey,
+			DescriptionKey: m.DescriptionKey,
+			MissionType:    m.MissionType,
+			TargetValue:    m.TargetValue,
+			ActiveEndsAt:   m.ActiveEndsAt,
+			Status:         "not_started",
+		}
+		if progress, ok := progressByMission[m.ID]; ok {
+			summaries[i].CurrentValue = progress.CurrentValue
+			if progress.ClaimedAt != nil {
+				summaries[i].Status = "claimed"
+			} else if progress.Status == "completed" {
+				summaries[i].Status = "completed"
+			} else {
+				summaries[i].Status = progress.Status
+			}
+		}
+	}
+	return summaries, nil
 }
 
 func (s *Service) ClaimMission(ctx context.Context, sess *session.Context, missionID string) (*MissionSummary, error) {
-	if _, err := ownerFromSession(sess); err != nil {
+	owner, err := ownerFromSession(sess)
+	if err != nil {
 		return nil, err
 	}
-	missions := DefaultMissionSummaries(s.clock.Now())
-	if len(missions) == 0 {
+	id, err := uuid.Parse(missionID)
+	if err != nil {
 		return nil, ErrChallengeNotFound
 	}
-	missions[0].Status = "claimed"
+	progress, err := s.repo.GetMissionProgress(ctx, id, owner)
+	if err != nil {
+		return nil, err
+	}
+	if progress == nil {
+		return nil, ErrChallengeNotFound
+	}
+	if progress.Status != "completed" {
+		return nil, ErrResultsNotReady
+	}
+	if progress.ClaimedAt != nil {
+		return &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed"}, nil
+	}
+	if err := s.repo.ClaimMissionProgress(ctx, id, owner, s.clock.Now()); err != nil {
+		return nil, err
+	}
 	s.logger.InfoContext(ctx, "challenge mission claimed", slog.String("mission_id", missionID))
-	return &missions[0], nil
+	now := s.clock.Now()
+	return &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed", ActiveEndsAt: &now}, nil
 }
 
 func (s *Service) FinalizeAttemptResult(ctx context.Context, attempt ChallengeAttempt, roundResults any, completedAt time.Time, displayName string) error {
@@ -275,7 +367,69 @@ func (s *Service) FinalizeAttemptResult(ctx context.Context, attempt ChallengeAt
 		return err
 	}
 	s.logger.InfoContext(ctx, "challenge result finalized", slog.String("challenge_id", attempt.ChallengeID.String()), slog.String("attempt_id", attempt.ID.String()), slog.Int("score", result.TotalScore))
+	challenge, err := s.repo.GetChallengeByID(ctx, attempt.ChallengeID)
+	if err != nil || challenge == nil {
+		return err
+	}
+	owner, err := s.attemptOwner(attempt)
+	if err != nil {
+		return err
+	}
+	if challenge.Type == TypeDaily && challenge.ChallengeDate != nil {
+		s.updateStreak(ctx, owner, *challenge.ChallengeDate)
+	}
+	s.fireMissionProgress(ctx, attempt, challenge, roundResults, owner)
 	return nil
+}
+
+func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, completedAt time.Time) error {
+	attempt, err := s.repo.GetAttemptByGameID(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	if attempt == nil {
+		return nil
+	}
+	if attempt.Status == AttemptStatusCompleted {
+		return nil
+	}
+	gameData, err := s.repo.GetGameCompletionData(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	roundResults, err := s.repo.LoadGameRoundResults(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	var durationMS *int64
+	if gameData.StartedAt != nil {
+		d := completedAt.Sub(*gameData.StartedAt).Milliseconds()
+		durationMS = &d
+	}
+	if err := s.repo.UpdateAttemptCompletion(ctx, attempt.ID, gameData.TotalScore, 0, durationMS, completedAt); err != nil {
+		return err
+	}
+	attempt.TotalScore = gameData.TotalScore
+	attempt.CompletionDurationMS = durationMS
+	attempt.CompletedAt = &completedAt
+	owner, err := s.attemptOwner(*attempt)
+	if err != nil {
+		return err
+	}
+	resultsDTO := make([]struct {
+		RoundNumber    int `json:"round_number"`
+		Score          int `json:"score"`
+		DistanceMeters int `json:"distance_meters"`
+	}, len(roundResults))
+	totalDistance := 0
+	for i, r := range roundResults {
+		resultsDTO[i].RoundNumber = r.RoundNumber
+		resultsDTO[i].Score = r.Score
+		resultsDTO[i].DistanceMeters = r.DistanceMeters
+		totalDistance += r.DistanceMeters
+	}
+	attempt.TotalDistanceMeters = totalDistance
+	return s.FinalizeAttemptResult(ctx, *attempt, resultsDTO, completedAt, owner.displayName)
 }
 
 func (s *Service) materializeDaily(ctx context.Context, date, startsAt, endsAt time.Time) (*Challenge, error) {
@@ -493,4 +647,97 @@ func ownerFromSession(sess *session.Context) (ownerIdentity, error) {
 		return ownerIdentity{guestHash: &guest, displayName: "Guest"}, nil
 	}
 	return ownerIdentity{}, ErrForbidden
+}
+
+func (s *Service) attemptOwner(attempt ChallengeAttempt) (ownerIdentity, error) {
+	owner := ownerIdentity{userID: attempt.UserID, guestHash: attempt.GuestIdentityHash, displayName: "Player"}
+	if owner.guestHash != nil {
+		owner.displayName = "Guest"
+	}
+	if owner.userID == nil && owner.guestHash == nil {
+		return ownerIdentity{}, ErrForbidden
+	}
+	return owner, nil
+}
+
+func (s *Service) updateStreak(ctx context.Context, owner ownerIdentity, challengeDate time.Time) {
+	now := s.clock.Now()
+	existing, err := s.repo.GetStreakForOwner(ctx, owner)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "failed to load streak for update", slog.Any("error", err))
+		return
+	}
+	next := ApplyDailyCompletion(existing, challengeDate, now)
+	event := StreakEvent{
+		OwnerUserID:       owner.userID,
+		GuestIdentityHash: owner.guestHash,
+		ChallengeDate:     &challengeDate,
+		EventType:         "daily_completion",
+		CurrentStreak:     next.CurrentCount,
+	}
+	if existing != nil && next.CurrentCount == existing.CurrentCount {
+		return
+	}
+	if err := s.repo.UpsertStreak(ctx, owner, next); err != nil {
+		s.logger.ErrorContext(ctx, "failed to upsert streak", slog.Any("error", err))
+		return
+	}
+	_ = s.repo.CreateStreakEvent(ctx, event)
+	s.logger.InfoContext(ctx, "streak updated", slog.Int("current_count", next.CurrentCount), slog.Int("best_count", next.BestCount))
+}
+
+func (s *Service) fireMissionProgress(ctx context.Context, attempt ChallengeAttempt, challenge *Challenge, roundResults any, owner ownerIdentity) {
+	now := s.clock.Now()
+	resultJSON, _ := json.Marshal(roundResults)
+	var results []struct {
+		RoundNumber    int `json:"round_number"`
+		Score          int `json:"score"`
+		DistanceMeters int `json:"distance_meters"`
+	}
+	_ = json.Unmarshal(resultJSON, &results)
+	eventSource := &attempt.ID
+	challengeSource := &attempt.ChallengeID
+	if challenge.Type == TypeDaily {
+		s.applyMissionEvent(ctx, owner, now, "daily_completion", 1, eventSource, challengeSource)
+		if attempt.UserID != nil {
+			s.applyMissionEvent(ctx, owner, now, "streak_milestone", 1, eventSource, challengeSource)
+		}
+	}
+	if challenge.Type == TypeShared {
+		s.applyMissionEvent(ctx, owner, now, "shared_participation", 1, eventSource, challengeSource)
+	}
+	highAccuracy := true
+	for _, r := range results {
+		if r.Score < 4000 {
+			highAccuracy = false
+			break
+		}
+	}
+	if highAccuracy && len(results) > 0 {
+		s.applyMissionEvent(ctx, owner, now, "round_accuracy", 1, eventSource, challengeSource)
+	}
+	s.applyMissionEvent(ctx, owner, now, "score_threshold", attempt.TotalScore, eventSource, challengeSource)
+}
+
+func (s *Service) applyMissionEvent(ctx context.Context, owner ownerIdentity, now time.Time, missionCode string, delta int, sourceAttemptID, sourceChallengeID *uuid.UUID) {
+	if delta <= 0 {
+		return
+	}
+	mission, err := s.repo.GetMissionByCode(ctx, missionCode)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "failed to lookup mission for progress event", slog.String("mission_code", missionCode), slog.Any("error", err))
+		return
+	}
+	if mission == nil {
+		return
+	}
+	event := MissionProgressEvent{
+		SourceAttemptID:   sourceAttemptID,
+		SourceChallengeID: sourceChallengeID,
+		EventType:         missionCode,
+		Delta:             delta,
+	}
+	if err := s.repo.ApplyMissionProgressEvent(ctx, *mission, owner, event, now); err != nil {
+		s.logger.ErrorContext(ctx, "failed to apply mission progress", slog.String("mission_code", missionCode), slog.Any("error", err))
+	}
 }

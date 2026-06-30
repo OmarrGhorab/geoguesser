@@ -64,7 +64,7 @@ func (handlerServiceStub) StartChallengeAttempt(context.Context, *session.Contex
 func (handlerServiceStub) GetResults(context.Context, *session.Context, string) (*ResultResponse, error) {
 	return nil, ErrResultsNotReady
 }
-func (handlerServiceStub) GetLeaderboard(context.Context, *session.Context, string, int) (*LeaderboardResponse, error) {
+func (handlerServiceStub) GetLeaderboard(context.Context, *session.Context, string, int, string) (*LeaderboardResponse, error) {
 	return nil, ErrResultsNotReady
 }
 func (handlerServiceStub) GetDailyStreak(context.Context, *session.Context) (*StreakSummary, error) {

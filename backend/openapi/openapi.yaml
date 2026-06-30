@@ -401,6 +401,25 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /users/{userId}/games:
+    get:
+      tags: [Profile]
+      summary: Get user game history
+      operationId: getUserGameHistory
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Cursor-paginated list of the user's games.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserGameHistoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /maps:
     get:
       tags: [Maps]
@@ -1729,6 +1748,46 @@ components:
         best_score:
           type: integer
           minimum: 0
+
+    UserGameHistoryResponse:
+      type: object
+      required: [games, page]
+      properties:
+        games:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserGameHistoryItem'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    UserGameHistoryItem:
+      type: object
+      required: [id, map_id, mode, status, round_count, total_score, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        map_id:
+          type: string
+          format: uuid
+        mode:
+          type: string
+        status:
+          type: string
+        round_count:
+          type: integer
+          minimum: 1
+        total_score:
+          type: integer
+          minimum: 0
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
 
     MapListResponse:
       type: object

@@ -118,7 +118,6 @@ func main() {
 	usersService := users.NewService(usersRepo)
 	mapsService := maps.NewService(mapsRepo)
 	locationsService := locations.NewService(locationsRepo, locations.StaticProvider{})
-	gamesService := games.NewServiceWithOptions(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics)
 	var defaultChallengeMapID uuid.UUID
 	if cfg.ChallengeDefaultMapID != "" {
 		parsed, parseErr := uuid.Parse(cfg.ChallengeDefaultMapID)
@@ -129,6 +128,7 @@ func main() {
 		defaultChallengeMapID = parsed
 	}
 	challengesService := challenges.NewService(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics)
+	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, challengesService)
 
 	var storageProvider storage.Provider
 	if cfg.R2AccountID != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
