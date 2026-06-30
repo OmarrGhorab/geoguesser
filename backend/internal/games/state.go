@@ -1,7 +1,8 @@
 package games
 
 const (
-	GameModeSolo = "solo"
+	GameModeSolo        = "solo"
+	GameModePrivateRoom = "private_room"
 
 	GameStatusPending   = "pending"
 	GameStatusActive    = "active"
@@ -14,9 +15,13 @@ const (
 	RoundStatusCompleted = "completed"
 	RoundStatusCancelled = "cancelled"
 
+	PlayerRoleHost   = "host"
 	PlayerRolePlayer = "player"
 
-	PlayerStatusActive = "active"
+	PlayerStatusActive       = "active"
+	PlayerStatusDisconnected = "disconnected"
+	PlayerStatusLeft         = "left"
+	PlayerStatusKicked       = "kicked"
 )
 
 // CanStart reports whether a game status can transition to active.

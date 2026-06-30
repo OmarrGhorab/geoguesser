@@ -832,6 +832,38 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /rooms/{roomCode}/ready:
+    post:
+      tags: [Rooms]
+      summary: Update player readiness
+      operationId: setRoomReady
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RoomCode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadyRoomRequest'
+      responses:
+        '200':
+          description: Ready state updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
   /rooms/{roomCode}/players/{playerId}:
     delete:
       tags: [Rooms]
@@ -846,8 +878,12 @@ paths:
         - $ref: '#/components/parameters/RoomCode'
         - $ref: '#/components/parameters/PlayerId'
       responses:
-        '204':
+        '200':
           description: Player removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -2459,7 +2495,7 @@ components:
           format: uuid
         visibility:
           type: string
-          enum: [private, public]
+          enum: [private]
         round_count:
           type: integer
           minimum: 1
@@ -2474,6 +2510,10 @@ components:
           minimum: 2
           maximum: 50
           default: 8
+        display_name:
+          type: string
+          minLength: 2
+          maxLength: 32
     JoinRoomRequest:
       type: object
       required: [code]
@@ -2490,6 +2530,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        map_id:
+          type: string
+          format: uuid
         round_count:
           type: integer
           minimum: 1
@@ -2502,6 +2545,13 @@ components:
           type: integer
           minimum: 2
           maximum: 50
+    ReadyRoomRequest:
+      type: object
+      additionalProperties: false
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
     RoomResponse:
       type: object
       required: [room]
@@ -2515,14 +2565,23 @@ components:
         - code
         - visibility
         - status
+        - version
         - max_players
         - round_count
+        - expires_at
         - players
+        - ready_player_ids
       properties:
         id:
           type: string
           format: uuid
         game_id:
+          type: [string, 'null']
+          format: uuid
+        host_player_id:
+          type: [string, 'null']
+          format: uuid
+        current_player_id:
           type: [string, 'null']
           format: uuid
         code:
@@ -2533,6 +2592,9 @@ components:
         status:
           type: string
           enum: [lobby, active, completed, expired, cancelled]
+        version:
+          type: integer
+          minimum: 0
         max_players:
           type: integer
         round_count:
@@ -2545,7 +2607,94 @@ components:
         players:
           type: array
           items:
-            $ref: '#/components/schemas/GamePlayer'
+            $ref: '#/components/schemas/RoomPlayer'
+        ready_player_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        current_round:
+          anyOf:
+            - $ref: '#/components/schemas/RoomCurrentRound'
+            - type: 'null'
+        guess_progress:
+          anyOf:
+            - $ref: '#/components/schemas/RoomGuessProgress'
+            - type: 'null'
+
+    RoomPlayer:
+      type: object
+      required: [id, display_name, role, membership_status, presence_status, is_ready, total_score, joined_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: [string, 'null']
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [host, player, spectator]
+        membership_status:
+          type: string
+          enum: [joined, left, kicked, disconnected]
+        presence_status:
+          type: string
+          enum: [connected, disconnected]
+        is_ready:
+          type: boolean
+        total_score:
+          type: integer
+        joined_at:
+          type: string
+          format: date-time
+        left_at:
+          type: [string, 'null']
+          format: date-time
+    RoomCurrentRound:
+      type: object
+      required: [id, round_number, status, starts_at, ends_at, media, revealed]
+      description: Hidden answer coordinates, location_id, and answer-revealing provider metadata are omitted until reveal.
+      properties:
+        id:
+          type: string
+          format: uuid
+        round_number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [pending, active, completed, cancelled]
+        starts_at:
+          type: [string, 'null']
+          format: date-time
+        ends_at:
+          type: [string, 'null']
+          format: date-time
+        media:
+          anyOf:
+            - $ref: '#/components/schemas/RoundMedia'
+            - type: 'null'
+        revealed:
+          type: boolean
+    RoomGuessProgress:
+      type: object
+      required: [submitted_count, eligible_count, submitted_player_ids]
+      description: Aggregate guess progress that never exposes guess coordinates or answer data before reveal.
+      properties:
+        submitted_count:
+          type: integer
+          minimum: 0
+        eligible_count:
+          type: integer
+          minimum: 0
+        submitted_player_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
 
     EnterMatchmakingRequest:
       type: object

@@ -27,6 +27,8 @@ import (
 	"github.com/raven/geoguess/backend/internal/platform/postgres"
 	redisplatform "github.com/raven/geoguess/backend/internal/platform/redis"
 	"github.com/raven/geoguess/backend/internal/platform/storage"
+	"github.com/raven/geoguess/backend/internal/realtime"
+	"github.com/raven/geoguess/backend/internal/rooms"
 	"github.com/raven/geoguess/backend/internal/uploads"
 	"github.com/raven/geoguess/backend/internal/users"
 )
@@ -81,6 +83,8 @@ func main() {
 	locationsRepo := locations.NewRepository(db)
 	gamesRepo := games.NewRepository(db)
 	challengesRepo := challenges.NewRepository(db)
+	roomsRepo := rooms.NewRepository(db)
+	roomCoordinator := redisplatform.NewRoomCoordinator(redisClient)
 
 	hasher := auth.NewBCryptHasher()
 	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
@@ -155,8 +159,11 @@ func main() {
 	locationsHandler := locations.NewHandler(locationsService, logger)
 	gamesHandler := games.NewHandler(gamesService, logger)
 	challengesHandler := challenges.NewHandler(challengesService, logger)
+	roomsService := rooms.NewServiceWithGames(roomsRepo, roomCoordinator, gamesService, logger, nil)
+	roomsHandler := rooms.NewHandler(roomsService, logger)
+	realtimeHandler := realtime.NewHandler(realtime.NewHub(), roomsService, logger, nil)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, roomsHandler, realtimeHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

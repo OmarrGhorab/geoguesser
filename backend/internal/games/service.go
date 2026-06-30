@@ -166,6 +166,45 @@ func (s *Service) StartGame(ctx context.Context, sess *session.Context, gameID s
 	return &GameResponse{Game: toGameDTO(*started)}, nil
 }
 
+func (s *Service) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID) (*MultiplayerStart, error) {
+	game, err := s.repo.GetGameByID(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if game == nil {
+		return nil, ErrGameNotFound
+	}
+	selected, err := s.selector.SelectLocations(ctx, game.MapID, game.RoundCount)
+	if err != nil {
+		return nil, err
+	}
+	selected = uniqueSelectedLocations(selected, game.RoundCount)
+	if len(selected) < game.RoundCount {
+		return nil, ErrNotEnoughLocations
+	}
+	now := s.clock.Now()
+	return s.repo.StartPrivateRoomGame(ctx, gameID, roundsFromSelected(gameID, selected, game.RoundCount), now, game.TimerSeconds)
+}
+
+func (s *Service) GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID) (*MultiplayerRoundState, error) {
+	state, err := s.repo.GetMultiplayerRoundState(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	if state != nil && state.Status == RoundStatusActive && state.EndsAt != nil && !now.Before(*state.EndsAt) {
+		if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now); err != nil && !errors.Is(err, ErrRoundClosed) {
+			return nil, err
+		}
+		state, err = s.repo.GetMultiplayerRoundState(ctx, gameID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	s.resolveMultiplayerMedia(state)
+	return state, nil
+}
+
 // GetCurrentRound returns the current round without hidden coordinates.
 func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, gameID string) (*CurrentRoundResponse, error) {
 	game, _, err := s.loadOwnedGame(ctx, sess, gameID)
@@ -199,16 +238,54 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		s.logger.InfoContext(ctx, "solo game guess rejected", slog.String("reason", "invalid_guess"))
 		return nil, ErrInvalidGuess
 	}
-	game, player, err := s.loadOwnedGame(ctx, sess, gameID)
+	owner, err := ownerFromSession(sess)
 	if err != nil {
 		outcome = "rejected"
-		s.logger.InfoContext(ctx, "solo game guess rejected", slog.String("reason", "load_game_failed"), slog.Any("error", err))
 		return nil, err
+	}
+	parsedGameID, err := uuid.Parse(gameID)
+	if err != nil {
+		outcome = "rejected"
+		return nil, ErrGameNotFound
+	}
+	game, err := s.repo.GetGameByID(ctx, parsedGameID)
+	if err != nil {
+		outcome = "rejected"
+		return nil, err
+	}
+	if game == nil {
+		outcome = "rejected"
+		return nil, ErrGameNotFound
+	}
+	var player *GamePlayer
+	if game.Mode == GameModePrivateRoom {
+		player, err = s.repo.GetPlayerByOwner(ctx, game.ID, owner)
+		if err != nil {
+			outcome = "rejected"
+			return nil, err
+		}
+		if player == nil {
+			outcome = "rejected"
+			return nil, ErrForbidden
+		}
+	} else {
+		player, err = s.repo.GetSoloPlayer(ctx, game.ID)
+		if err != nil {
+			outcome = "rejected"
+			return nil, err
+		}
+		if player == nil || !ownerMatches(owner, *player) {
+			outcome = "rejected"
+			return nil, ErrForbidden
+		}
 	}
 	if game.Status != GameStatusActive {
 		outcome = "rejected"
 		s.logger.InfoContext(ctx, "solo game guess rejected", slog.String("game_id", game.ID.String()), slog.String("reason", "game_not_active"))
 		return nil, ErrGameNotActive
+	}
+	if game.Mode == GameModePrivateRoom {
+		return s.submitPrivateRoomGuess(ctx, game, player, roundID, idempotencyKey, req)
 	}
 	parsedRoundID, err := uuid.Parse(roundID)
 	if err != nil {
@@ -340,6 +417,69 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 			DistanceMeters: saved.DistanceMeters,
 			Score:          saved.Score,
 			SubmittedAt:    saved.SubmittedAt,
+		},
+		ActualLocation: toRevealedLocation(*actual),
+	}, nil
+}
+
+func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player *GamePlayer, roundID, idempotencyKey string, req SubmitGuessRequest) (*GuessResultResponse, error) {
+	parsedRoundID, err := uuid.Parse(roundID)
+	if err != nil {
+		return nil, ErrRoundNotFound
+	}
+	current, err := s.repo.GetCurrentRound(ctx, game.ID)
+	if err != nil {
+		return nil, err
+	}
+	if current == nil || current.RoundID != parsedRoundID {
+		return nil, ErrRoundNotCurrent
+	}
+	now := s.clock.Now()
+	if current.EndsAt != nil && now.After(*current.EndsAt) {
+		return nil, ErrRoundClosed
+	}
+	key := strings.TrimSpace(idempotencyKey)
+	guess := Guess{Latitude: req.Latitude, Longitude: req.Longitude}
+	if key != "" {
+		existing, err := s.repo.GetGuessByIdempotencyKey(ctx, player.ID, key)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			if existing.RoundID != parsedRoundID || existing.Latitude != req.Latitude || existing.Longitude != req.Longitude {
+				return nil, ErrIdempotencyConflict
+			}
+			return s.guessReplayResponse(ctx, *existing)
+		}
+		guess.IdempotencyKey = &key
+	}
+	existing, err := s.repo.GetGuessByRoundPlayer(ctx, parsedRoundID, player.ID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrAlreadyGuessed
+	}
+	saved, actual, err := s.repo.SubmitMultiplayerGuessTx(ctx, game.ID, parsedRoundID, player.ID, guess, now)
+	if err != nil {
+		return nil, err
+	}
+	if saved == nil || actual == nil {
+		return nil, ErrRoundNotFound
+	}
+	if saved.GameCompleted && s.completionHook != nil {
+		if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
+			s.logger.ErrorContext(ctx, "private room completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+		}
+	}
+	return &GuessResultResponse{
+		Guess: GuessResult{
+			ID:             saved.Guess.ID,
+			Latitude:       saved.Guess.Latitude,
+			Longitude:      saved.Guess.Longitude,
+			DistanceMeters: saved.Guess.DistanceMeters,
+			Score:          saved.Guess.Score,
+			SubmittedAt:    saved.Guess.SubmittedAt,
 		},
 		ActualLocation: toRevealedLocation(*actual),
 	}, nil
@@ -519,6 +659,22 @@ func (s *Service) toRoundDTO(row currentRoundRow) RoundDTO {
 			Attribution: row.Attribution,
 		},
 	}
+}
+
+func (s *Service) resolveMultiplayerMedia(state *MultiplayerRoundState) {
+	if state == nil {
+		return
+	}
+	if s.media == nil {
+		state.MediaURL = ""
+		return
+	}
+	resolved, err := s.media.MediaURL(state.Provider, state.ProviderRef)
+	if err != nil {
+		state.MediaURL = ""
+		return
+	}
+	state.MediaURL = resolved
 }
 
 func toGameDTO(game Game) GameDTO {
