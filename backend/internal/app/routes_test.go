@@ -36,7 +36,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -67,7 +67,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	usersHandler := users.NewHandler(users.NewService(nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -110,7 +110,7 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -144,7 +144,7 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	challengesHandler := challenges.NewHandler(stubChallengeService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -174,19 +174,22 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 func testConfig() config.Config {
 	return config.Config{
-		AppEnv:             "test",
-		Version:            "0.0.0",
-		HTTPAddr:           ":8080",
-		AllowedOrigin:      "http://localhost:3000",
-		ReadTimeout:        10 * time.Second,
-		WriteTimeout:       15 * time.Second,
-		IdleTimeout:        60 * time.Second,
-		AccessTokenSecret:  "test-access-token-secret-at-least-32-bytes-long",
-		AccessTokenTTL:     15 * time.Minute,
-		RefreshTokenSecret: "test-refresh-token-secret-at-least-32-bytes-long",
-		RefreshTokenTTL:    7 * 24 * time.Hour,
-		CSRFSecret:         "test-csrf-secret-at-least-32-bytes-long",
-		GuestSessionSecret: "test-guest-secret-at-least-32-bytes-long",
+		AppEnv:                "test",
+		Version:               "0.0.0",
+		HTTPAddr:              ":8080",
+		AllowedOrigin:         "http://localhost:3000",
+		ReadTimeout:           10 * time.Second,
+		WriteTimeout:          15 * time.Second,
+		IdleTimeout:           60 * time.Second,
+		AccessTokenSecret:     "test-access-token-secret-at-least-32-bytes-long",
+		AccessTokenTTL:        15 * time.Minute,
+		RefreshTokenSecret:    "test-refresh-token-secret-at-least-32-bytes-long",
+		RefreshTokenTTL:       7 * 24 * time.Hour,
+		CSRFSecret:            "test-csrf-secret-at-least-32-bytes-long",
+		GuestSessionSecret:    "test-guest-secret-at-least-32-bytes-long",
+		RoomReconnectGrace:    30 * time.Second,
+		RoomHeartbeatInterval: 10 * time.Second,
+		RoomPresenceTTL:       30 * time.Second,
 	}
 }
 

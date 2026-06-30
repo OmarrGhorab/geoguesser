@@ -17,11 +17,13 @@ import (
 	"github.com/raven/geoguess/backend/internal/maps"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
+	"github.com/raven/geoguess/backend/internal/realtime"
+	"github.com/raven/geoguess/backend/internal/rooms"
 	"github.com/raven/geoguess/backend/internal/uploads"
 	"github.com/raven/geoguess/backend/internal/users"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -100,7 +102,19 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 					challengesHandler.RegisterRoutes(c)
 				})
 		}
+
+		if roomsHandler != nil {
+			roomLimit := appmiddleware.RateLimitConfig{Limit: 60, Window: 1 * time.Minute}
+			api.With(appmiddleware.RateLimit(rateLimiter, roomLimit, appmiddleware.RateLimitByIP("rooms"), logger)).
+				Group(func(r chi.Router) {
+					roomsHandler.RegisterRoutes(r)
+				})
+		}
 	})
+
+	if realtimeHandler != nil {
+		router.Get("/realtime/rooms/{roomCode}", realtimeHandler.Room)
+	}
 
 	router.Get("/health", healthHandler.Health)
 	router.Get("/ready", healthHandler.Ready)

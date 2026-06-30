@@ -59,6 +59,11 @@ type Config struct {
 
 	ChallengeResetHourUTC int
 	ChallengeDefaultMapID string
+
+	RoomReconnectGrace      time.Duration
+	RoomHeartbeatInterval   time.Duration
+	RoomPresenceTTL         time.Duration
+	RoomRealtimeAllowedHost string
 }
 
 func Load() (Config, error) {
@@ -112,6 +117,11 @@ func Load() (Config, error) {
 
 		ChallengeResetHourUTC: intEnvAllowZero("CHALLENGE_RESET_HOUR_UTC", 0),
 		ChallengeDefaultMapID: strings.TrimSpace(os.Getenv("CHALLENGE_DEFAULT_MAP_ID")),
+
+		RoomReconnectGrace:      durationSeconds("ROOM_RECONNECT_GRACE_SECONDS", 30),
+		RoomHeartbeatInterval:   durationSeconds("ROOM_HEARTBEAT_INTERVAL_SECONDS", 10),
+		RoomPresenceTTL:         durationSeconds("ROOM_PRESENCE_TTL_SECONDS", 30),
+		RoomRealtimeAllowedHost: strings.TrimSpace(os.Getenv("ROOM_REALTIME_ALLOWED_HOST")),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -160,6 +170,15 @@ func (c Config) Validate() error {
 	}
 	if c.ChallengeResetHourUTC < 0 || c.ChallengeResetHourUTC > 23 {
 		return errors.New("CHALLENGE_RESET_HOUR_UTC must be between 0 and 23")
+	}
+	if c.RoomReconnectGrace <= 0 {
+		return errors.New("ROOM_RECONNECT_GRACE_SECONDS must be positive")
+	}
+	if c.RoomHeartbeatInterval <= 0 {
+		return errors.New("ROOM_HEARTBEAT_INTERVAL_SECONDS must be positive")
+	}
+	if c.RoomPresenceTTL <= c.RoomHeartbeatInterval {
+		return errors.New("ROOM_PRESENCE_TTL_SECONDS must be greater than ROOM_HEARTBEAT_INTERVAL_SECONDS")
 	}
 
 	return nil

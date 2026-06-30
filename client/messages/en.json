@@ -11,6 +11,64 @@
     "play": "Play",
     "challenges": "Challenges"
   },
+  "Rooms": {
+    "title": "Private rooms",
+    "create": "Create room",
+    "join": "Join room",
+    "mapId": "Map ID",
+    "roomCode": "Room code",
+    "displayName": "Display name",
+    "copyInvite": "Copy invite",
+    "players": "Players",
+    "host": "Host",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "rounds": "Rounds",
+    "timer": "Timer",
+    "noTimer": "No timer",
+    "hostControls": {
+      "title": "Host controls",
+      "roundCount": "Rounds",
+      "maxPlayers": "Max players",
+      "timerSeconds": "Timer seconds",
+      "saveSettings": "Save settings",
+      "startRoom": "Start room",
+      "removePlayer": "Remove",
+      "ready": "Ready",
+      "notReady": "Not ready",
+      "locked": "Settings locked"
+    },
+    "game": {
+      "activeTitle": "Room game",
+      "round": "Round",
+      "countdown": "Time left",
+      "untimed": "Untimed round",
+      "progress": "Guess progress",
+      "submitted": "submitted",
+      "results": "Round results",
+      "score": "Score",
+      "final": "Final results",
+      "waiting": "Waiting for the next round"
+    },
+    "recovery": {
+      "reconnecting": "Reconnecting to the room",
+      "degraded": "Live updates are delayed. Refreshing authoritative state.",
+      "disconnected": "Disconnected from live updates",
+      "restored": "Live room state restored"
+    },
+    "states": {
+      "invalid": "Invalid room code",
+      "expired": "This room has expired",
+      "full": "This room is full",
+      "kicked": "You were removed from this room",
+      "unauthorized": "You are not authorized for this room",
+      "loading": "Loading room",
+      "empty": "No players yet",
+      "disabled": "This action is unavailable right now",
+      "success": "Room state updated",
+      "unexpected": "Something went wrong"
+    }
+  },
   "Challenges": {
     "daily": {
       "eyebrow": "Daily challenge",
