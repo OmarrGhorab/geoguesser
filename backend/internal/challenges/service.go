@@ -684,11 +684,11 @@ func (s *Service) startAttempt(ctx context.Context, sess *session.Context, chall
 	for i := 0; i < settings.RoundCount; i++ {
 		selected[i] = maps.SelectedLocation{ID: locationRows[i].LocationID}
 	}
-	attempt, game, err := s.repo.CreateAttemptWithGame(ctx, challenge, owner, selected, settings, s.clock.Now())
+	attempt, _, err := s.repo.CreateAttemptWithGame(ctx, challenge, owner, selected, settings, s.clock.Now())
 	if err != nil {
 		return nil, err
 	}
-	attempt, game, err = s.repo.StartAttemptGame(ctx, attempt.ID, s.clock.Now())
+	attempt, game, err := s.repo.StartAttemptGame(ctx, attempt.ID, s.clock.Now())
 	if err != nil {
 		return nil, err
 	}
