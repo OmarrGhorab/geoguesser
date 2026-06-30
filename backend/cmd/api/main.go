@@ -12,8 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/raven/geoguess/backend/internal/app"
 	"github.com/raven/geoguess/backend/internal/auth"
+	"github.com/raven/geoguess/backend/internal/challenges"
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
@@ -78,6 +80,7 @@ func main() {
 	mapsRepo := maps.NewRepository(db)
 	locationsRepo := locations.NewRepository(db)
 	gamesRepo := games.NewRepository(db)
+	challengesRepo := challenges.NewRepository(db)
 
 	hasher := auth.NewBCryptHasher()
 	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
@@ -115,7 +118,17 @@ func main() {
 	usersService := users.NewService(usersRepo)
 	mapsService := maps.NewService(mapsRepo)
 	locationsService := locations.NewService(locationsRepo, locations.StaticProvider{})
-	gamesService := games.NewServiceWithOptions(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics)
+	var defaultChallengeMapID uuid.UUID
+	if cfg.ChallengeDefaultMapID != "" {
+		parsed, parseErr := uuid.Parse(cfg.ChallengeDefaultMapID)
+		if parseErr != nil {
+			logger.Error("failed to parse CHALLENGE_DEFAULT_MAP_ID", slog.Any("error", parseErr))
+			os.Exit(1)
+		}
+		defaultChallengeMapID = parsed
+	}
+	challengesService := challenges.NewServiceWithIdempotency(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics, challenges.NewRedisIdempotencyStore(redisClient))
+	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, challengesService)
 
 	var storageProvider storage.Provider
 	if cfg.R2AccountID != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
@@ -141,8 +154,9 @@ func main() {
 	mapsHandler := maps.NewHandler(mapsService, logger)
 	locationsHandler := locations.NewHandler(locationsService, logger)
 	gamesHandler := games.NewHandler(gamesService, logger)
+	challengesHandler := challenges.NewHandler(challengesService, logger)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

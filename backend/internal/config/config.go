@@ -56,6 +56,9 @@ type Config struct {
 	R2PublicURL       string
 	R2SignedURLTTL    time.Duration
 	R2MaxFileSize     int64
+
+	ChallengeResetHourUTC int
+	ChallengeDefaultMapID string
 }
 
 func Load() (Config, error) {
@@ -106,6 +109,9 @@ func Load() (Config, error) {
 		R2PublicURL:       strings.TrimSpace(os.Getenv("R2_PUBLIC_URL")),
 		R2SignedURLTTL:    durationSeconds("R2_SIGNED_URL_TTL_SECONDS", 15*60),
 		R2MaxFileSize:     int64Env("R2_MAX_FILE_SIZE_BYTES", 10*1024*1024),
+
+		ChallengeResetHourUTC: intEnvAllowZero("CHALLENGE_RESET_HOUR_UTC", 0),
+		ChallengeDefaultMapID: strings.TrimSpace(os.Getenv("CHALLENGE_DEFAULT_MAP_ID")),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -152,6 +158,9 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.GuestSessionSecret) == "" {
 		return errors.New("GUEST_SESSION_SECRET is required")
 	}
+	if c.ChallengeResetHourUTC < 0 || c.ChallengeResetHourUTC > 23 {
+		return errors.New("CHALLENGE_RESET_HOUR_UTC must be between 0 and 23")
+	}
 
 	return nil
 }
@@ -186,6 +195,18 @@ func intEnv(key string, fallback int) int {
 	}
 	n, err := strconv.Atoi(value)
 	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
+}
+
+func intEnvAllowZero(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
 		return fallback
 	}
 	return n

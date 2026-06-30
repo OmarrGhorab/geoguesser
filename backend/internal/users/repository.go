@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,4 +81,59 @@ func (r *Repository) GetUserStats(ctx context.Context, userID uuid.UUID) (*UserS
 		AverageScore: result.AverageScore,
 		BestScore:    result.BestScore,
 	}, nil
+}
+
+// ListUserGameHistory returns a cursor-paginated list of games the user participated in.
+func (r *Repository) ListUserGameHistory(ctx context.Context, userID uuid.UUID, limit int, cursor string) ([]UserGameHistoryItem, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	createdAtCursor, idCursor := parseHistoryCursor(cursor)
+
+	query := `
+		SELECT
+			g.id,
+			g.map_id,
+			g.mode,
+			g.status,
+			g.round_count,
+			g.total_score,
+			g.started_at,
+			g.completed_at,
+			g.created_at
+		FROM games g
+		JOIN game_players gp ON gp.game_id = g.id
+		WHERE gp.user_id = ?
+		  AND gp.status = 'active'
+		  AND g.status IN ('completed', 'active', 'abandoned')
+	`
+	args := []any{userID}
+	if createdAtCursor != nil && idCursor != nil {
+		query += ` AND (g.created_at, g.id) < (?, ?)`
+		args = append(args, *createdAtCursor, *idCursor)
+	}
+	query += ` ORDER BY g.created_at DESC, g.id DESC LIMIT ?`
+	args = append(args, limit)
+
+	var rows []UserGameHistoryItem
+	if err := r.db.WithContext(ctx).Raw(query, args...).Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to list user game history: %w", err)
+	}
+	return rows, nil
+}
+
+func parseHistoryCursor(cursor string) (*time.Time, *uuid.UUID) {
+	parts := strings.SplitN(cursor, "|", 2)
+	if len(parts) != 2 {
+		return nil, nil
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return nil, nil
+	}
+	id, err := uuid.Parse(parts[1])
+	if err != nil {
+		return nil, nil
+	}
+	return &createdAt, &id
 }

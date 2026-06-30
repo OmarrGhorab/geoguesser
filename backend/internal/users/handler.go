@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	apphttp "github.com/raven/geoguess/backend/internal/http"
@@ -23,12 +24,31 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 // RegisterRoutes mounts user routes.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/users/{userId}/stats", h.GetUserStats)
+	r.Get("/users/{userId}/games", h.GetUserGameHistory)
 }
 
 // GetUserStats handles GET /users/{userId}/stats.
 func (h *Handler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userId")
 	resp, err := h.service.GetUserStats(r.Context(), userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidUserID), errors.Is(err, ErrUserNotFound):
+			apphttp.Error(w, r, h.logger, apphttp.ErrNotFound)
+		default:
+			apphttp.Error(w, r, h.logger, err)
+		}
+		return
+	}
+	apphttp.OK(w, r, resp)
+}
+
+// GetUserGameHistory handles GET /users/{userId}/games.
+func (h *Handler) GetUserGameHistory(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	cursor := r.URL.Query().Get("cursor")
+	resp, err := h.service.GetUserGameHistory(r.Context(), userID, limit, cursor)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidUserID), errors.Is(err, ErrUserNotFound):

@@ -142,6 +142,44 @@ func (r *Repository) SelectLocations(ctx context.Context, mapID uuid.UUID, count
 	return rows, nil
 }
 
+// SelectLocationsBySeed returns a deterministic active-location ordering for a
+// fixed challenge seed. Challenge materialization persists the selected rows, so
+// the deterministic order is needed only when the immutable snapshot is first
+// created.
+func (r *Repository) SelectLocationsBySeed(ctx context.Context, mapID uuid.UUID, count int, seed string) ([]SelectedLocation, error) {
+	if count <= 0 {
+		return []SelectedLocation{}, nil
+	}
+	if count > 100 {
+		count = 100
+	}
+
+	var rows []SelectedLocation
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			l.id,
+			l.latitude,
+			l.longitude,
+			l.country_code,
+			l.region,
+			l.locality,
+			l.difficulty,
+			l.provider,
+			l.attribution
+		FROM locations l
+		JOIN map_locations ml ON ml.location_id = l.id
+		JOIN maps m ON m.id = ml.map_id
+		WHERE ml.map_id = ?
+		  AND l.status = 'active'
+		  AND m.status = 'active'
+		ORDER BY md5(? || ':' || l.id::text), l.id
+		LIMIT ?
+	`, mapID, seed, count).Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to select seeded locations: %w", err)
+	}
+	return rows, nil
+}
+
 func (r *Repository) selectLocationsByRandomKey(ctx context.Context, mapID uuid.UUID, pivot float64, afterPivot bool, limit int, rows *[]SelectedLocation) error {
 	query := `
 		SELECT

@@ -93,6 +93,11 @@ func (s *Service) SelectLocations(ctx context.Context, mapID uuid.UUID, count in
 	return s.repo.SelectLocations(ctx, mapID, count)
 }
 
+// SelectLocationsBySeed returns deterministic active gameplay locations for a fixed seed.
+func (s *Service) SelectLocationsBySeed(ctx context.Context, mapID uuid.UUID, count int, seed string) ([]SelectedLocation, error) {
+	return s.repo.SelectLocationsBySeed(ctx, mapID, count, seed)
+}
+
 func toMapDTO(m Map) MapDTO {
 	return MapDTO{
 		ID:          m.ID,

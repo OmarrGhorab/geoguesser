@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import GuessMap from "@/components/GuessMap";
 import ResultCard from "@/components/ResultCard";
 import ScoreBar from "@/components/ScoreBar";
 import StreetView from "@/components/StreetView";
 import { haversineDistanceKm } from "@/lib/haversine";
+import { Link } from "@/lib/i18n/navigation";
 import { type Location, pickRandomLocation } from "@/lib/locations";
 import { scoreFromDistanceKm } from "@/lib/scoring";
 import type { GamePhase, GuessResult, LatLng } from "@/lib/types";
 
 export function GamePrototype() {
+  const locale = useLocale();
+  const t = useTranslations("Navigation");
   const [location, setLocation] = useState<Location>(() => pickRandomLocation());
   const [seenLocationIds, setSeenLocationIds] = useState<readonly number[]>(() => []);
   const [guess, setGuess] = useState<LatLng | null>(null);
@@ -55,6 +59,22 @@ export function GamePrototype() {
       <StreetView location={location} />
 
       <ScoreBar totalScore={totalScore} round={round} />
+
+      <nav
+        aria-label={t("primary")}
+        className="absolute left-4 top-16 z-30 flex rounded-lg bg-white/95 p-1 shadow-lg ring-1 ring-black/10 backdrop-blur"
+      >
+        <span className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">
+          {t("play")}
+        </span>
+        <Link
+          href="/challenges/daily"
+          locale={locale}
+          className="rounded-md px-3 py-2 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+        >
+          {t("challenges")}
+        </Link>
+      </nav>
 
       <GuessMap
         phase={phase}

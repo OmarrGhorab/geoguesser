@@ -21,15 +21,19 @@ type LocationSelector interface {
 	SelectLocations(ctx context.Context, mapID uuid.UUID, count int) ([]maps.SelectedLocation, error)
 }
 
-// Service implements solo game business rules.
+type GameCompletionHook interface {
+	OnGameCompleted(ctx context.Context, gameID uuid.UUID, completedAt time.Time) error
+}
+
 type Service struct {
-	repo        *Repository
-	selector    LocationSelector
-	media       LocationMediaProvider
-	clock       clock.Clock
-	logger      *slog.Logger
-	idempotency IdempotencyStore
-	metrics     MetricsRecorder
+	repo           *Repository
+	selector       LocationSelector
+	media          LocationMediaProvider
+	clock          clock.Clock
+	logger         *slog.Logger
+	idempotency    IdempotencyStore
+	metrics        MetricsRecorder
+	completionHook GameCompletionHook
 }
 
 // NewService returns a solo game service.
@@ -42,12 +46,15 @@ func NewServiceWithMedia(repo *Repository, selector LocationSelector, media Loca
 	return NewServiceWithOptions(repo, selector, media, clk, logger, nil, nil)
 }
 
-// NewServiceWithOptions returns a solo game service with optional runtime integrations.
 func NewServiceWithOptions(repo *Repository, selector LocationSelector, media LocationMediaProvider, clk clock.Clock, logger *slog.Logger, idempotency IdempotencyStore, metrics MetricsRecorder) *Service {
+	return NewServiceWithHook(repo, selector, media, clk, logger, idempotency, metrics, nil)
+}
+
+func NewServiceWithHook(repo *Repository, selector LocationSelector, media LocationMediaProvider, clk clock.Clock, logger *slog.Logger, idempotency IdempotencyStore, metrics MetricsRecorder, completionHook GameCompletionHook) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{repo: repo, selector: selector, media: media, clock: clk, logger: logger, idempotency: idempotency, metrics: metrics}
+	return &Service{repo: repo, selector: selector, media: media, clock: clk, logger: logger, idempotency: idempotency, metrics: metrics, completionHook: completionHook}
 }
 
 // CreateGame creates a pending solo game.
@@ -318,6 +325,11 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 			slog.String("game_id", game.ID.String()),
 			slog.Int("final_round_score", saved.Score),
 		)
+		if s.completionHook != nil {
+			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
+				s.logger.ErrorContext(ctx, "challenge completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+			}
+		}
 	}
 	// Recalculate score from actual coordinates before returning if repository used full answer.
 	return &GuessResultResponse{
