@@ -127,7 +127,7 @@ func main() {
 		}
 		defaultChallengeMapID = parsed
 	}
-	challengesService := challenges.NewService(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics)
+	challengesService := challenges.NewServiceWithIdempotency(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics, challenges.NewRedisIdempotencyStore(redisClient))
 	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, challengesService)
 
 	var storageProvider storage.Provider

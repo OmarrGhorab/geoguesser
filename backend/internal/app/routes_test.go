@@ -195,16 +195,16 @@ type stubChallengeService struct{}
 func (stubChallengeService) GetDaily(context.Context, *session.Context, string) (*challenges.ChallengeMetadataResponse, error) {
 	return nil, challenges.ErrChallengeUnavailable
 }
-func (stubChallengeService) StartDailyAttempt(context.Context, *session.Context) (*challenges.ChallengeAttemptResponse, error) {
+func (stubChallengeService) StartDailyAttempt(context.Context, *session.Context, string) (*challenges.ChallengeAttemptResponse, error) {
 	return nil, challenges.ErrChallengeUnavailable
 }
-func (stubChallengeService) CreateShared(context.Context, *session.Context, challenges.CreateSharedChallengeRequest) (*challenges.ChallengeMetadataResponse, error) {
+func (stubChallengeService) CreateShared(context.Context, *session.Context, string, challenges.CreateSharedChallengeRequest) (*challenges.ChallengeMetadataResponse, error) {
 	return nil, challenges.ErrInvalidChallengeInput
 }
 func (stubChallengeService) GetShared(context.Context, *session.Context, string) (*challenges.ChallengeMetadataResponse, error) {
 	return nil, challenges.ErrChallengeNotFound
 }
-func (stubChallengeService) StartChallengeAttempt(context.Context, *session.Context, string) (*challenges.ChallengeAttemptResponse, error) {
+func (stubChallengeService) StartChallengeAttempt(context.Context, *session.Context, string, string) (*challenges.ChallengeAttemptResponse, error) {
 	return nil, challenges.ErrChallengeNotFound
 }
 func (stubChallengeService) GetResults(context.Context, *session.Context, string) (*challenges.ResultResponse, error) {
@@ -219,6 +219,6 @@ func (stubChallengeService) GetDailyStreak(context.Context, *session.Context) (*
 func (stubChallengeService) GetMissions(context.Context, *session.Context) ([]challenges.MissionSummary, error) {
 	return nil, challenges.ErrForbidden
 }
-func (stubChallengeService) ClaimMission(context.Context, *session.Context, string) (*challenges.MissionSummary, error) {
+func (stubChallengeService) ClaimMission(context.Context, *session.Context, string, string) (*challenges.MissionSummary, error) {
 	return nil, challenges.ErrForbidden
 }

@@ -180,7 +180,8 @@ type StreakEvent struct {
 	GuestIdentityHash *string    `gorm:"type:text"`
 	ChallengeDate     *time.Time `gorm:"type:date"`
 	EventType         string     `gorm:"type:text;not null"`
-	CurrentStreak     int        `gorm:"type:int;not null;default:0"`
+	PreviousCount     int        `gorm:"type:int;not null;default:0"`
+	NewCount          int        `gorm:"type:int;not null;default:0"`
 	CreatedAt         time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 }
 

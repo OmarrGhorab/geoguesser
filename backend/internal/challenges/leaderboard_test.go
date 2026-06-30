@@ -29,3 +29,19 @@ func TestLeaderboardOrderingTieBreakers(t *testing.T) {
 		t.Fatalf("second attempt = %s", got)
 	}
 }
+
+func TestLeaderboardCursorRoundTripIncludesRankAndAttempt(t *testing.T) {
+	entry := LeaderboardEntry{
+		Rank:      42,
+		AttemptID: uuid.MustParse("00000000-0000-0000-0000-000000000042"),
+	}
+
+	cursor := encodeLeaderboardCursor(entry)
+	rank, attemptID, err := decodeLeaderboardCursor(cursor)
+	if err != nil {
+		t.Fatalf("decodeLeaderboardCursor failed: %v", err)
+	}
+	if rank != entry.Rank || attemptID != entry.AttemptID {
+		t.Fatalf("cursor decoded rank=%d attempt=%s, want rank=%d attempt=%s", rank, attemptID, entry.Rank, entry.AttemptID)
+	}
+}

@@ -2,9 +2,12 @@ package challenges
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -315,9 +318,9 @@ func (r *Repository) ListLeaderboardEntries(ctx context.Context, challengeID uui
 	var entries []LeaderboardEntry
 	query := r.db.WithContext(ctx).Where("challenge_id = ?", challengeID)
 	if cursor != "" {
-		var cursorAttemptID uuid.UUID
-		if err := cursorAttemptID.UnmarshalText([]byte(cursor)); err == nil {
-			query = query.Where("attempt_id > ?", cursorAttemptID)
+		rank, attemptID, err := decodeLeaderboardCursor(cursor)
+		if err == nil {
+			query = query.Where("(rank, attempt_id) > (?, ?)", rank, attemptID)
 		}
 	}
 	if err := query.Order("rank ASC, attempt_id ASC").Limit(limit).Find(&entries).Error; err != nil {
@@ -398,7 +401,8 @@ func (r *Repository) UpsertStreak(ctx context.Context, owner ownerIdentity, stre
 		return ErrForbidden
 	}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: ownerColumn(owner)}},
+		Columns:     []clause.Column{{Name: ownerColumn(owner)}},
+		TargetWhere: ownerConflictTargetWhere(owner),
 		DoUpdates: clause.AssignmentColumns([]string{
 			"current_count",
 			"best_count",
@@ -411,9 +415,11 @@ func (r *Repository) UpsertStreak(ctx context.Context, owner ownerIdentity, stre
 }
 
 func (r *Repository) CreateStreakEvent(ctx context.Context, event StreakEvent) error {
+	owner := ownerIdentity{userID: event.OwnerUserID, guestHash: event.GuestIdentityHash}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: ownerColumn(ownerIdentity{userID: event.OwnerUserID, guestHash: event.GuestIdentityHash})}, {Name: "challenge_date"}, {Name: "event_type"}},
-		DoNothing: true,
+		Columns:     []clause.Column{{Name: ownerColumn(owner)}, {Name: "challenge_date"}, {Name: "event_type"}},
+		TargetWhere: ownerConflictTargetWhere(owner),
+		DoNothing:   true,
 	}).Create(&event).Error
 }
 
@@ -442,7 +448,8 @@ func (r *Repository) ApplyMissionProgressEvent(ctx context.Context, mission Miss
 			progress.CompletedAt = &now
 		}
 		return tx.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "mission_id"}, {Name: ownerColumn(owner)}},
+			Columns:     []clause.Column{{Name: "mission_id"}, {Name: ownerColumn(owner)}},
+			TargetWhere: ownerConflictTargetWhere(owner),
 			DoUpdates: clause.Assignments(map[string]any{
 				"current_value": gorm.Expr("LEAST(mission_progress.current_value + EXCLUDED.current_value, mission_progress.target_value)"),
 				"status":        gorm.Expr("CASE WHEN LEAST(mission_progress.current_value + EXCLUDED.current_value, mission_progress.target_value) >= mission_progress.target_value THEN 'completed' ELSE 'in_progress' END"),
@@ -640,6 +647,38 @@ func ownerColumn(owner ownerIdentity) string {
 	return "guest_identity_hash"
 }
 
+func ownerConflictTargetWhere(owner ownerIdentity) clause.Where {
+	if owner.userID != nil {
+		return clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "owner_user_id IS NOT NULL"}}}
+	}
+	return clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "guest_identity_hash IS NOT NULL"}}}
+}
+
+func encodeLeaderboardCursor(entry LeaderboardEntry) string {
+	raw := strconv.Itoa(entry.Rank) + ":" + entry.AttemptID.String()
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func decodeLeaderboardCursor(cursor string) (int, uuid.UUID, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0, uuid.Nil, err
+	}
+	parts := strings.SplitN(string(raw), ":", 2)
+	if len(parts) != 2 {
+		return 0, uuid.Nil, fmt.Errorf("invalid leaderboard cursor")
+	}
+	rank, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, uuid.Nil, err
+	}
+	attemptID, err := uuid.Parse(parts[1])
+	if err != nil {
+		return 0, uuid.Nil, err
+	}
+	return rank, attemptID, nil
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -654,7 +693,7 @@ type gameRoundResult struct {
 }
 
 type gameCompletionData struct {
-	TotalScore int        `gorm:"column:total_score"`
-	StartedAt  *time.Time `gorm:"column:started_at"`
+	TotalScore  int        `gorm:"column:total_score"`
+	StartedAt   *time.Time `gorm:"column:started_at"`
 	CompletedAt *time.Time `gorm:"column:completed_at"`
 }

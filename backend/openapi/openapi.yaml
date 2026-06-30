@@ -1489,7 +1489,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Stable retry key for replay-safe writes. Guess submission replays identical requests and rejects conflicting reuse.
+      description: Stable retry key for replay-safe writes. Identical requests replay the original successful result; conflicting reuse returns 409.
       schema:
         type: string
         minLength: 16
@@ -2322,8 +2322,44 @@ components:
           $ref: '#/components/schemas/ChallengeAttemptSummary'
         visible:
           type: boolean
+        total_score:
+          type: [integer, 'null']
+          minimum: 0
+        total_distance_meters:
+          type: [integer, 'null']
+          minimum: 0
+        round_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChallengeRoundResult'
+        rank_context:
+          anyOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+        streak:
+          anyOf:
+            - $ref: '#/components/schemas/StreakSummary'
+            - type: 'null'
+        missions_summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissionSummary'
         message:
           type: string
+    ChallengeRoundResult:
+      type: object
+      required: [round_number, score, distance_meters]
+      properties:
+        round_number:
+          type: integer
+          minimum: 1
+        score:
+          type: integer
+          minimum: 0
+        distance_meters:
+          type: integer
+          minimum: 0
     ChallengeLeaderboardResponse:
       type: object
       required: [challenge, entries, page]

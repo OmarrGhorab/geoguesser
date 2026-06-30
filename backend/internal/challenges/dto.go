@@ -1,6 +1,7 @@
 package challenges
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,10 +98,22 @@ type CreateSharedChallengeRequest struct {
 }
 
 type ResultResponse struct {
-	Challenge ChallengeSummary `json:"challenge"`
-	Attempt   AttemptSummary   `json:"attempt"`
-	Visible   bool             `json:"visible"`
-	Message   string           `json:"message,omitempty"`
+	Challenge       ChallengeSummary `json:"challenge"`
+	Attempt         AttemptSummary   `json:"attempt"`
+	Visible         bool             `json:"visible"`
+	TotalScore      *int             `json:"total_score,omitempty"`
+	TotalDistance   *int             `json:"total_distance_meters,omitempty"`
+	RoundResults    []RoundResultDTO `json:"round_results,omitempty"`
+	RankContext     *json.RawMessage `json:"rank_context,omitempty"`
+	Streak          *StreakSummary   `json:"streak,omitempty"`
+	MissionsSummary []MissionSummary `json:"missions_summary,omitempty"`
+	Message         string           `json:"message,omitempty"`
+}
+
+type RoundResultDTO struct {
+	RoundNumber    int `json:"round_number"`
+	Score          int `json:"score"`
+	DistanceMeters int `json:"distance_meters"`
 }
 
 type LeaderboardResponse struct {

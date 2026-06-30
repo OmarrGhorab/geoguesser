@@ -2,7 +2,10 @@ package challenges
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -16,6 +19,7 @@ import (
 
 type LocationSelector interface {
 	SelectLocations(ctx context.Context, mapID uuid.UUID, count int) ([]maps.SelectedLocation, error)
+	SelectLocationsBySeed(ctx context.Context, mapID uuid.UUID, count int, seed string) ([]maps.SelectedLocation, error)
 }
 
 type MetricsRecorder interface{}
@@ -28,13 +32,18 @@ type Service struct {
 	resetHourUTC int
 	defaultMapID uuid.UUID
 	metrics      MetricsRecorder
+	idempotency  IdempotencyStore
 }
 
 func NewService(repo *Repository, selector LocationSelector, clk clock.Clock, logger *slog.Logger, resetHourUTC int, defaultMapID uuid.UUID, metrics MetricsRecorder) *Service {
+	return NewServiceWithIdempotency(repo, selector, clk, logger, resetHourUTC, defaultMapID, metrics, nil)
+}
+
+func NewServiceWithIdempotency(repo *Repository, selector LocationSelector, clk clock.Clock, logger *slog.Logger, resetHourUTC int, defaultMapID uuid.UUID, metrics MetricsRecorder, idempotency IdempotencyStore) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{repo: repo, selector: selector, clock: clk, logger: logger, resetHourUTC: resetHourUTC, defaultMapID: defaultMapID, metrics: metrics}
+	return &Service{repo: repo, selector: selector, clock: clk, logger: logger, resetHourUTC: resetHourUTC, defaultMapID: defaultMapID, metrics: metrics, idempotency: idempotency}
 }
 
 func (s *Service) GetDaily(ctx context.Context, sess *session.Context, dateOverride string) (*ChallengeMetadataResponse, error) {
@@ -62,7 +71,12 @@ func (s *Service) GetDaily(ctx context.Context, sess *session.Context, dateOverr
 	return s.metadata(ctx, sess, *challenge)
 }
 
-func (s *Service) StartDailyAttempt(ctx context.Context, sess *session.Context) (*ChallengeAttemptResponse, error) {
+func (s *Service) StartDailyAttempt(ctx context.Context, sess *session.Context, idempotencyKey string) (*ChallengeAttemptResponse, error) {
+	replay, op, handled, err := beginIdempotency[ChallengeAttemptResponse](ctx, s.idempotency, idempotencyKey, "start_daily_attempt", sess, nil)
+	if handled || err != nil {
+		return replay, err
+	}
+	defer releaseIdempotency(ctx, op)
 	now := s.clock.Now()
 	date, _, _ := DailyWindow(now, s.resetHourUTC)
 	challenge, err := s.repo.GetDailyByDate(ctx, date)
@@ -82,10 +96,22 @@ func (s *Service) StartDailyAttempt(ctx context.Context, sess *session.Context) 
 	if challenge == nil {
 		return nil, ErrChallengeNotFound
 	}
-	return s.startAttempt(ctx, sess, *challenge)
+	resp, err := s.startAttempt(ctx, sess, *challenge)
+	if err != nil {
+		return nil, err
+	}
+	if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
-func (s *Service) CreateShared(ctx context.Context, sess *session.Context, req CreateSharedChallengeRequest) (*ChallengeMetadataResponse, error) {
+func (s *Service) CreateShared(ctx context.Context, sess *session.Context, idempotencyKey string, req CreateSharedChallengeRequest) (*ChallengeMetadataResponse, error) {
+	replay, op, handled, err := beginIdempotency[ChallengeMetadataResponse](ctx, s.idempotency, idempotencyKey, "create_shared_challenge", sess, req)
+	if handled || err != nil {
+		return replay, err
+	}
+	defer releaseIdempotency(ctx, op)
 	owner, err := ownerFromSession(sess)
 	if err != nil {
 		return nil, err
@@ -97,11 +123,11 @@ func (s *Service) CreateShared(ctx context.Context, sess *session.Context, req C
 	if req.MapID == uuid.Nil {
 		return nil, ErrInvalidChallengeInput
 	}
-	selected, err := s.selectUnique(ctx, req.MapID, settings.RoundCount)
+	seed, err := SharedSeed()
 	if err != nil {
 		return nil, err
 	}
-	seed, err := SharedSeed()
+	selected, err := s.selectUniqueBySeed(ctx, req.MapID, settings.RoundCount, seed)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +153,14 @@ func (s *Service) CreateShared(ctx context.Context, sess *session.Context, req C
 		return nil, err
 	}
 	s.logger.InfoContext(ctx, "shared challenge created", slog.String("challenge_id", challenge.ID.String()), slog.String("map_id", req.MapID.String()))
-	return s.metadata(ctx, sess, *challenge)
+	resp, err := s.metadata(ctx, sess, *challenge)
+	if err != nil {
+		return nil, err
+	}
+	if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (s *Service) GetShared(ctx context.Context, sess *session.Context, code string) (*ChallengeMetadataResponse, error) {
@@ -141,7 +174,12 @@ func (s *Service) GetShared(ctx context.Context, sess *session.Context, code str
 	return s.metadata(ctx, sess, *challenge)
 }
 
-func (s *Service) StartChallengeAttempt(ctx context.Context, sess *session.Context, challengeID string) (*ChallengeAttemptResponse, error) {
+func (s *Service) StartChallengeAttempt(ctx context.Context, sess *session.Context, idempotencyKey string, challengeID string) (*ChallengeAttemptResponse, error) {
+	replay, op, handled, err := beginIdempotency[ChallengeAttemptResponse](ctx, s.idempotency, idempotencyKey, "start_challenge_attempt:"+challengeID, sess, nil)
+	if handled || err != nil {
+		return replay, err
+	}
+	defer releaseIdempotency(ctx, op)
 	id, err := uuid.Parse(challengeID)
 	if err != nil {
 		return nil, ErrChallengeNotFound
@@ -153,7 +191,14 @@ func (s *Service) StartChallengeAttempt(ctx context.Context, sess *session.Conte
 	if challenge == nil {
 		return nil, ErrChallengeNotFound
 	}
-	return s.startAttempt(ctx, sess, *challenge)
+	resp, err := s.startAttempt(ctx, sess, *challenge)
+	if err != nil {
+		return nil, err
+	}
+	if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (s *Service) GetResults(ctx context.Context, sess *session.Context, challengeID string) (*ResultResponse, error) {
@@ -179,19 +224,56 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, challen
 	if attempt == nil {
 		return nil, ErrResultsNotReady
 	}
-	if attempt.Status != AttemptStatusCompleted {
-		s.logger.InfoContext(ctx, "challenge result spoiler protected", slog.String("challenge_id", id.String()), slog.String("attempt_id", attempt.ID.String()))
-	}
 	settings, err := decodeSettings(challenge.SettingsSnapshot)
 	if err != nil {
 		return nil, err
 	}
-	return &ResultResponse{
-		Challenge: toChallengeSummary(*challenge, settings),
-		Attempt:   toAttemptSummary(*attempt, nil),
-		Visible:   attempt.Status == AttemptStatusCompleted,
-		Message:   "Results are available after completing the challenge.",
-	}, nil
+	if attempt.Status != AttemptStatusCompleted {
+		s.logger.InfoContext(ctx, "challenge result spoiler protected", slog.String("challenge_id", id.String()), slog.String("attempt_id", attempt.ID.String()))
+		return &ResultResponse{
+			Challenge: toChallengeSummary(*challenge, settings),
+			Attempt:   toAttemptSummary(*attempt, nil),
+			Visible:   false,
+			Message:   "Results are available after completing the challenge.",
+		}, nil
+	}
+	result, err := s.repo.GetResultByAttempt(ctx, attempt.ID)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, ErrResultsNotReady
+	}
+	var rounds []RoundResultDTO
+	if err := json.Unmarshal(result.RoundResultsSnapshot, &rounds); err != nil {
+		return nil, fmt.Errorf("decode challenge result snapshot: %w", err)
+	}
+	totalScore := result.TotalScore
+	totalDistance := result.TotalDistanceMeters
+	resp := &ResultResponse{
+		Challenge:     toChallengeSummary(*challenge, settings),
+		Attempt:       toAttemptSummary(*attempt, nil),
+		Visible:       true,
+		TotalScore:    &totalScore,
+		TotalDistance: &totalDistance,
+		RoundResults:  rounds,
+	}
+	if len(result.RankSnapshot) > 0 {
+		rankContext := result.RankSnapshot
+		resp.RankContext = &rankContext
+	}
+	streak, err := s.repo.GetStreakForOwner(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	streakSummary := toStreakSummary(streak, owner.guestHash != nil)
+	resp.Streak = &streakSummary
+	missions, err := s.GetMissions(ctx, sess)
+	if err != nil {
+		return nil, err
+	}
+	resp.MissionsSummary = missions
+	return resp, nil
 }
 
 func (s *Service) GetLeaderboard(ctx context.Context, sess *session.Context, challengeID string, limit int, cursor string) (*LeaderboardResponse, error) {
@@ -214,10 +296,13 @@ func (s *Service) GetLeaderboard(ctx context.Context, sess *session.Context, cha
 	if err != nil {
 		return nil, err
 	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
 	var nextCursor *string
 	if len(entries) == limit {
-		lastAttemptID := entries[len(entries)-1].AttemptID.String()
-		nextCursor = &lastAttemptID
+		cursor := encodeLeaderboardCursor(entries[len(entries)-1])
+		nextCursor = &cursor
 	}
 	var currentUserID *uuid.UUID
 	if sess != nil && sess.IsRegistered() {
@@ -317,7 +402,12 @@ func (s *Service) GetMissions(ctx context.Context, sess *session.Context) ([]Mis
 	return summaries, nil
 }
 
-func (s *Service) ClaimMission(ctx context.Context, sess *session.Context, missionID string) (*MissionSummary, error) {
+func (s *Service) ClaimMission(ctx context.Context, sess *session.Context, idempotencyKey string, missionID string) (*MissionSummary, error) {
+	replay, op, handled, err := beginIdempotency[MissionSummary](ctx, s.idempotency, idempotencyKey, "claim_mission:"+missionID, sess, nil)
+	if handled || err != nil {
+		return replay, err
+	}
+	defer releaseIdempotency(ctx, op)
 	owner, err := ownerFromSession(sess)
 	if err != nil {
 		return nil, err
@@ -337,14 +427,22 @@ func (s *Service) ClaimMission(ctx context.Context, sess *session.Context, missi
 		return nil, ErrResultsNotReady
 	}
 	if progress.ClaimedAt != nil {
-		return &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed"}, nil
+		resp := &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed"}
+		if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
+			return nil, err
+		}
+		return resp, nil
 	}
 	if err := s.repo.ClaimMissionProgress(ctx, id, owner, s.clock.Now()); err != nil {
 		return nil, err
 	}
 	s.logger.InfoContext(ctx, "challenge mission claimed", slog.String("mission_id", missionID))
 	now := s.clock.Now()
-	return &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed", ActiveEndsAt: &now}, nil
+	resp := &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed", ActiveEndsAt: &now}
+	if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (s *Service) FinalizeAttemptResult(ctx context.Context, attempt ChallengeAttempt, roundResults any, completedAt time.Time, displayName string) error {
@@ -406,21 +504,11 @@ func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, complet
 		d := completedAt.Sub(*gameData.StartedAt).Milliseconds()
 		durationMS = &d
 	}
-	if err := s.repo.UpdateAttemptCompletion(ctx, attempt.ID, gameData.TotalScore, 0, durationMS, completedAt); err != nil {
-		return err
-	}
-	attempt.TotalScore = gameData.TotalScore
-	attempt.CompletionDurationMS = durationMS
-	attempt.CompletedAt = &completedAt
 	owner, err := s.attemptOwner(*attempt)
 	if err != nil {
 		return err
 	}
-	resultsDTO := make([]struct {
-		RoundNumber    int `json:"round_number"`
-		Score          int `json:"score"`
-		DistanceMeters int `json:"distance_meters"`
-	}, len(roundResults))
+	resultsDTO := make([]RoundResultDTO, len(roundResults))
 	totalDistance := 0
 	for i, r := range roundResults {
 		resultsDTO[i].RoundNumber = r.RoundNumber
@@ -428,6 +516,12 @@ func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, complet
 		resultsDTO[i].DistanceMeters = r.DistanceMeters
 		totalDistance += r.DistanceMeters
 	}
+	if err := s.repo.UpdateAttemptCompletion(ctx, attempt.ID, gameData.TotalScore, totalDistance, durationMS, completedAt); err != nil {
+		return err
+	}
+	attempt.TotalScore = gameData.TotalScore
+	attempt.CompletionDurationMS = durationMS
+	attempt.CompletedAt = &completedAt
 	attempt.TotalDistanceMeters = totalDistance
 	return s.FinalizeAttemptResult(ctx, *attempt, resultsDTO, completedAt, owner.displayName)
 }
@@ -441,7 +535,8 @@ func (s *Service) materializeDaily(ctx context.Context, date, startsAt, endsAt t
 	if err != nil {
 		return nil, err
 	}
-	selected, err := s.selectUnique(ctx, mapID, settings.RoundCount)
+	seed := DailySeed(date)
+	selected, err := s.selectUniqueBySeed(ctx, mapID, settings.RoundCount, seed)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +546,7 @@ func (s *Service) materializeDaily(ctx context.Context, date, startsAt, endsAt t
 	}
 	challenge := &Challenge{
 		Type:             TypeDaily,
-		Seed:             DailySeed(date),
+		Seed:             seed,
 		ChallengeDate:    &date,
 		ResetStartsAt:    &startsAt,
 		ResetEndsAt:      &endsAt,
@@ -475,6 +570,29 @@ func (s *Service) firstActiveMapID(ctx context.Context) (uuid.UUID, error) {
 
 func (s *Service) selectUnique(ctx context.Context, mapID uuid.UUID, count int) ([]maps.SelectedLocation, error) {
 	selected, err := s.selector.SelectLocations(ctx, mapID, count)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[uuid.UUID]struct{}, count)
+	unique := make([]maps.SelectedLocation, 0, count)
+	for _, location := range selected {
+		if location.ID == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[location.ID]; ok {
+			continue
+		}
+		seen[location.ID] = struct{}{}
+		unique = append(unique, location)
+		if len(unique) == count {
+			return unique, nil
+		}
+	}
+	return nil, ErrNotEnoughLocations
+}
+
+func (s *Service) selectUniqueBySeed(ctx context.Context, mapID uuid.UUID, count int, seed string) ([]maps.SelectedLocation, error) {
+	selected, err := s.selector.SelectLocationsBySeed(ctx, mapID, count, seed)
 	if err != nil {
 		return nil, err
 	}
@@ -527,7 +645,7 @@ func (s *Service) metadata(ctx context.Context, sess *session.Context, challenge
 	}
 	var countdown *CountdownSummary
 	if challenge.ResetEndsAt != nil {
-		remaining := int64(time.Until(*challenge.ResetEndsAt).Seconds())
+		remaining := int64(s.clock.Until(*challenge.ResetEndsAt).Seconds())
 		if remaining < 0 {
 			remaining = 0
 		}
@@ -625,6 +743,98 @@ func toStreakSummary(streak *Streak, guestLimited bool) StreakSummary {
 	return StreakSummary{CurrentCount: streak.CurrentCount, BestCount: streak.BestCount, LastCompletedChallengeDate: last, Status: streak.Status, ProtectionState: streak.ProtectionState, GuestLimited: guestLimited}
 }
 
+const (
+	idempotencyReplayTTL = 24 * time.Hour
+	idempotencyLockTTL   = 2 * time.Minute
+)
+
+type idempotencyOperation struct {
+	store       IdempotencyStore
+	key         string
+	fingerprint string
+	claimed     bool
+}
+
+func beginIdempotency[T any](ctx context.Context, store IdempotencyStore, rawKey, operation string, sess *session.Context, body any) (*T, *idempotencyOperation, bool, error) {
+	rawKey = strings.TrimSpace(rawKey)
+	if store == nil || rawKey == "" {
+		return nil, nil, false, nil
+	}
+	storageKey := idempotencyStorageKey(operation, sess, rawKey)
+	fingerprint, err := idempotencyFingerprint(operation, sess, body)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	record, err := store.Get(ctx, storageKey)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	if record != nil {
+		if record.Fingerprint != fingerprint {
+			return nil, nil, true, ErrIdempotencyConflict
+		}
+		var replay T
+		if err := json.Unmarshal(record.Payload, &replay); err != nil {
+			return nil, nil, false, fmt.Errorf("decode challenge idempotency replay: %w", err)
+		}
+		return &replay, nil, true, nil
+	}
+	claimed, err := store.Claim(ctx, storageKey, idempotencyLockTTL)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	if !claimed {
+		return nil, nil, true, ErrIdempotencyConflict
+	}
+	return nil, &idempotencyOperation{store: store, key: storageKey, fingerprint: fingerprint, claimed: true}, false, nil
+}
+
+func storeIdempotencyResponse[T any](ctx context.Context, op *idempotencyOperation, resp *T) error {
+	if op == nil || op.store == nil {
+		return nil
+	}
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("encode challenge idempotency replay: %w", err)
+	}
+	return op.store.Store(ctx, op.key, IdempotencyRecord{Fingerprint: op.fingerprint, Payload: payload}, idempotencyReplayTTL)
+}
+
+func releaseIdempotency(ctx context.Context, op *idempotencyOperation) {
+	if op == nil || op.store == nil || !op.claimed {
+		return
+	}
+	_ = op.store.Release(ctx, op.key)
+	op.claimed = false
+}
+
+func idempotencyStorageKey(operation string, sess *session.Context, rawKey string) string {
+	sum := sha256.Sum256([]byte(operation + "|" + idempotencyActor(sess) + "|" + rawKey))
+	return "challenges:idempotency:" + hex.EncodeToString(sum[:])
+}
+
+func idempotencyFingerprint(operation string, sess *session.Context, body any) (string, error) {
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("encode challenge idempotency fingerprint: %w", err)
+	}
+	sum := sha256.Sum256([]byte(operation + "|" + idempotencyActor(sess) + "|" + string(bodyJSON)))
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func idempotencyActor(sess *session.Context) string {
+	if sess == nil {
+		return "none"
+	}
+	if sess.IsRegistered() && sess.UserID != nil {
+		return "user:" + *sess.UserID
+	}
+	if sess.IsGuest() && sess.GuestID != nil {
+		return "guest:" + *sess.GuestID
+	}
+	return "anonymous"
+}
+
 type ownerIdentity struct {
 	userID      *uuid.UUID
 	guestHash   *string
@@ -673,7 +883,11 @@ func (s *Service) updateStreak(ctx context.Context, owner ownerIdentity, challen
 		GuestIdentityHash: owner.guestHash,
 		ChallengeDate:     &challengeDate,
 		EventType:         "daily_completion",
-		CurrentStreak:     next.CurrentCount,
+		PreviousCount:     0,
+		NewCount:          next.CurrentCount,
+	}
+	if existing != nil {
+		event.PreviousCount = existing.CurrentCount
 	}
 	if existing != nil && next.CurrentCount == existing.CurrentCount {
 		return

@@ -49,16 +49,16 @@ type handlerServiceStub struct{}
 func (handlerServiceStub) GetDaily(context.Context, *session.Context, string) (*ChallengeMetadataResponse, error) {
 	return nil, ErrChallengeUnavailable
 }
-func (handlerServiceStub) StartDailyAttempt(context.Context, *session.Context) (*ChallengeAttemptResponse, error) {
+func (handlerServiceStub) StartDailyAttempt(context.Context, *session.Context, string) (*ChallengeAttemptResponse, error) {
 	return nil, ErrChallengeUnavailable
 }
-func (handlerServiceStub) CreateShared(context.Context, *session.Context, CreateSharedChallengeRequest) (*ChallengeMetadataResponse, error) {
+func (handlerServiceStub) CreateShared(context.Context, *session.Context, string, CreateSharedChallengeRequest) (*ChallengeMetadataResponse, error) {
 	return nil, ErrInvalidChallengeInput
 }
 func (handlerServiceStub) GetShared(context.Context, *session.Context, string) (*ChallengeMetadataResponse, error) {
 	return nil, ErrChallengeNotFound
 }
-func (handlerServiceStub) StartChallengeAttempt(context.Context, *session.Context, string) (*ChallengeAttemptResponse, error) {
+func (handlerServiceStub) StartChallengeAttempt(context.Context, *session.Context, string, string) (*ChallengeAttemptResponse, error) {
 	return nil, ErrChallengeNotFound
 }
 func (handlerServiceStub) GetResults(context.Context, *session.Context, string) (*ResultResponse, error) {
@@ -73,6 +73,6 @@ func (handlerServiceStub) GetDailyStreak(context.Context, *session.Context) (*St
 func (handlerServiceStub) GetMissions(context.Context, *session.Context) ([]MissionSummary, error) {
 	return nil, ErrForbidden
 }
-func (handlerServiceStub) ClaimMission(context.Context, *session.Context, string) (*MissionSummary, error) {
+func (handlerServiceStub) ClaimMission(context.Context, *session.Context, string, string) (*MissionSummary, error) {
 	return nil, ErrForbidden
 }

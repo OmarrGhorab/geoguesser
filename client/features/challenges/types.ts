@@ -73,3 +73,22 @@ export type ChallengeAttemptResponse = {
     current_round_number?: number;
   };
 };
+
+export type ChallengeRoundResult = {
+  round_number: number;
+  score: number;
+  distance_meters: number;
+};
+
+export type ChallengeResultResponse = {
+  challenge: ChallengeSummary;
+  attempt: AttemptSummary;
+  visible: boolean;
+  total_score?: number | null;
+  total_distance_meters?: number | null;
+  round_results?: ChallengeRoundResult[];
+  rank_context?: Record<string, unknown> | null;
+  streak?: StreakSummary | null;
+  missions_summary?: MissionSummary[];
+  message?: string;
+};

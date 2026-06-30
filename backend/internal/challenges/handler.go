@@ -20,15 +20,15 @@ type Handler struct {
 
 type ServiceAPI interface {
 	GetDaily(context.Context, *session.Context, string) (*ChallengeMetadataResponse, error)
-	StartDailyAttempt(context.Context, *session.Context) (*ChallengeAttemptResponse, error)
-	CreateShared(context.Context, *session.Context, CreateSharedChallengeRequest) (*ChallengeMetadataResponse, error)
+	StartDailyAttempt(context.Context, *session.Context, string) (*ChallengeAttemptResponse, error)
+	CreateShared(context.Context, *session.Context, string, CreateSharedChallengeRequest) (*ChallengeMetadataResponse, error)
 	GetShared(context.Context, *session.Context, string) (*ChallengeMetadataResponse, error)
-	StartChallengeAttempt(context.Context, *session.Context, string) (*ChallengeAttemptResponse, error)
+	StartChallengeAttempt(context.Context, *session.Context, string, string) (*ChallengeAttemptResponse, error)
 	GetResults(context.Context, *session.Context, string) (*ResultResponse, error)
 	GetLeaderboard(context.Context, *session.Context, string, int, string) (*LeaderboardResponse, error)
 	GetDailyStreak(context.Context, *session.Context) (*StreakSummary, error)
 	GetMissions(context.Context, *session.Context) ([]MissionSummary, error)
-	ClaimMission(context.Context, *session.Context, string) (*MissionSummary, error)
+	ClaimMission(context.Context, *session.Context, string, string) (*MissionSummary, error)
 }
 
 func NewHandler(service ServiceAPI, logger *slog.Logger) *Handler {
@@ -58,7 +58,7 @@ func (h *Handler) GetDaily(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) StartDailyAttempt(w http.ResponseWriter, r *http.Request) {
-	resp, err := h.service.StartDailyAttempt(r.Context(), appmiddleware.SessionFromContext(r.Context()))
+	resp, err := h.service.StartDailyAttempt(r.Context(), appmiddleware.SessionFromContext(r.Context()), r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		h.mapError(w, r, err)
 		return
@@ -72,7 +72,7 @@ func (h *Handler) CreateShared(w http.ResponseWriter, r *http.Request) {
 		apphttp.Error(w, r, h.logger, err)
 		return
 	}
-	resp, err := h.service.CreateShared(r.Context(), appmiddleware.SessionFromContext(r.Context()), req)
+	resp, err := h.service.CreateShared(r.Context(), appmiddleware.SessionFromContext(r.Context()), r.Header.Get("Idempotency-Key"), req)
 	if err != nil {
 		h.mapError(w, r, err)
 		return
@@ -90,7 +90,7 @@ func (h *Handler) GetShared(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) StartChallengeAttempt(w http.ResponseWriter, r *http.Request) {
-	resp, err := h.service.StartChallengeAttempt(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "challengeId"))
+	resp, err := h.service.StartChallengeAttempt(r.Context(), appmiddleware.SessionFromContext(r.Context()), r.Header.Get("Idempotency-Key"), chi.URLParam(r, "challengeId"))
 	if err != nil {
 		h.mapError(w, r, err)
 		return
@@ -137,7 +137,7 @@ func (h *Handler) GetMissions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ClaimMission(w http.ResponseWriter, r *http.Request) {
-	resp, err := h.service.ClaimMission(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "missionId"))
+	resp, err := h.service.ClaimMission(r.Context(), appmiddleware.SessionFromContext(r.Context()), r.Header.Get("Idempotency-Key"), chi.URLParam(r, "missionId"))
 	if err != nil {
 		h.mapError(w, r, err)
 		return
