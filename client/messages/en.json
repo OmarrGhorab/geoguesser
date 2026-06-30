@@ -5,5 +5,77 @@
   },
   "Game": {
     "title": "GeoGuess"
+  },
+  "Navigation": {
+    "primary": "Primary navigation",
+    "play": "Play",
+    "challenges": "Challenges"
+  },
+  "Challenges": {
+    "daily": {
+      "eyebrow": "Daily challenge",
+      "title": "Today's fixed-seed challenge",
+      "description": "Play the same locked rounds as everyone else before the next reset.",
+      "countdown": "Next daily",
+      "start": "Start daily",
+      "resume": "Resume daily",
+      "unavailableTitle": "Daily challenge is not ready",
+      "unavailableMessage": "Make sure there is an active public map with enough locations, then refresh this page.",
+      "backToPlay": "Back to play"
+    },
+    "shared": {
+      "eyebrow": "Shared challenge",
+      "title": "Shared fixed-seed challenge",
+      "description": "Open a stable challenge link and compete asynchronously under identical rules.",
+      "start": "Start challenge",
+      "resume": "Resume challenge"
+    },
+    "fields": {
+      "seed": "Seed",
+      "map": "Map",
+      "status": "Status",
+      "rounds": "Rounds",
+      "timer": "Timer",
+      "noTimer": "No timer",
+      "movement": "Movement",
+      "shareCode": "Share code"
+    },
+    "streak": {
+      "title": "Daily streak",
+      "summary": "Current {current}, best {best}",
+      "protection": {
+        "none": "No streak protection is active.",
+        "available": "Streak protection is available.",
+        "consumed": "Streak protection was consumed.",
+        "expired": "Streak protection expired."
+      }
+    },
+    "missions": {
+      "title": "Missions",
+      "dailyCompletion": {
+        "title": "Complete a daily",
+        "description": "Finish today's daily challenge."
+      },
+      "sharedParticipation": {
+        "title": "Join a shared challenge",
+        "description": "Start or complete a shared challenge."
+      },
+      "scoreThreshold": {
+        "title": "Score target",
+        "description": "Reach the challenge score target."
+      },
+      "leaderboardMilestone": {
+        "title": "Climb the board",
+        "description": "Reach a leaderboard milestone."
+      },
+      "streakMilestone": {
+        "title": "Keep the streak",
+        "description": "Maintain a daily streak milestone."
+      },
+      "roundAccuracy": {
+        "title": "Close round",
+        "description": "Finish a round near the correct location."
+      }
+    }
   }
 }

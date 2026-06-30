@@ -26,6 +26,9 @@ tags:
   - name: Rooms
   - name: Matchmaking
   - name: Leaderboards
+  - name: Challenges
+  - name: Missions
+  - name: Streaks
   - name: Billing
   - name: Webhooks
   - name: Health
@@ -893,6 +896,262 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+
+  /challenges/daily:
+    get:
+      tags: [Challenges]
+      summary: Get today's daily challenge
+      operationId: getDailyChallenge
+      security:
+        - accessCookie: []
+        - guestSession: []
+        - {}
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Daily challenge metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeMetadataResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /challenges/daily/attempts:
+    post:
+      tags: [Challenges]
+      summary: Start or resume today's daily challenge attempt
+      operationId: startDailyChallengeAttempt
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Daily challenge attempt state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeAttemptResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /challenges/shared:
+    post:
+      tags: [Challenges]
+      summary: Create a shared fixed-seed challenge
+      operationId: createSharedChallenge
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSharedChallengeRequest'
+      responses:
+        '201':
+          description: Shared challenge created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeMetadataResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /challenges/shared/{code}:
+    get:
+      tags: [Challenges]
+      summary: Get shared challenge metadata
+      operationId: getSharedChallenge
+      security:
+        - accessCookie: []
+        - guestSession: []
+        - {}
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shared challenge metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeMetadataResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /challenges/{challengeId}/attempts:
+    post:
+      tags: [Challenges]
+      summary: Start or resume a challenge attempt
+      operationId: startChallengeAttempt
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Challenge attempt state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeAttemptResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /challenges/{challengeId}/results:
+    get:
+      tags: [Challenges]
+      summary: Get current actor challenge results
+      operationId: getChallengeResults
+      security:
+        - accessCookie: []
+        - guestSession: []
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+      responses:
+        '200':
+          description: Spoiler-safe result state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResultResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /challenges/{challengeId}/leaderboard:
+    get:
+      tags: [Challenges]
+      summary: Get challenge leaderboard
+      operationId: getChallengeLeaderboard
+      security:
+        - accessCookie: []
+        - guestSession: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Paginated leaderboard.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeLeaderboardResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /missions:
+    get:
+      tags: [Missions]
+      summary: Get active challenge missions
+      operationId: getMissions
+      security:
+        - accessCookie: []
+        - guestSession: []
+      responses:
+        '200':
+          description: Active missions and progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /missions/{missionId}/claim:
+    post:
+      tags: [Missions]
+      summary: Claim a completed mission status or reward
+      operationId: claimMission
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - name: missionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Mission progress updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionSummary'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /streaks/daily:
+    get:
+      tags: [Streaks]
+      summary: Get daily challenge streak
+      operationId: getDailyStreak
+      security:
+        - accessCookie: []
+        - guestSession: []
+      responses:
+        '200':
+          description: Daily streak state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreakSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /leaderboards/global:
     get:
       tags: [Leaderboards]
@@ -1122,6 +1381,15 @@ components:
         type: string
 
   parameters:
+
+    ChallengeId:
+      name: challengeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
     GameId:
       name: gameId
       in: path
@@ -1834,6 +2102,257 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GuessResult'
+
+
+    ChallengeMetadataResponse:
+      type: object
+      required: [challenge, streak, missions_summary, leaderboard_summary]
+      properties:
+        challenge:
+          $ref: '#/components/schemas/ChallengeSummary'
+        attempt_state:
+          anyOf:
+            - $ref: '#/components/schemas/ChallengeAttemptSummary'
+            - type: 'null'
+        streak:
+          $ref: '#/components/schemas/StreakSummary'
+        missions_summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissionSummary'
+        leaderboard_summary:
+          type: object
+          required: [participants]
+          properties:
+            participants:
+              type: integer
+              minimum: 0
+        countdown:
+          anyOf:
+            - $ref: '#/components/schemas/ChallengeCountdown'
+            - type: 'null'
+    ChallengeAttemptResponse:
+      type: object
+      required: [challenge, attempt]
+      properties:
+        challenge:
+          $ref: '#/components/schemas/ChallengeSummary'
+        attempt:
+          $ref: '#/components/schemas/ChallengeAttemptSummary'
+        game:
+          anyOf:
+            - $ref: '#/components/schemas/Game'
+            - type: 'null'
+    ChallengeSummary:
+      type: object
+      required: [id, type, seed, map, settings, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [daily, shared]
+        seed:
+          type: string
+        challenge_date:
+          type: [string, 'null']
+          format: date
+        reset_starts_at:
+          type: [string, 'null']
+          format: date-time
+        reset_ends_at:
+          type: [string, 'null']
+          format: date-time
+        map:
+          type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+        settings:
+          $ref: '#/components/schemas/ChallengeSettings'
+        status:
+          type: string
+          enum: [draft, active, completed, archived, unavailable]
+        share_code:
+          type: [string, 'null']
+        share_url:
+          type: [string, 'null']
+    ChallengeSettings:
+      type: object
+      required: [round_count, movement_rules, scoring_version]
+      properties:
+        round_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+        timer_seconds:
+          type: [integer, 'null']
+          minimum: 10
+          maximum: 600
+        movement_rules:
+          type: string
+        scoring_version:
+          type: integer
+    ChallengeAttemptSummary:
+      type: object
+      required: [id, challenge_id, status, leaderboard_eligible, total_score]
+      properties:
+        id:
+          type: string
+          format: uuid
+        challenge_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, active, completed, abandoned, expired]
+        leaderboard_eligible:
+          type: boolean
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+        total_score:
+          type: integer
+          minimum: 0
+        current_round_number:
+          type: [integer, 'null']
+        game_id:
+          type: [string, 'null']
+          format: uuid
+    ChallengeCountdown:
+      type: object
+      required: [reset_ends_at, seconds_remaining]
+      properties:
+        reset_ends_at:
+          type: string
+          format: date-time
+        seconds_remaining:
+          type: integer
+          minimum: 0
+    CreateSharedChallengeRequest:
+      type: object
+      required: [map_id, round_count]
+      additionalProperties: false
+      properties:
+        map_id:
+          type: string
+          format: uuid
+        round_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+        timer_seconds:
+          type: [integer, 'null']
+          minimum: 10
+          maximum: 600
+        display_label:
+          type: [string, 'null']
+    ChallengeResultResponse:
+      type: object
+      required: [challenge, attempt, visible]
+      properties:
+        challenge:
+          $ref: '#/components/schemas/ChallengeSummary'
+        attempt:
+          $ref: '#/components/schemas/ChallengeAttemptSummary'
+        visible:
+          type: boolean
+        message:
+          type: string
+    ChallengeLeaderboardResponse:
+      type: object
+      required: [challenge, entries, page]
+      properties:
+        challenge:
+          $ref: '#/components/schemas/ChallengeSummary'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChallengeLeaderboardEntry'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    ChallengeLeaderboardEntry:
+      type: object
+      required: [rank, display_name, score, completed_at]
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+        display_name:
+          type: string
+        score:
+          type: integer
+          minimum: 0
+        completion_duration_ms:
+          type: [integer, 'null']
+        completed_at:
+          type: string
+          format: date-time
+        current_player:
+          type: boolean
+    StreakSummary:
+      type: object
+      required: [current_count, best_count, status, protection_state, guest_limited]
+      properties:
+        current_count:
+          type: integer
+          minimum: 0
+        best_count:
+          type: integer
+          minimum: 0
+        last_completed_challenge_date:
+          type: [string, 'null']
+          format: date
+        status:
+          type: string
+          enum: [active, broken, protected, inactive]
+        protection_state:
+          type: string
+          enum: [none, available, consumed, expired]
+        guest_limited:
+          type: boolean
+    MissionsResponse:
+      type: object
+      required: [missions]
+      properties:
+        missions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissionSummary'
+    MissionSummary:
+      type: object
+      required: [code, title_key, description_key, mission_type, current_value, target_value, status]
+      properties:
+        id:
+          type: [string, 'null']
+          format: uuid
+        code:
+          type: string
+        title_key:
+          type: string
+        description_key:
+          type: string
+        mission_type:
+          type: string
+          enum: [daily_completion, shared_participation, score_threshold, leaderboard_milestone, streak_milestone, round_accuracy]
+        current_value:
+          type: integer
+          minimum: 0
+        target_value:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [not_started, in_progress, completed, claimed, expired]
+        active_ends_at:
+          type: [string, 'null']
+          format: date-time
 
     CreateRoomRequest:
       type: object

@@ -5,5 +5,77 @@
   },
   "Game": {
     "title": "GeoGuess"
+  },
+  "Navigation": {
+    "primary": "التنقل الرئيسي",
+    "play": "اللعب",
+    "challenges": "التحديات"
+  },
+  "Challenges": {
+    "daily": {
+      "eyebrow": "تحدي اليوم",
+      "title": "تحدي اليوم ببذرة ثابتة",
+      "description": "العب نفس الجولات المقفلة مثل باقي اللاعبين قبل إعادة الضبط التالية.",
+      "countdown": "التحدي التالي",
+      "start": "ابدأ اليومي",
+      "resume": "أكمل اليومي",
+      "unavailableTitle": "تحدي اليوم غير جاهز",
+      "unavailableMessage": "تأكد من وجود خريطة عامة نشطة تحتوي على مواقع كافية، ثم حدث الصفحة.",
+      "backToPlay": "العودة للعب"
+    },
+    "shared": {
+      "eyebrow": "تحدي مشترك",
+      "title": "تحدي مشترك ببذرة ثابتة",
+      "description": "افتح رابط تحدي ثابت وتنافس بشكل غير متزامن بنفس القواعد.",
+      "start": "ابدأ التحدي",
+      "resume": "أكمل التحدي"
+    },
+    "fields": {
+      "seed": "البذرة",
+      "map": "الخريطة",
+      "status": "الحالة",
+      "rounds": "الجولات",
+      "timer": "المؤقت",
+      "noTimer": "بدون مؤقت",
+      "movement": "الحركة",
+      "shareCode": "رمز المشاركة"
+    },
+    "streak": {
+      "title": "سلسلة اليومي",
+      "summary": "الحالية {current}، الأفضل {best}",
+      "protection": {
+        "none": "لا توجد حماية سلسلة مفعلة.",
+        "available": "حماية السلسلة متاحة.",
+        "consumed": "تم استخدام حماية السلسلة.",
+        "expired": "انتهت حماية السلسلة."
+      }
+    },
+    "missions": {
+      "title": "المهام",
+      "dailyCompletion": {
+        "title": "أكمل تحدي اليوم",
+        "description": "أنه تحدي اليوم."
+      },
+      "sharedParticipation": {
+        "title": "شارك في تحدي مشترك",
+        "description": "ابدأ أو أكمل تحديا مشتركا."
+      },
+      "scoreThreshold": {
+        "title": "هدف النقاط",
+        "description": "حقق هدف النقاط في التحدي."
+      },
+      "leaderboardMilestone": {
+        "title": "اصعد في الترتيب",
+        "description": "حقق إنجازا في لوحة الترتيب."
+      },
+      "streakMilestone": {
+        "title": "حافظ على السلسلة",
+        "description": "حافظ على إنجاز في سلسلة اللعب اليومية."
+      },
+      "roundAccuracy": {
+        "title": "جولة دقيقة",
+        "description": "أنه جولة بالقرب من الموقع الصحيح."
+      }
+    }
   }
 }
