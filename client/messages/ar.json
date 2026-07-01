@@ -135,5 +135,66 @@
         "description": "أنه جولة بالقرب من الموقع الصحيح."
       }
     }
+  },
+  "Profile": {
+    "title": "ملفك الشخصي",
+    "editHeading": "تعديل الملف الشخصي",
+    "fields": {
+      "displayName": "الاسم المعروض",
+      "avatarUrl": "رابط الصورة الرمزية",
+      "countryCode": "رمز الدولة",
+      "locale": "اللغة",
+      "timezone": "المنطقة الزمنية"
+    },
+    "localeOptions": {
+      "en": "الإنجليزية",
+      "ar": "العربية"
+    },
+    "actions": {
+      "save": "حفظ التغييرات",
+      "saving": "جارٍ الحفظ...",
+      "saved": "تم تحديث الملف الشخصي.",
+      "rateLimited": "محاولات تحديث كثيرة جدًا. يرجى الانتظار والمحاولة مرة أخرى.",
+      "unauthorized": "يجب تسجيل الدخول لتحديث ملفك الشخصي.",
+      "unexpected": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "validationFailed": "يرجى تصحيح الحقول المحددة."
+    },
+    "validation": {
+      "invalid_length": "يجب أن يكون طول القيمة بين 2 و 32 حرفًا.",
+      "invalid_format": "هذه القيمة ليست بتنسيق صحيح.",
+      "unsupported_locale": "هذه اللغة غير مدعومة."
+    },
+    "stats": {
+      "title": "الإحصائيات",
+      "gamesPlayed": "المباريات التي تم لعبها",
+      "totalScore": "النقاط الإجمالية",
+      "averageScore": "المتوسط",
+      "bestScore": "أفضل نتيجة",
+      "emptyState": "لا توجد ألعاب مكتملة بعد."
+    },
+    "states": {
+      "unauthorizedTitle": "تسجيل الدخول مطلوب",
+      "unauthorizedMessage": "سجل الدخول لعرض ملفك الشخصي وتعديله.",
+      "backToPlay": "العودة إلى اللعب",
+      "notFoundTitle": "الملف الشخصي غير موجود",
+      "notFoundMessage": "هذا الملف الشخصي غير متاح.",
+      "unexpectedTitle": "حدث خطأ ما",
+      "unexpectedMessage": "تعذر تحميل هذه الصفحة. يرجى المحاولة مرة أخرى."
+    },
+    "history": {
+      "title": "سجل الألعاب",
+      "empty": "لا توجد ألعاب بعد.",
+      "loadMore": "عرض المزيد",
+      "mode": "الوضع",
+      "rounds": "الجولات",
+      "createdAt": "التاريخ",
+      "score": "النقاط: {score}",
+      "roundProgress": "الجولة {current} من {total}",
+      "status": {
+        "completed": "مكتملة",
+        "active": "قيد التقدم",
+        "abandoned": "متروكة"
+      }
+    }
   }
 }

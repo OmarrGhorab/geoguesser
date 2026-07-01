@@ -16,8 +16,8 @@ import (
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
+	"github.com/raven/geoguess/backend/internal/profiles"
 	"github.com/raven/geoguess/backend/internal/session"
-	"github.com/raven/geoguess/backend/internal/users"
 )
 
 // noopRateLimiter is a test stub that always allows requests.
@@ -65,9 +65,9 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 
 	authService := auth.NewService(nil, nil, nil, nil, csrfManager, nil, nil, nil, nil, nil, cfg, clock.NewSystem())
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
-	usersHandler := users.NewHandler(users.NewService(nil), obs.Logger)
+	profilesHandler := profiles.NewHandler(profiles.NewService(nil, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, usersHandler, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))

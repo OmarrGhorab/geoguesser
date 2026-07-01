@@ -8,6 +8,8 @@ type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: BodyInit | Record<string, unknown>;
 };
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   const cookieStore = await cookies();
@@ -15,6 +17,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (cookieHeader) {
     headers.set("Cookie", cookieHeader);
+  }
+
+  const method = (options.method ?? "GET").toUpperCase();
+  if (!SAFE_METHODS.has(method) && !headers.has("X-CSRF-Token")) {
+    const csrfToken = cookieStore.get("csrf_token")?.value;
+    if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
   }
 
   let body = options.body;

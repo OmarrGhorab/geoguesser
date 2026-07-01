@@ -13,5 +13,5 @@ Before planning or implementing feature work, read `.specify/memory/constitution
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/006-room-realtime-reconnection/plan.md
+at specs/007-profiles-stats-progress/plan.md
 <!-- SPECKIT END -->

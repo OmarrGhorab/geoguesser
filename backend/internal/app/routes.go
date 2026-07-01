@@ -17,13 +17,13 @@ import (
 	"github.com/raven/geoguess/backend/internal/maps"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
+	"github.com/raven/geoguess/backend/internal/profiles"
 	"github.com/raven/geoguess/backend/internal/realtime"
 	"github.com/raven/geoguess/backend/internal/rooms"
 	"github.com/raven/geoguess/backend/internal/uploads"
-	"github.com/raven/geoguess/backend/internal/users"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -61,8 +61,17 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 				})
 		}
 
-		if usersHandler != nil {
-			usersHandler.RegisterRoutes(api)
+		if profilesHandler != nil {
+			profileUpdateLimit := appmiddleware.RateLimitConfig{Limit: 10, Window: 1 * time.Minute}
+			api.Group(func(p chi.Router) {
+				p.Get("/profile", profilesHandler.GetCurrentProfile)
+				p.Get("/users/{userId}/stats", profilesHandler.GetPublicProfile)
+				p.Get("/users/{userId}/games", profilesHandler.GetGameHistory)
+				p.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimit(rateLimiter, profileUpdateLimit, appmiddleware.RateLimitByCookie("profile-update", auth.AccessTokenCookieName), logger),
+				).Patch("/profile", profilesHandler.UpdateProfile)
+			})
 		}
 
 		if uploadsHandler != nil {

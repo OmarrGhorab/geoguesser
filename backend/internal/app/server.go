@@ -13,16 +13,16 @@ import (
 	"github.com/raven/geoguess/backend/internal/maps"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
+	"github.com/raven/geoguess/backend/internal/profiles"
 	"github.com/raven/geoguess/backend/internal/realtime"
 	"github.com/raven/geoguess/backend/internal/rooms"
 	"github.com/raven/geoguess/backend/internal/uploads"
-	"github.com/raven/geoguess/backend/internal/users"
 )
 
-func NewServer(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, usersHandler *users.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) *http.Server {
+func NewServer(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) *http.Server {
 	return &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      NewRouter(cfg, logger, obs, rateLimiter, healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, roomsHandler, realtimeHandler),
+		Handler:      NewRouter(cfg, logger, obs, rateLimiter, healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, roomsHandler, realtimeHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,

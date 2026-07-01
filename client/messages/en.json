@@ -135,5 +135,66 @@
         "description": "Finish a round near the correct location."
       }
     }
+  },
+  "Profile": {
+    "title": "Your profile",
+    "editHeading": "Edit profile",
+    "fields": {
+      "displayName": "Display name",
+      "avatarUrl": "Avatar URL",
+      "countryCode": "Country code",
+      "locale": "Language",
+      "timezone": "Timezone"
+    },
+    "localeOptions": {
+      "en": "English",
+      "ar": "Arabic"
+    },
+    "actions": {
+      "save": "Save changes",
+      "saving": "Saving...",
+      "saved": "Profile updated.",
+      "rateLimited": "Too many update attempts. Please wait and try again.",
+      "unauthorized": "You need to sign in to update your profile.",
+      "unexpected": "Something went wrong. Please try again.",
+      "validationFailed": "Please fix the highlighted fields."
+    },
+    "validation": {
+      "invalid_length": "Must be between 2 and 32 characters.",
+      "invalid_format": "This value is not in a valid format.",
+      "unsupported_locale": "This language is not supported."
+    },
+    "stats": {
+      "title": "Stats",
+      "gamesPlayed": "Games played",
+      "totalScore": "Total score",
+      "averageScore": "Average score",
+      "bestScore": "Best score",
+      "emptyState": "No completed games yet."
+    },
+    "states": {
+      "unauthorizedTitle": "Sign in required",
+      "unauthorizedMessage": "Sign in to view and edit your profile.",
+      "backToPlay": "Back to play",
+      "notFoundTitle": "Profile not found",
+      "notFoundMessage": "This player profile is unavailable.",
+      "unexpectedTitle": "Something went wrong",
+      "unexpectedMessage": "We could not load this page. Please try again."
+    },
+    "history": {
+      "title": "Game history",
+      "empty": "No games yet.",
+      "loadMore": "Load more",
+      "mode": "Mode",
+      "rounds": "Rounds",
+      "createdAt": "Date",
+      "score": "Score: {score}",
+      "roundProgress": "Round {current} of {total}",
+      "status": {
+        "completed": "Completed",
+        "active": "In progress",
+        "abandoned": "Abandoned"
+      }
+    }
   }
 }
