@@ -27,10 +27,10 @@ import (
 	"github.com/raven/geoguess/backend/internal/platform/postgres"
 	redisplatform "github.com/raven/geoguess/backend/internal/platform/redis"
 	"github.com/raven/geoguess/backend/internal/platform/storage"
+	"github.com/raven/geoguess/backend/internal/profiles"
 	"github.com/raven/geoguess/backend/internal/realtime"
 	"github.com/raven/geoguess/backend/internal/rooms"
 	"github.com/raven/geoguess/backend/internal/uploads"
-	"github.com/raven/geoguess/backend/internal/users"
 )
 
 func main() {
@@ -77,7 +77,7 @@ func main() {
 	healthHandler := health.NewHandlerWithObservability(cfg.Version, logger, obs, health.NewDefaultPingers(db, redisClient))
 
 	authRepo := auth.NewRepository(db)
-	usersRepo := users.NewRepository(db)
+	profilesRepo := profiles.NewRepository(db)
 	uploadsRepo := uploads.NewRepository(db)
 	mapsRepo := maps.NewRepository(db)
 	locationsRepo := locations.NewRepository(db)
@@ -119,7 +119,12 @@ func main() {
 	}
 
 	authService := auth.NewService(authRepo, hasher, tokenManager, guestManager, csrfManager, oauthManager, sessionStore, otpStore, emailSender, redisClient, cfg, clock.NewSystem())
-	usersService := users.NewService(usersRepo)
+	profilesMetrics, err := profiles.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register profiles metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	profilesService := profiles.NewServiceWithLogger(profilesRepo, profilesMetrics, logger)
 	mapsService := maps.NewService(mapsRepo)
 	locationsService := locations.NewService(locationsRepo, locations.StaticProvider{})
 	var defaultChallengeMapID uuid.UUID
@@ -153,7 +158,7 @@ func main() {
 	uploadsService := uploads.NewService(uploadsRepo, storageProvider, cfg)
 
 	authHandler := auth.NewHandler(authService, cfg, logger)
-	usersHandler := users.NewHandler(usersService, logger)
+	profilesHandler := profiles.NewHandler(profilesService, logger)
 	uploadsHandler := uploads.NewHandler(uploadsService, logger)
 	mapsHandler := maps.NewHandler(mapsService, logger)
 	locationsHandler := locations.NewHandler(locationsService, logger)
@@ -163,7 +168,7 @@ func main() {
 	roomsHandler := rooms.NewHandler(roomsService, logger)
 	realtimeHandler := realtime.NewHandler(realtime.NewHub(), roomsService, logger, nil)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, usersHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, roomsHandler, realtimeHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, roomsHandler, realtimeHandler)
 
 	errCh := make(chan error, 1)
 	go func() {
