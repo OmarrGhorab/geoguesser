@@ -26,6 +26,13 @@ type RateLimitConfig struct {
 
 // RateLimit applies a sliding-window rate limit using a key extractor.
 func RateLimit(limiter RateLimiter, config RateLimitConfig, keyFunc func(r *http.Request) string, logger *slog.Logger) func(http.Handler) http.Handler {
+	return RateLimitWithObserver(limiter, config, keyFunc, logger, nil)
+}
+
+// RateLimitWithObserver applies a sliding-window rate limit and calls
+// onRejected after a request is rejected. The hook must stay privacy-safe:
+// callers should record counters or static log fields, not key material.
+func RateLimitWithObserver(limiter RateLimiter, config RateLimitConfig, keyFunc func(r *http.Request) string, logger *slog.Logger, onRejected func(*http.Request)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := keyFunc(r)
@@ -36,6 +43,9 @@ func RateLimit(limiter RateLimiter, config RateLimitConfig, keyFunc func(r *http
 				return
 			}
 			if !allowed {
+				if onRejected != nil {
+					onRejected(r)
+				}
 				w.Header().Set("Retry-After", strconv.Itoa(int(config.Window.Seconds())))
 				apphttp.Error(w, r, logger, apphttp.ErrRateLimited)
 				return

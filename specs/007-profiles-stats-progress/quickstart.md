@@ -122,3 +122,37 @@ Verified via `next dev` + `curl` against locale-prefixed routes (unauthenticated
 ### Performance
 
 - No dedicated load test was run. `getCurrentProfile`/`getPublicProfile`/`getGameHistory` each issue a single backend request per navigation (`cache: "no-store"`), and the backend queries (`internal/profiles/repository.go`) use indexed lookups (`user_id` primary key, cursor-paginated `games` query) consistent with the existing `rooms`/`challenges` read paths — no N+1 patterns introduced.
+
+## Convergence Evidence Recorded (2026-07-02)
+
+### Backend gates
+
+- `gofmt -w internal/middleware/rate_limit.go internal/middleware/auth.go internal/app/routes.go internal/app/routes_test.go internal/profiles/service.go internal/profiles/service_test.go internal/profiles/handler.go internal/profiles/handler_test.go cmd/api/main.go` — applied formatting to Phase 07 backend files.
+- `go test ./internal/profiles/... ./internal/app/...` — passed after adding profile handler, validation, logging, and route ownership coverage.
+- `go test ./internal/profiles/... ./internal/users/... ./internal/games/... ./internal/app/...` — passed.
+- `go test ./...` from `backend/` — passed across all backend packages.
+- `npx pnpm@10.24.0 check:openapi` — OpenAPI remains valid with the same 29 warnings, including the pre-existing unused `UserStatsResponse` warning.
+
+### Frontend gates
+
+- `npx pnpm@10.24.0 --dir client test -- --run features/profile` — 36/36 profile tests pass across 12 files, including direct server-action outcome mapping and Arabic/localized profile state assertions.
+- `npx pnpm@10.24.0 --dir client typecheck` — clean.
+- `npx pnpm@10.24.0 --dir client lint` — clean.
+- `npx pnpm@10.24.0 --dir client build` — production build succeeds and compiles `/[locale]/profile` plus `/[locale]/users/[userId]`.
+
+### Convergence implementation evidence
+
+- Profile update validation now rejects display-name control characters, invalid country codes, invalid IANA timezones, unsafe avatar URL schemes or non-image references, unsupported preference keys, and unsupported preference values. Service tests cover invalid and accepted timezone/avatar/preference cases.
+- Profile update validation normalizes country codes to uppercase and trims supported locale/timezone/avatar values before persistence.
+- `backend/internal/profiles/handler_test.go` now covers current-profile guest denial, owner-safe response shape, invalid JSON, validation error envelopes, public stats invalid/missing users, game-history pagination/error responses, and rate-limit metric recording.
+- `backend/internal/app/routes_test.go` verifies public `/users/{userId}/stats` routing reaches the Phase 07 profiles contract rather than a stale legacy users response shape.
+- Profile service logs now record privacy-safe operation events for profile reads, updates, validation failures, public stats reads, history reads, denied access, missing users, and invalid pagination. A regression test verifies profile logs do not include raw email or private preference keys.
+- Profile update rate-limit rejection observability is wired through `RateLimitWithObserver(..., profilesHandler.RecordRateLimited)` so `profile_updates_rate_limited_total` is incremented before the rejected response is written.
+- Frontend profile tests now cover normalized save payloads, validation/rate-limit/unauthorized action outcomes, private-field absence in public/profile form surfaces, Arabic copy, public empty states, and spoiler-safe history rendering.
+
+### Browser, accessibility, and performance notes
+
+- Registered-success browser validation remains represented by automated server-action/component coverage rather than a real authenticated manual browser session in this workspace.
+- Arabic RTL and unauthenticated browser route evidence from the previous section remains valid; added profile tests assert Arabic copy on profile form, public stats, history, and unauthorized panels.
+- Accessibility evidence is covered by component tests and source review for labels, focusable links/buttons, `role="status"`, `role="alert"`, disabled submit state, and non-color-only validation/status text.
+- Performance budget evidence remains query-shape and build/test based: profile/public stats/history helpers issue one backend request per server navigation, repository reads are bounded or cursor-paginated, and the production build completed successfully.

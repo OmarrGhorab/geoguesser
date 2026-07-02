@@ -53,4 +53,19 @@ describe("GameHistory", () => {
     const link = screen.getByRole("link", { name: "Load more" });
     expect(link).toHaveAttribute("href", "/en/profile?cursor=abc123");
   });
+
+  it("does not render hidden answer or coordinate details", () => {
+    renderWithIntl(<GameHistory games={[gameFixture()]} page={{ limit: 10, next_cursor: null }} basePath="/en/profile" />);
+
+    expect(screen.queryByText(/latitude/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/longitude/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/provider/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/answer/i)).not.toBeInTheDocument();
+  });
+
+  it("renders Arabic empty history copy", () => {
+    renderWithIntl(<GameHistory games={[]} page={{ limit: 10, next_cursor: null }} basePath="/ar/profile" />, "ar");
+
+    expect(screen.getByText("لا توجد ألعاب بعد.")).toBeInTheDocument();
+  });
 });

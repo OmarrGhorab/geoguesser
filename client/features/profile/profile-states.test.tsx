@@ -43,4 +43,11 @@ describe("profile-states", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
   });
+
+  it("renders Arabic unauthorized copy", () => {
+    renderWithIntl(<ProfileUnauthorizedPanel />, "ar");
+
+    expect(screen.getByText("تسجيل الدخول مطلوب")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "العودة إلى اللعب" })).toHaveAttribute("href", "/");
+  });
 });

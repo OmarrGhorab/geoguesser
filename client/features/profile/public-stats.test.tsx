@@ -46,4 +46,19 @@ describe("PublicStats", () => {
 
     expect(screen.queryByText("US")).not.toBeInTheDocument();
   });
+
+  it("does not render private account fields", () => {
+    renderWithIntl(<PublicStats profile={profileFixture()} stats={statsFixture()} />);
+
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/token/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/session/i)).not.toBeInTheDocument();
+  });
+
+  it("renders Arabic public stats copy", () => {
+    renderWithIntl(<PublicStats profile={profileFixture({ display_name: "لاعب" })} stats={statsFixture({ games_played: 0 })} />, "ar");
+
+    expect(screen.getByRole("heading", { name: "لاعب" })).toBeInTheDocument();
+    expect(screen.getByText("لا توجد ألعاب مكتملة بعد.")).toBeInTheDocument();
+  });
 });

@@ -124,7 +124,7 @@ func main() {
 		logger.Error("failed to register profiles metrics", slog.Any("error", err))
 		os.Exit(1)
 	}
-	profilesService := profiles.NewService(profilesRepo, profilesMetrics)
+	profilesService := profiles.NewServiceWithLogger(profilesRepo, profilesMetrics, logger)
 	mapsService := maps.NewService(mapsRepo)
 	locationsService := locations.NewService(locationsRepo, locations.StaticProvider{})
 	var defaultChallengeMapID uuid.UUID

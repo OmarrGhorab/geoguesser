@@ -69,7 +69,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 				p.Get("/users/{userId}/games", profilesHandler.GetGameHistory)
 				p.With(
 					appmiddleware.RequireAuth(logger),
-					appmiddleware.RateLimit(rateLimiter, profileUpdateLimit, appmiddleware.RateLimitByCookie("profile-update", auth.AccessTokenCookieName), logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, profileUpdateLimit, appmiddleware.RateLimitByCookie("profile-update", auth.AccessTokenCookieName), logger, profilesHandler.RecordRateLimited),
 				).Patch("/profile", profilesHandler.UpdateProfile)
 			})
 		}

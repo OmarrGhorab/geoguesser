@@ -22,6 +22,18 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 	return &Handler{service: service, logger: logger}
 }
 
+// RecordRateLimited records and logs a profile update rejected before it
+// reaches the handler. It deliberately avoids logging cookie or session data.
+func (h *Handler) RecordRateLimited(r *http.Request) {
+	if h == nil || h.service == nil {
+		return
+	}
+	h.service.metrics.RecordRateLimited()
+	if h.logger != nil {
+		h.logger.InfoContext(r.Context(), "profile update rate limited", slog.String("path", r.URL.Path))
+	}
+}
+
 // RegisterRoutes mounts profile routes. Callers are expected to wrap the
 // mutating route with auth, CSRF, and rate-limit middleware as appropriate
 // (see app/routes.go).

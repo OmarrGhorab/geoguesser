@@ -1,8 +1,11 @@
 package profiles
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,6 +146,34 @@ func TestServiceGetCurrentProfileReturnsProfileStatsAndProgress(t *testing.T) {
 	}
 }
 
+func TestServiceLogsAvoidEmailAndPreferences(t *testing.T) {
+	fs := newFakeStore()
+	userID := uuid.New()
+	fs.profiles[userID] = &RegisteredProfile{
+		UserID:      userID,
+		Email:       "private@example.com",
+		DisplayName: "Ana",
+		Locale:      "en",
+		Preferences: map[string]any{"distance_unit": "km"},
+	}
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	s := NewServiceWithLogger(fs, nil, logger)
+	_, err := s.GetCurrentProfile(context.Background(), registeredSession(userID))
+	if err != nil {
+		t.Fatalf("GetCurrentProfile failed: %v", err)
+	}
+
+	got := logs.String()
+	if strings.Contains(got, "private@example.com") || strings.Contains(got, "distance_unit") {
+		t.Fatalf("privacy-sensitive profile data appeared in logs: %s", got)
+	}
+	if !strings.Contains(got, userID.String()) {
+		t.Fatalf("expected safe user id in logs, got %s", got)
+	}
+}
+
 func TestServiceUpdateProfileValidatesDisplayNameLength(t *testing.T) {
 	fs := newFakeStore()
 	userID := uuid.New()
@@ -158,6 +189,24 @@ func TestServiceUpdateProfileValidatesDisplayNameLength(t *testing.T) {
 	}
 	if len(verr.Fields) != 1 || verr.Fields[0].Name != "display_name" {
 		t.Fatalf("expected display_name field error, got %+v", verr.Fields)
+	}
+}
+
+func TestServiceUpdateProfileValidatesDisplayNameControlCharacters(t *testing.T) {
+	fs := newFakeStore()
+	userID := uuid.New()
+	fs.profiles[userID] = &RegisteredProfile{UserID: userID, DisplayName: "Ana", Locale: "en", Preferences: map[string]any{}}
+
+	s := NewService(fs, nil)
+	bad := "Ana\nNour"
+	_, err := s.UpdateProfile(context.Background(), registeredSession(userID), UpdateProfileRequest{DisplayName: &bad})
+
+	var verr *ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("expected *ValidationError, got %v (%T)", err, err)
+	}
+	if verr.Fields[0].Name != "display_name" || verr.Fields[0].Code != "invalid_format" {
+		t.Fatalf("expected display_name invalid_format error, got %+v", verr.Fields)
 	}
 }
 
@@ -180,24 +229,170 @@ func TestServiceUpdateProfileValidatesLocale(t *testing.T) {
 }
 
 func TestServiceUpdateProfileValidatesCountryCode(t *testing.T) {
+	for _, bad := range []string{"EGY", "ZZ"} {
+		t.Run(bad, func(t *testing.T) {
+			fs := newFakeStore()
+			userID := uuid.New()
+			fs.profiles[userID] = &RegisteredProfile{UserID: userID, DisplayName: "Ana", Locale: "en", Preferences: map[string]any{}}
+
+			s := NewService(fs, nil)
+			req := UpdateProfileRequest{}
+			if err := req.CountryCode.UnmarshalJSON([]byte(`"` + bad + `"`)); err != nil {
+				t.Fatalf("unmarshal failed: %v", err)
+			}
+			_, err := s.UpdateProfile(context.Background(), registeredSession(userID), req)
+
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("expected *ValidationError, got %v (%T)", err, err)
+			}
+			if verr.Fields[0].Name != "country_code" {
+				t.Fatalf("expected country_code field error, got %+v", verr.Fields)
+			}
+		})
+	}
+}
+
+func TestServiceUpdateProfileNormalizesCountryCode(t *testing.T) {
 	fs := newFakeStore()
 	userID := uuid.New()
 	fs.profiles[userID] = &RegisteredProfile{UserID: userID, DisplayName: "Ana", Locale: "en", Preferences: map[string]any{}}
 
 	s := NewService(fs, nil)
-	bad := "EGY"
 	req := UpdateProfileRequest{}
-	if err := req.CountryCode.UnmarshalJSON([]byte(`"` + bad + `"`)); err != nil {
+	if err := req.CountryCode.UnmarshalJSON([]byte(`"eg"`)); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	_, err := s.UpdateProfile(context.Background(), registeredSession(userID), req)
-
-	var verr *ValidationError
-	if !errors.As(err, &verr) {
-		t.Fatalf("expected *ValidationError, got %v (%T)", err, err)
+	resp, err := s.UpdateProfile(context.Background(), registeredSession(userID), req)
+	if err != nil {
+		t.Fatalf("UpdateProfile failed: %v", err)
 	}
-	if verr.Fields[0].Name != "country_code" {
-		t.Fatalf("expected country_code field error, got %+v", verr.Fields)
+	if resp.Profile.CountryCode == nil || *resp.Profile.CountryCode != "EG" {
+		t.Fatalf("expected country EG, got %v", resp.Profile.CountryCode)
+	}
+}
+
+func TestServiceUpdateProfileValidatesTimezoneAvatarAndPreferences(t *testing.T) {
+	tests := []struct {
+		name      string
+		request   func() UpdateProfileRequest
+		wantField string
+	}{
+		{
+			name: "timezone_unknown",
+			request: func() UpdateProfileRequest {
+				req := UpdateProfileRequest{}
+				if err := req.Timezone.UnmarshalJSON([]byte(`"Not/AZone"`)); err != nil {
+					t.Fatalf("unmarshal failed: %v", err)
+				}
+				return req
+			},
+			wantField: "timezone",
+		},
+		{
+			name: "timezone_local",
+			request: func() UpdateProfileRequest {
+				req := UpdateProfileRequest{}
+				if err := req.Timezone.UnmarshalJSON([]byte(`"Local"`)); err != nil {
+					t.Fatalf("unmarshal failed: %v", err)
+				}
+				return req
+			},
+			wantField: "timezone",
+		},
+		{
+			name: "avatar",
+			request: func() UpdateProfileRequest {
+				req := UpdateProfileRequest{}
+				if err := req.AvatarURL.UnmarshalJSON([]byte(`"javascript:alert(1)"`)); err != nil {
+					t.Fatalf("unmarshal failed: %v", err)
+				}
+				return req
+			},
+			wantField: "avatar_url",
+		},
+		{
+			name: "preferences",
+			request: func() UpdateProfileRequest {
+				req := UpdateProfileRequest{}
+				if err := req.Preferences.UnmarshalJSON([]byte(`{"admin":true}`)); err != nil {
+					t.Fatalf("unmarshal failed: %v", err)
+				}
+				return req
+			},
+			wantField: "preferences.admin",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := newFakeStore()
+			userID := uuid.New()
+			fs.profiles[userID] = &RegisteredProfile{UserID: userID, DisplayName: "Ana", Locale: "en", Preferences: map[string]any{}}
+
+			s := NewService(fs, nil)
+			_, err := s.UpdateProfile(context.Background(), registeredSession(userID), tt.request())
+
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("expected *ValidationError, got %v (%T)", err, err)
+			}
+			if verr.Fields[0].Name != tt.wantField {
+				t.Fatalf("expected %s field error, got %+v", tt.wantField, verr.Fields)
+			}
+		})
+	}
+}
+
+func TestServiceUpdateProfileAcceptsSafeTimezoneAvatarAndPreferences(t *testing.T) {
+	fs := newFakeStore()
+	userID := uuid.New()
+	fs.profiles[userID] = &RegisteredProfile{UserID: userID, DisplayName: "Ana", Locale: "en", Preferences: map[string]any{}}
+
+	s := NewService(fs, nil)
+	req := UpdateProfileRequest{}
+	if err := req.Timezone.UnmarshalJSON([]byte(`"Africa/Cairo"`)); err != nil {
+		t.Fatalf("unmarshal timezone failed: %v", err)
+	}
+	if err := req.AvatarURL.UnmarshalJSON([]byte(`"https://example.com/avatar.webp"`)); err != nil {
+		t.Fatalf("unmarshal avatar failed: %v", err)
+	}
+	if err := req.Preferences.UnmarshalJSON([]byte(`{"distance_unit":"km","theme":"dark"}`)); err != nil {
+		t.Fatalf("unmarshal preferences failed: %v", err)
+	}
+
+	resp, err := s.UpdateProfile(context.Background(), registeredSession(userID), req)
+	if err != nil {
+		t.Fatalf("UpdateProfile failed: %v", err)
+	}
+	if resp.Profile.Timezone == nil || *resp.Profile.Timezone != "Africa/Cairo" {
+		t.Fatalf("expected timezone Africa/Cairo, got %v", resp.Profile.Timezone)
+	}
+	if resp.Profile.AvatarURL == nil || *resp.Profile.AvatarURL != "https://example.com/avatar.webp" {
+		t.Fatalf("expected avatar URL to persist, got %v", resp.Profile.AvatarURL)
+	}
+	if resp.Profile.Preferences["distance_unit"] != "km" || resp.Profile.Preferences["theme"] != "dark" {
+		t.Fatalf("expected safe preferences to persist, got %+v", resp.Profile.Preferences)
+	}
+}
+
+func TestServiceUpdateProfileAcceptsUTCTimezone(t *testing.T) {
+	fs := newFakeStore()
+	userID := uuid.New()
+	fs.profiles[userID] = &RegisteredProfile{UserID: userID, DisplayName: "Ana", Locale: "en", Preferences: map[string]any{}}
+
+	s := NewService(fs, nil)
+	req := UpdateProfileRequest{}
+	if err := req.Timezone.UnmarshalJSON([]byte(`"UTC"`)); err != nil {
+		t.Fatalf("unmarshal timezone failed: %v", err)
+	}
+
+	resp, err := s.UpdateProfile(context.Background(), registeredSession(userID), req)
+	if err != nil {
+		t.Fatalf("UpdateProfile failed: %v", err)
+	}
+	if resp.Profile.Timezone == nil || *resp.Profile.Timezone != "UTC" {
+		t.Fatalf("expected timezone UTC, got %v", resp.Profile.Timezone)
 	}
 }
 
