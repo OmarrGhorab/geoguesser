@@ -404,7 +404,7 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		)
 		if s.completionHook != nil {
 			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
-				s.logger.ErrorContext(ctx, "challenge completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+				s.logger.ErrorContext(ctx, "game completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
 			}
 		}
 	}

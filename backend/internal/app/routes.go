@@ -13,6 +13,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/leaderboards"
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
@@ -23,7 +24,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/uploads"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -109,6 +110,14 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 			api.With(appmiddleware.RateLimit(rateLimiter, challengeLimit, appmiddleware.RateLimitByIP("challenges"), logger)).
 				Group(func(c chi.Router) {
 					challengesHandler.RegisterRoutes(c)
+				})
+		}
+
+		if leaderboardsHandler != nil {
+			leaderboardLimit := appmiddleware.RateLimitConfig{Limit: 120, Window: 1 * time.Minute}
+			api.With(appmiddleware.RateLimit(rateLimiter, leaderboardLimit, appmiddleware.RateLimitByIP("leaderboards"), logger)).
+				Group(func(l chi.Router) {
+					leaderboardsHandler.RegisterRoutes(l)
 				})
 		}
 
