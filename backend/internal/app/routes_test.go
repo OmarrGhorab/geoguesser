@@ -19,6 +19,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/leaderboards"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
@@ -42,7 +43,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -73,7 +74,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(nil, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -120,7 +121,7 @@ func TestRouterPublicUserRoutesUseProfilesContract(t *testing.T) {
 
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID.String()+"/stats", nil)
@@ -222,7 +223,7 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -256,7 +257,7 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	challengesHandler := challenges.NewHandler(stubChallengeService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -280,6 +281,34 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 		router.ServeHTTP(w, r)
 		if contentType := w.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
 			t.Fatalf("%s %s did not reach JSON handler, got status %d content-type %q body %q", endpoint.method, endpoint.path, w.Code, contentType, w.Body.String())
+		}
+	}
+}
+
+func TestRouterMountsDocumentedLeaderboardRoutes(t *testing.T) {
+	cfg := testConfig()
+
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil)
+
+	endpoints := []string{
+		"/api/v1/leaderboards/global",
+		"/api/v1/leaderboards/daily",
+		"/api/v1/leaderboards/maps/not-a-uuid",
+	}
+
+	for _, path := range endpoints {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		router.ServeHTTP(w, r)
+		if contentType := w.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
+			t.Fatalf("GET %s did not reach JSON handler, got status %d content-type %q body %q", path, w.Code, contentType, w.Body.String())
 		}
 	}
 }
@@ -336,6 +365,20 @@ func (stubChallengeService) GetMissions(context.Context, *session.Context) ([]ch
 }
 func (stubChallengeService) ClaimMission(context.Context, *session.Context, string, string) (*challenges.MissionSummary, error) {
 	return nil, challenges.ErrForbidden
+}
+
+type stubLeaderboardService struct{}
+
+func (stubLeaderboardService) GetGlobal(context.Context, int, string) (*leaderboards.Response, error) {
+	return &leaderboards.Response{}, nil
+}
+
+func (stubLeaderboardService) GetDaily(context.Context, int, string, string) (*leaderboards.Response, error) {
+	return &leaderboards.Response{}, nil
+}
+
+func (stubLeaderboardService) GetMap(context.Context, string, int, string) (*leaderboards.Response, error) {
+	return nil, leaderboards.ErrInvalidMapID
 }
 
 type staticRateLimiter struct {
@@ -440,7 +483,7 @@ func newProfileRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, profileMetrics), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	return router, csrfManager, accessToken
 }

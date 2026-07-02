@@ -19,6 +19,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/leaderboards"
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
@@ -83,6 +84,7 @@ func main() {
 	locationsRepo := locations.NewRepository(db)
 	gamesRepo := games.NewRepository(db)
 	challengesRepo := challenges.NewRepository(db)
+	leaderboardsRepo := leaderboards.NewRepository(db)
 	roomsRepo := rooms.NewRepository(db)
 	roomCoordinator := redisplatform.NewRoomCoordinator(redisClient)
 
@@ -137,7 +139,8 @@ func main() {
 		defaultChallengeMapID = parsed
 	}
 	challengesService := challenges.NewServiceWithIdempotency(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics, challenges.NewRedisIdempotencyStore(redisClient))
-	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, challengesService)
+	leaderboardsService := leaderboards.NewService(leaderboardsRepo, leaderboards.NewRedisPageCache(redisClient), clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, challengesService)
+	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, leaderboardsService)
 
 	var storageProvider storage.Provider
 	if cfg.R2AccountID != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
@@ -164,11 +167,12 @@ func main() {
 	locationsHandler := locations.NewHandler(locationsService, logger)
 	gamesHandler := games.NewHandler(gamesService, logger)
 	challengesHandler := challenges.NewHandler(challengesService, logger)
+	leaderboardsHandler := leaderboards.NewHandler(leaderboardsService, logger)
 	roomsService := rooms.NewServiceWithGames(roomsRepo, roomCoordinator, gamesService, logger, nil)
 	roomsHandler := rooms.NewHandler(roomsService, logger)
 	realtimeHandler := realtime.NewHandler(realtime.NewHub(), roomsService, logger, nil)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, roomsHandler, realtimeHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler)
 
 	errCh := make(chan error, 1)
 	go func() {
