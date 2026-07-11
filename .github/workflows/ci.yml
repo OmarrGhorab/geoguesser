@@ -15,6 +15,30 @@ jobs:
     name: Backend
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: geoguess
+          POSTGRES_PASSWORD: geoguess
+          POSTGRES_DB: geoguess_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geoguess -d geoguess_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: backend
@@ -44,18 +68,35 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.12.2
           working-directory: backend
 
-      - name: Test
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://geoguess:geoguess@localhost:5432/geoguess_test?sslmode=disable
+        run: go run github.com/pressly/goose/v3/cmd/goose@v3.27.2 -dir ./migrations postgres "$DATABASE_URL" up
+
+      - name: Unit test suite
         run: go test ./...
+
+      - name: Integration tests (PostgreSQL + Redis)
+        env:
+          DATABASE_URL: postgres://geoguess:geoguess@localhost:5432/geoguess_test?sslmode=disable
+          REDIS_URL: redis://localhost:6379/15
+        run: go test -p 1 ./internal/matchmaking/ ./internal/games/ ./internal/platform/redis/ ./internal/app/
+
+      - name: Race tests (matchmaking + games)
+        env:
+          DATABASE_URL: postgres://geoguess:geoguess@localhost:5432/geoguess_test?sslmode=disable
+          REDIS_URL: redis://localhost:6379/15
+        run: go test -p 1 -race ./internal/matchmaking/ ./internal/games/ ./internal/platform/redis/ ./internal/app/
 
       - name: Build
         run: go build ./cmd/api
 
       - name: Validate OpenAPI contract
         working-directory: backend
-        run: npx -y @redocly/cli lint ./openapi/openapi.yaml
+        run: npx -y @redocly/cli@2.38.0 lint ./openapi/openapi.yaml
 
   frontend:
     name: Frontend
@@ -81,6 +122,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
 
       - name: Lint
         run: pnpm lint

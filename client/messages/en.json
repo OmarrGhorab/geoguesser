@@ -196,5 +196,102 @@
         "abandoned": "Abandoned"
       }
     }
+  },
+  "Matchmaking": {
+    "notQueued": {
+      "title": "Ranked matchmaking",
+      "message": "Find an opponent in standard ranked mode."
+    },
+    "joining": {
+      "title": "Joining queue",
+      "message": "Entering ranked matchmaking…"
+    },
+    "searching": {
+      "title": "Searching for a ranked match",
+      "message": "Looking for a compatible opponent. You can leave any time before assignment.",
+      "startedAt": "Search started at {time}",
+      "indicator": "Searching"
+    },
+    "delayed": {
+      "title": "Still searching",
+      "message": "Matchmaking is taking longer than usual. Stay in queue or leave and try again."
+    },
+    "leaving": {
+      "title": "Leaving queue",
+      "message": "Removing you from ranked matchmaking…"
+    },
+    "matched": {
+      "title": "Match found",
+      "message": "You have been assigned to a ranked match.",
+      "redirecting": "Opening your ranked game…"
+    },
+    "unavailable": {
+      "title": "Matchmaking temporarily unavailable",
+      "message": "We could not confirm queue state. Please try again."
+    },
+    "ineligible": {
+      "title": "Account not eligible",
+      "message": "Your account is not eligible for ranked matchmaking."
+    },
+    "unauthorized": {
+      "title": "Sign in required",
+      "message": "Sign in with an active account to join ranked matchmaking."
+    },
+    "rateLimited": {
+      "title": "Slow down",
+      "message": "Too many matchmaking requests. Wait a moment and try again."
+    },
+    "actions": {
+      "join": "Find ranked match",
+      "joining": "Joining…",
+      "leave": "Leave queue",
+      "leaving": "Leaving…",
+      "retry": "Retry"
+    },
+    "errors": {
+      "rateLimited": "Too many requests. Wait a moment and try again.",
+      "unavailable": "Matchmaking is temporarily unavailable.",
+      "unexpected": "Something went wrong. Please try again.",
+      "unexpectedTitle": "Could not load matchmaking",
+      "ineligible": "Your account is not eligible for ranked matchmaking.",
+      "conflict": "You already have an active game or assignment that conflicts with matchmaking.",
+      "claimInProgress": "A match is being finalized. Refreshing status…"
+    }
+  },
+  "RankedGame": {
+    "title": "Ranked game",
+    "loadingGame": "Game {id} — status: {status}",
+    "roundProgress": "Round {current} of {total}",
+    "countdown": "Round starts in {seconds}s",
+    "roundReady": "Round is live — place your guess.",
+    "mediaAlt": "Panorama for ranked round {round}",
+    "mediaPending": "Location media loads when the round is ready.",
+    "guess": {
+      "latitude": "Guess latitude",
+      "longitude": "Guess longitude",
+      "submitted": "Guess scored {score} points ({distance} m away)."
+    },
+    "actions": {
+      "submitGuess": "Submit guess",
+      "submitting": "Submitting…",
+      "reload": "Refresh round"
+    },
+    "results": {
+      "title": "Ranked results",
+      "message": "Final scores for this ranked match. No rating changes in this phase.",
+      "playerScore": "{name} scored {score}"
+    },
+    "unauthorized": {
+      "title": "Not authorized",
+      "message": "You are not allowed to view this game."
+    },
+    "notFound": {
+      "title": "Game not found",
+      "message": "This game could not be found."
+    },
+    "error": {
+      "title": "Could not load game",
+      "message": "Please refresh and try again."
+    }
   }
 }

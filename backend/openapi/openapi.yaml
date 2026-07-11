@@ -906,12 +906,14 @@ paths:
   /matchmaking/queue:
     post:
       tags: [Matchmaking]
-      summary: Enter matchmaking queue
+      summary: Enter ranked matchmaking queue
       operationId: enterMatchmakingQueue
+      description: |
+        Registered-only ranked join. First and concurrent joins for the same valid
+        searching entry preserve original search_started_at. A durable active
+        assignment is returned as matched when present.
       security:
         - accessCookie: []
-          csrfHeader: []
-        - guestSession: []
           csrfHeader: []
       requestBody:
         required: true
@@ -921,7 +923,7 @@ paths:
               $ref: '#/components/schemas/EnterMatchmakingRequest'
       responses:
         '202':
-          description: Added to queue.
+          description: Search accepted or existing search/match returned.
           content:
             application/json:
               schema:
@@ -930,31 +932,48 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags: [Matchmaking]
-      summary: Leave matchmaking queue
+      summary: Leave ranked matchmaking queue
       operationId: leaveMatchmakingQueue
+      description: |
+        Idempotent leave for searching players. Returns 409 when a pair claim is
+        in progress; clients should refresh status.
       security:
         - accessCookie: []
           csrfHeader: []
-        - guestSession: []
-          csrfHeader: []
       responses:
         '204':
-          description: Removed from queue.
+          description: Caller is not searching after the operation.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /matchmaking/status:
     get:
       tags: [Matchmaking]
-      summary: Get matchmaking status
+      summary: Get ranked matchmaking status
       operationId: getMatchmakingStatus
+      description: |
+        Durable-first status. Searching renews the activity lease without changing
+        queue priority. Never includes opponent identity or hidden game data.
       security:
         - accessCookie: []
-        - guestSession: []
       responses:
         '200':
           description: Current queue or match status.
@@ -964,6 +983,10 @@ paths:
                 $ref: '#/components/schemas/MatchmakingStatusResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
 
   /challenges/daily:
@@ -1603,6 +1626,12 @@ components:
           description: Seconds until retry is allowed.
           schema:
             type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: Dependency unavailable or state cannot be resolved safely.
       content:
         application/json:
           schema:
@@ -2812,43 +2841,64 @@ components:
       properties:
         mode:
           type: string
-          enum: [quick_play]
-        region:
-          type: [string, 'null']
-          maxLength: 32
-        map_id:
-          type: [string, 'null']
-          format: uuid
+          enum: [ranked_standard]
     MatchmakingStatusResponse:
       type: object
-      required: [status]
+      required: [status, queue, match]
+      additionalProperties: false
       properties:
         status:
           type: string
-          enum: [idle, queued, matched, expired]
+          enum: [not_queued, searching, matched, temporarily_unavailable]
         queue:
           anyOf:
             - $ref: '#/components/schemas/MatchmakingQueue'
             - type: 'null'
-        room:
+        match:
           anyOf:
-            - $ref: '#/components/schemas/Room'
+            - $ref: '#/components/schemas/MatchmakingMatch'
             - type: 'null'
     MatchmakingQueue:
       type: object
-      required: [mode, enqueued_at]
+      required: [mode, search_started_at, lease_expires_at]
+      additionalProperties: false
       properties:
         mode:
           type: string
-          enum: [quick_play]
-        region:
-          type: [string, 'null']
-        enqueued_at:
+          enum: [ranked_standard]
+        search_started_at:
           type: string
           format: date-time
-        estimated_wait_seconds:
-          type: [integer, 'null']
-          minimum: 0
+        lease_expires_at:
+          type: string
+          format: date-time
+    MatchmakingMatch:
+      type: object
+      required: [match_id, game_id, mode, formed_at, destination]
+      additionalProperties: false
+      properties:
+        match_id:
+          type: string
+          format: uuid
+        game_id:
+          type: string
+          format: uuid
+        mode:
+          type: string
+          enum: [ranked_standard]
+        formed_at:
+          type: string
+          format: date-time
+        destination:
+          type: string
+          description: Locale-independent application path such as /games/{game_id}.
+          example: /games/00000000-0000-0000-0000-000000000001
+        # Ranked game behavior notes (Phase 9):
+        # - Destination is a direct games.mode=ranked multiplayer game (not a private room).
+        # - Exactly two registered participants share one game destination.
+        # - Round 1 uses a server-controlled starts_at countdown; guesses before starts_at are rejected.
+        # - Rounds advance when both eligible players submit or the deadline expires.
+        # - Status payloads never include opponent identity, hidden location IDs, or coordinates.
 
     LeaderboardResponse:
       type: object

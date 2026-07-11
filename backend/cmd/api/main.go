@@ -22,6 +22,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/leaderboards"
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
+	"github.com/raven/geoguess/backend/internal/matchmaking"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/email"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
@@ -141,6 +142,7 @@ func main() {
 	challengesService := challenges.NewServiceWithIdempotency(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics, challenges.NewRedisIdempotencyStore(redisClient))
 	leaderboardsService := leaderboards.NewService(leaderboardsRepo, leaderboards.NewRedisPageCache(redisClient), clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, challengesService)
 	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, leaderboardsService)
+	// Ranked lifecycle adapter is wired after matchmakingRepo is constructed below.
 
 	var storageProvider storage.Provider
 	if cfg.R2AccountID != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
@@ -172,7 +174,37 @@ func main() {
 	roomsHandler := rooms.NewHandler(roomsService, logger)
 	realtimeHandler := realtime.NewHandler(realtime.NewHub(), roomsService, logger, nil)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler)
+	matchmakingMetrics, err := matchmaking.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register matchmaking metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	matchmakingRepo := matchmaking.NewRepository(db)
+	matchmakingQueue := matchmaking.NewRedisQueueAdapter(redisplatform.NewMatchmakingCoordinator(redisClient))
+	var defaultMapID uuid.UUID
+	if cfg.MatchmakingDefaultMapID != "" {
+		parsed, parseErr := uuid.Parse(cfg.MatchmakingDefaultMapID)
+		if parseErr != nil {
+			logger.Error("failed to parse MATCHMAKING_DEFAULT_MAP_ID", slog.Any("error", parseErr))
+			os.Exit(1)
+		}
+		defaultMapID = parsed
+	}
+	rankedLifecycle := matchmaking.NewRankedLifecycleAdapter(matchmakingRepo)
+	gamesService.WithRankedLifecycle(rankedLifecycle)
+	matchmakingService := matchmaking.NewService(matchmakingRepo, matchmakingQueue, matchmaking.Config{
+		DefaultMapID:       defaultMapID,
+		QueueLease:         cfg.MatchmakingQueueLease,
+		ClaimTTL:           cfg.MatchmakingClaimTTL,
+		StartDelay:         cfg.MatchmakingStartDelay,
+		RoundCount:         cfg.MatchmakingRoundCount,
+		TimerSeconds:       cfg.MatchmakingTimerSeconds,
+		CandidateScanLimit: cfg.MatchmakingCandidateScanLimit,
+	}, logger, matchmakingMetrics).
+		WithLocations(matchmaking.NewMapsLocationSelector(mapsService))
+	matchmakingHandler := matchmaking.NewHandlerWithMetrics(matchmakingService, logger, matchmakingMetrics)
+
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

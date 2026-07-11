@@ -20,6 +20,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/leaderboards"
+	"github.com/raven/geoguess/backend/internal/matchmaking"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
@@ -43,7 +44,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -74,7 +75,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(nil, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -121,7 +122,7 @@ func TestRouterPublicUserRoutesUseProfilesContract(t *testing.T) {
 
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID.String()+"/stats", nil)
@@ -223,7 +224,7 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -257,7 +258,7 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	challengesHandler := challenges.NewHandler(stubChallengeService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -295,7 +296,7 @@ func TestRouterMountsDocumentedLeaderboardRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil)
 
 	endpoints := []string{
 		"/api/v1/leaderboards/global",
@@ -483,7 +484,7 @@ func newProfileRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, profileMetrics), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	return router, csrfManager, accessToken
 }
@@ -495,4 +496,199 @@ func generateCSRFToken(t *testing.T, manager *auth.CSRFManager) string {
 		t.Fatalf("csrf token generation failed: %v", err)
 	}
 	return token
+}
+
+func TestRouterMatchmakingRequiresRegisteredAuth(t *testing.T) {
+	cfg := testConfig()
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+
+	// Nil matchmaking handler means routes are not mounted.
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unmounted status = %d, want 404", w.Code)
+	}
+}
+
+type stubMatchmakingService struct {
+	joinResp   *matchmaking.StatusResponse
+	statusResp *matchmaking.StatusResponse
+	joinErr    error
+	leaveErr   error
+	statusErr  error
+}
+
+func (s *stubMatchmakingService) JoinQueue(context.Context, *session.Context, matchmaking.JoinQueueRequest) (*matchmaking.StatusResponse, error) {
+	return s.joinResp, s.joinErr
+}
+
+func (s *stubMatchmakingService) LeaveQueue(context.Context, *session.Context) error {
+	return s.leaveErr
+}
+
+func (s *stubMatchmakingService) GetStatus(context.Context, *session.Context) (*matchmaking.StatusResponse, error) {
+	return s.statusResp, s.statusErr
+}
+
+func newMatchmakingRouter(t *testing.T, cfg config.Config, limiter appmiddleware.RateLimiter, svc matchmaking.ServiceAPI) (http.Handler, *auth.CSRFManager, string, uuid.UUID) {
+	t.Helper()
+	userID := uuid.New()
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+	csrfManager, err := auth.NewCSRFManager(cfg.CSRFSecret)
+	if err != nil {
+		t.Fatalf("csrf manager setup failed: %v", err)
+	}
+	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("token manager setup failed: %v", err)
+	}
+	accessToken, _, err := tokenManager.GenerateAccessToken(userID, "user")
+	if err != nil {
+		t.Fatalf("access token generation failed: %v", err)
+	}
+	authService := auth.NewService(nil, nil, tokenManager, nil, csrfManager, nil, nil, nil, nil, nil, cfg, clock.NewSystem())
+	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	mmHandler := matchmaking.NewHandler(svc, obs.Logger)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler)
+	return router, csrfManager, accessToken, userID
+}
+
+func TestRouterMatchmakingMountsRegisteredRoutes(t *testing.T) {
+	cfg := testConfig()
+	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	svc := &stubMatchmakingService{
+		joinResp:   matchmaking.NewSearchingStatus(matchmaking.ModeRankedStandard, now, now.Add(30*time.Second)),
+		statusResp: matchmaking.NewNotQueuedStatus(),
+	}
+	router, csrfManager, accessToken, _ := newMatchmakingRouter(t, cfg, noopRateLimiter{}, svc)
+	csrf := generateCSRFToken(t, csrfManager)
+
+	// POST join with registered auth + CSRF reaches handler (202).
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matchmaking/queue", strings.NewReader(`{"mode":"ranked_standard"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("POST join status = %d body=%s, want 202", w.Code, w.Body.String())
+	}
+
+	// GET status with registered auth reaches handler (200).
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET status = %d body=%s, want 200", w.Code, w.Body.String())
+	}
+
+	// DELETE leave with registered auth + CSRF reaches handler (204).
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/matchmaking/queue", nil)
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("DELETE leave status = %d body=%s, want 204", w.Code, w.Body.String())
+	}
+}
+
+func TestRouterMatchmakingRejectsGuestAndMissingAuth(t *testing.T) {
+	cfg := testConfig()
+	svc := &stubMatchmakingService{statusResp: matchmaking.NewNotQueuedStatus()}
+	router, csrfManager, _, _ := newMatchmakingRouter(t, cfg, noopRateLimiter{}, svc)
+	csrf := generateCSRFToken(t, csrfManager)
+
+	// Missing auth on status.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401", w.Code)
+	}
+
+	// Guest session rejected (no registered access token).
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/matchmaking/queue", strings.NewReader(`{"mode":"ranked_standard"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	req.AddCookie(&http.Cookie{Name: auth.GuestSessionCookieName, Value: "guest-session-token"})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("guest join status = %d body=%s, want 401", w.Code, w.Body.String())
+	}
+}
+
+func TestRouterMatchmakingPOSTRequiresCSRF(t *testing.T) {
+	cfg := testConfig()
+	svc := &stubMatchmakingService{
+		joinResp: matchmaking.NewSearchingStatus(matchmaking.ModeRankedStandard, time.Now().UTC(), time.Now().UTC().Add(30*time.Second)),
+	}
+	router, _, accessToken, _ := newMatchmakingRouter(t, cfg, noopRateLimiter{}, svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matchmaking/queue", strings.NewReader(`{"mode":"ranked_standard"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("POST without CSRF = %d, want 403", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/matchmaking/queue", nil)
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("DELETE without CSRF = %d, want 403", w.Code)
+	}
+}
+
+func TestRouterMatchmakingRateLimitsCommandsAndStatus(t *testing.T) {
+	cfg := testConfig()
+	svc := &stubMatchmakingService{
+		joinResp:   matchmaking.NewSearchingStatus(matchmaking.ModeRankedStandard, time.Now().UTC(), time.Now().UTC().Add(30*time.Second)),
+		statusResp: matchmaking.NewNotQueuedStatus(),
+	}
+	router, csrfManager, accessToken, _ := newMatchmakingRouter(t, cfg, staticRateLimiter{allowed: false}, svc)
+	csrf := generateCSRFToken(t, csrfManager)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matchmaking/queue", strings.NewReader(`{"mode":"ranked_standard"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("command rate limit = %d, want 429", w.Code)
+	}
+	if w.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After on command rate limit")
+	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("status rate limit = %d, want 429", w.Code)
+	}
+	if w.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After on status rate limit")
+	}
 }

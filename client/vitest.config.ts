@@ -7,7 +7,14 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["features/rooms/**/*.test.{ts,tsx}", "features/profile/**/*.test.{ts,tsx}"],
+    include: [
+      "features/rooms/**/*.test.{ts,tsx}",
+      "features/profile/**/*.test.{ts,tsx}",
+      "features/matchmaking/**/*.test.{ts,tsx}",
+      "features/game/**/*.test.{ts,tsx}",
+      "app/api/matchmaking/**/*.test.ts",
+      "messages/**/*.test.ts",
+    ],
     passWithNoTests: true,
     setupFiles: ["./test/setup.ts"],
   },

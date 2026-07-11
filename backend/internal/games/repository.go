@@ -136,7 +136,7 @@ func (r *Repository) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID,
 		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
 			return err
 		}
-		if game.Mode != GameModePrivateRoom || game.Status != GameStatusPending {
+		if !IsMultiplayerMode(game.Mode) || game.Status != GameStatusPending {
 			return ErrInvalidTransition
 		}
 		var existingRounds int64
@@ -302,7 +302,15 @@ func (r *Repository) SubmitGuessTx(ctx context.Context, gameID, roundID, playerI
 	return &saved, &answer, completedGame, nil
 }
 
-func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, roundID, playerID uuid.UUID, guess Guess, now time.Time) (*MultiplayerGuessOutcome, *answerLocation, error) {
+// MultiplayerTxHooks run inside the multiplayer game transaction so ranked match
+// lifecycle stays atomic with game/round state changes.
+type MultiplayerTxHooks struct {
+	OnMatchActive   func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error
+	OnGameCompleted func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error
+	OnGameCancelled func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time, failureCode string) error
+}
+
+func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, roundID, playerID uuid.UUID, guess Guess, now time.Time, hooks MultiplayerTxHooks) (*MultiplayerGuessOutcome, *answerLocation, error) {
 	out := &MultiplayerGuessOutcome{}
 	var answer answerLocation
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -310,7 +318,7 @@ func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, round
 		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
 			return err
 		}
-		if game.Mode != GameModePrivateRoom || game.Status != GameStatusActive {
+		if !IsMultiplayerMode(game.Mode) || game.Status != GameStatusActive {
 			return ErrGameNotActive
 		}
 		var round Round
@@ -318,6 +326,9 @@ func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, round
 			return err
 		}
 		if round.Status != RoundStatusActive {
+			return ErrRoundClosed
+		}
+		if !CanGuessBeforeStart(game.Mode, round.StartsAt, now) {
 			return ErrRoundClosed
 		}
 		if round.EndsAt != nil && now.After(*round.EndsAt) {
@@ -342,6 +353,12 @@ func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, round
 			return err
 		}
 		out.Guess = guess
+		// First accepted multiplayer guess activates the ranked match record.
+		if game.Mode == GameModeRanked && hooks.OnMatchActive != nil {
+			if err := hooks.OnMatchActive(ctx, tx, gameID, now); err != nil {
+				return err
+			}
+		}
 		submitted, eligible, err := multiplayerProgress(tx, gameID, roundID)
 		if err != nil {
 			return err
@@ -349,7 +366,7 @@ func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, round
 		out.SubmittedCount = submitted
 		out.EligibleCount = eligible
 		if eligible > 0 && submitted >= eligible {
-			return completeMultiplayerRound(tx, gameID, round.ID, now, game.TimerSeconds, out)
+			return completeMultiplayerRound(ctx, tx, gameID, round.ID, now, game.TimerSeconds, out, hooks)
 		}
 		return nil
 	})
@@ -400,14 +417,63 @@ func (r *Repository) GetMultiplayerRoundState(ctx context.Context, gameID uuid.U
 	return &row, nil
 }
 
-func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uuid.UUID, now time.Time) (*MultiplayerGuessOutcome, error) {
+// CancelMultiplayerGameTx marks a multiplayer game abandoned/cancelled and runs
+// ranked lifecycle cancellation inside the same transaction.
+// gameStatus must be GameStatusAbandoned or GameStatusCancelled.
+func (r *Repository) CancelMultiplayerGameTx(ctx context.Context, gameID uuid.UUID, now time.Time, gameStatus, failureCode string, hooks MultiplayerTxHooks) error {
+	if gameStatus != GameStatusAbandoned && gameStatus != GameStatusCancelled {
+		return fmt.Errorf("invalid multiplayer terminal status %q", gameStatus)
+	}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var game Game
+		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
+			return err
+		}
+		if !IsMultiplayerMode(game.Mode) {
+			return ErrGameNotActive
+		}
+		if game.Status == GameStatusCompleted || game.Status == GameStatusAbandoned || game.Status == GameStatusCancelled {
+			// Idempotent terminal replay.
+			return nil
+		}
+		if game.Status != GameStatusActive && game.Status != GameStatusPending {
+			return ErrGameNotActive
+		}
+		updates := map[string]any{
+			"status":     gameStatus,
+			"updated_at": now,
+		}
+		if err := tx.Model(&Game{}).Where("id = ? AND status = ?", gameID, game.Status).Updates(updates).Error; err != nil {
+			return err
+		}
+		// Cancel non-terminal rounds so the game cannot advance after abandon/cancel.
+		if err := tx.Model(&Round{}).
+			Where("game_id = ? AND status IN ?", gameID, []string{RoundStatusPending, RoundStatusActive}).
+			Updates(map[string]any{"status": RoundStatusCancelled}).Error; err != nil {
+			return err
+		}
+		if hooks.OnGameCancelled != nil {
+			return hooks.OnGameCancelled(ctx, tx, gameID, now, failureCode)
+		}
+		return nil
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrGameNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("cancel multiplayer game: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uuid.UUID, now time.Time, hooks MultiplayerTxHooks) (*MultiplayerGuessOutcome, error) {
 	out := &MultiplayerGuessOutcome{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var game Game
 		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
 			return err
 		}
-		if game.Mode != GameModePrivateRoom || game.Status != GameStatusActive {
+		if !IsMultiplayerMode(game.Mode) || game.Status != GameStatusActive {
 			return ErrGameNotActive
 		}
 		var round Round
@@ -423,7 +489,7 @@ func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uu
 		}
 		out.SubmittedCount = submitted
 		out.EligibleCount = eligible
-		return completeMultiplayerRound(tx, gameID, round.ID, now, game.TimerSeconds, out)
+		return completeMultiplayerRound(ctx, tx, gameID, round.ID, now, game.TimerSeconds, out, hooks)
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
@@ -564,7 +630,7 @@ func multiplayerProgress(tx *gorm.DB, gameID, roundID uuid.UUID) (int, int, erro
 	return int(submitted), int(eligible), nil
 }
 
-func completeMultiplayerRound(tx *gorm.DB, gameID, roundID uuid.UUID, now time.Time, timerSeconds *int, out *MultiplayerGuessOutcome) error {
+func completeMultiplayerRound(ctx context.Context, tx *gorm.DB, gameID, roundID uuid.UUID, now time.Time, timerSeconds *int, out *MultiplayerGuessOutcome, hooks MultiplayerTxHooks) error {
 	if err := tx.Model(&Round{}).Where("id = ?", roundID).Updates(map[string]any{
 		"status":      RoundStatusCompleted,
 		"revealed_at": now,
@@ -576,11 +642,17 @@ func completeMultiplayerRound(tx *gorm.DB, gameID, roundID uuid.UUID, now time.T
 	if err := tx.Where("game_id = ? AND status = ?", gameID, RoundStatusPending).Order("round_number ASC").First(&next).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			out.GameCompleted = true
-			return tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{
+			if err := tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{
 				"status":       GameStatusCompleted,
 				"completed_at": now,
 				"updated_at":   now,
-			}).Error
+			}).Error; err != nil {
+				return err
+			}
+			if hooks.OnGameCompleted != nil {
+				return hooks.OnGameCompleted(ctx, tx, gameID, now)
+			}
+			return nil
 		}
 		return err
 	}

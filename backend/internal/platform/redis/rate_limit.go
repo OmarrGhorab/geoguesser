@@ -3,8 +3,10 @@ package redis
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -22,6 +24,10 @@ redis.call('EXPIRE', key, windowSeconds)
 
 return count + 1
 `
+
+// rateLimitSeq guarantees unique sorted-set members when wall-clock nanoseconds collide
+// (common on Windows under tight loops).
+var rateLimitSeq atomic.Uint64
 
 // RateLimiter provides an atomic sliding-window rate limit backed by Redis.
 type RateLimiter struct {
@@ -43,7 +49,16 @@ func NewRateLimiter(client *redis.Client) *RateLimiter {
 func (r *RateLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, int, error) {
 	now := time.Now().UTC()
 	windowStart := now.Add(-window)
-	member := now.UnixNano()
+	// Guaranteed-unique member: timestamp + process-local sequence + UUID so
+	// concurrent/same-millisecond requests never overwrite the same ZSET member.
+	member := fmt.Sprintf("%d-%d-%s", now.UnixNano(), rateLimitSeq.Add(1), uuid.NewString())
+
+	// Redis EXPIRE is whole seconds; sub-second windows must still retain keys long enough
+	// for the sliding window to be observed (ceil to at least 1s).
+	expireSeconds := int((window + time.Second - 1) / time.Second)
+	if expireSeconds < 1 {
+		expireSeconds = 1
+	}
 
 	res, err := r.script.Run(
 		ctx,
@@ -52,7 +67,7 @@ func (r *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 		now.UnixMilli(),
 		windowStart.UnixMilli(),
 		member,
-		int(window.Seconds()),
+		expireSeconds,
 	).Result()
 	if err != nil {
 		return false, 0, fmt.Errorf("rate limit script failed: %w", err)

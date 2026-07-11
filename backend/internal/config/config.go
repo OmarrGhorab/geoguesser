@@ -64,6 +64,15 @@ type Config struct {
 	RoomHeartbeatInterval   time.Duration
 	RoomPresenceTTL         time.Duration
 	RoomRealtimeAllowedHost string
+
+	// Ranked matchmaking (Phase 9).
+	MatchmakingDefaultMapID       string
+	MatchmakingQueueLease         time.Duration
+	MatchmakingClaimTTL           time.Duration
+	MatchmakingStartDelay         time.Duration
+	MatchmakingRoundCount         int
+	MatchmakingTimerSeconds       int
+	MatchmakingCandidateScanLimit int
 }
 
 func Load() (Config, error) {
@@ -122,6 +131,14 @@ func Load() (Config, error) {
 		RoomHeartbeatInterval:   durationSeconds("ROOM_HEARTBEAT_INTERVAL_SECONDS", 10),
 		RoomPresenceTTL:         durationSeconds("ROOM_PRESENCE_TTL_SECONDS", 30),
 		RoomRealtimeAllowedHost: strings.TrimSpace(os.Getenv("ROOM_REALTIME_ALLOWED_HOST")),
+
+		MatchmakingDefaultMapID:       strings.TrimSpace(os.Getenv("MATCHMAKING_DEFAULT_MAP_ID")),
+		MatchmakingQueueLease:         durationSeconds("MATCHMAKING_QUEUE_LEASE_SECONDS", 30),
+		MatchmakingClaimTTL:           durationSeconds("MATCHMAKING_CLAIM_TTL_SECONDS", 15),
+		MatchmakingStartDelay:         durationSeconds("MATCHMAKING_START_DELAY_SECONDS", 5),
+		MatchmakingRoundCount:         intEnv("MATCHMAKING_ROUND_COUNT", 5),
+		MatchmakingTimerSeconds:       intEnv("MATCHMAKING_TIMER_SECONDS", 60),
+		MatchmakingCandidateScanLimit: intEnv("MATCHMAKING_CANDIDATE_SCAN_LIMIT", 20),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -180,8 +197,53 @@ func (c Config) Validate() error {
 	if c.RoomPresenceTTL <= c.RoomHeartbeatInterval {
 		return errors.New("ROOM_PRESENCE_TTL_SECONDS must be greater than ROOM_HEARTBEAT_INTERVAL_SECONDS")
 	}
+	if c.MatchmakingQueueLease <= 0 {
+		return errors.New("MATCHMAKING_QUEUE_LEASE_SECONDS must be positive")
+	}
+	if c.MatchmakingClaimTTL <= 0 {
+		return errors.New("MATCHMAKING_CLAIM_TTL_SECONDS must be positive")
+	}
+	if c.MatchmakingStartDelay <= 0 {
+		return errors.New("MATCHMAKING_START_DELAY_SECONDS must be positive")
+	}
+	if c.MatchmakingRoundCount < 1 || c.MatchmakingRoundCount > 10 {
+		return errors.New("MATCHMAKING_ROUND_COUNT must be between 1 and 10")
+	}
+	if c.MatchmakingTimerSeconds < 10 || c.MatchmakingTimerSeconds > 600 {
+		return errors.New("MATCHMAKING_TIMER_SECONDS must be between 10 and 600")
+	}
+	if c.MatchmakingCandidateScanLimit < 2 || c.MatchmakingCandidateScanLimit > 100 {
+		return errors.New("MATCHMAKING_CANDIDATE_SCAN_LIMIT must be between 2 and 100")
+	}
+	if mapID := strings.TrimSpace(c.MatchmakingDefaultMapID); mapID != "" {
+		if _, err := parseUUID(mapID); err != nil {
+			return errors.New("MATCHMAKING_DEFAULT_MAP_ID must be a valid UUID when set")
+		}
+	}
 
 	return nil
+}
+
+func parseUUID(value string) ([16]byte, error) {
+	// Lightweight UUID format check without adding a config-layer dependency.
+	// Accepts standard 8-4-4-4-12 hex form.
+	var zero [16]byte
+	if len(value) != 36 {
+		return zero, errors.New("invalid uuid length")
+	}
+	for i, ch := range value {
+		switch i {
+		case 8, 13, 18, 23:
+			if ch != '-' {
+				return zero, errors.New("invalid uuid separators")
+			}
+		default:
+			if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') && (ch < 'A' || ch > 'F') {
+				return zero, errors.New("invalid uuid hex")
+			}
+		}
+	}
+	return zero, nil
 }
 
 func getEnv(key, fallback string) string {

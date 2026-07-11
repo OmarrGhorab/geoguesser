@@ -49,3 +49,36 @@ func TestMultiplayerRoundStateShape(t *testing.T) {
 		t.Fatalf("state = %+v", state)
 	}
 }
+
+func TestIsMultiplayerModeIncludesRanked(t *testing.T) {
+	t.Parallel()
+	if !IsMultiplayerMode(GameModePrivateRoom) {
+		t.Fatal("private_room should be multiplayer")
+	}
+	if !IsMultiplayerMode(GameModeRanked) {
+		t.Fatal("ranked should be multiplayer")
+	}
+	if IsMultiplayerMode(GameModeSolo) {
+		t.Fatal("solo should not be multiplayer")
+	}
+}
+
+func TestCanGuessBeforeStart_RankedCountdown(t *testing.T) {
+	t.Parallel()
+	starts := time.Date(2026, 7, 11, 12, 0, 5, 0, time.UTC)
+	before := starts.Add(-time.Second)
+	after := starts.Add(time.Second)
+
+	if CanGuessBeforeStart(GameModeRanked, &starts, before) {
+		t.Fatal("ranked must reject guesses before starts_at")
+	}
+	if !CanGuessBeforeStart(GameModeRanked, &starts, after) {
+		t.Fatal("ranked must allow guesses after starts_at")
+	}
+	if !CanGuessBeforeStart(GameModePrivateRoom, &starts, before) {
+		t.Fatal("private_room should allow early guesses relative to starts_at")
+	}
+	if !CanGuessBeforeStart(GameModeRanked, nil, before) {
+		t.Fatal("nil starts_at should allow guesses")
+	}
+}

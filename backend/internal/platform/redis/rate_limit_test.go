@@ -55,12 +55,13 @@ func TestRateLimiterWindowSlides(t *testing.T) {
 	ctx := context.Background()
 	key := fmt.Sprintf("rate:slide:%d", time.Now().UnixNano())
 	limiter := redisplatform.NewRateLimiter(client)
+	window := 200 * time.Millisecond
 
-	if _, _, err := limiter.Allow(ctx, key, 1, time.Millisecond*50); err != nil {
+	if _, _, err := limiter.Allow(ctx, key, 1, window); err != nil {
 		t.Fatalf("allow failed: %v", err)
 	}
 
-	allowed, _, err := limiter.Allow(ctx, key, 1, time.Millisecond*50)
+	allowed, _, err := limiter.Allow(ctx, key, 1, window)
 	if err != nil {
 		t.Fatalf("allow failed: %v", err)
 	}
@@ -68,9 +69,9 @@ func TestRateLimiterWindowSlides(t *testing.T) {
 		t.Fatal("second request should be denied inside window")
 	}
 
-	time.Sleep(time.Millisecond * 60)
+	time.Sleep(window + 50*time.Millisecond)
 
-	allowed, _, err = limiter.Allow(ctx, key, 1, time.Millisecond*50)
+	allowed, _, err = limiter.Allow(ctx, key, 1, window)
 	if err != nil {
 		t.Fatalf("allow failed: %v", err)
 	}
