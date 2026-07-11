@@ -14,6 +14,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/session"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 // LocationSelector selects active locations for a map.
@@ -25,6 +26,18 @@ type GameCompletionHook interface {
 	OnGameCompleted(ctx context.Context, gameID uuid.UUID, completedAt time.Time) error
 }
 
+// RankedLifecycleHook is an optional seam for ranked match lifecycle (owned outside games).
+// Non-transactional methods remain for best-effort paths; Tx methods run inside game writes
+// so match rows commit or roll back with the game/round change.
+type RankedLifecycleHook interface {
+	OnRankedGameStarted(ctx context.Context, gameID uuid.UUID, at time.Time) error
+	OnRankedGameCompleted(ctx context.Context, gameID uuid.UUID, at time.Time) error
+	OnRankedGameCancelled(ctx context.Context, gameID uuid.UUID, at time.Time, failureCode string) error
+	ApplyStartedInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, at time.Time) error
+	ApplyCompletedInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, at time.Time) error
+	ApplyCancelledInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, at time.Time, failureCode string) error
+}
+
 type Service struct {
 	repo           *Repository
 	selector       LocationSelector
@@ -34,6 +47,7 @@ type Service struct {
 	idempotency    IdempotencyStore
 	metrics        MetricsRecorder
 	completionHook GameCompletionHook
+	rankedHook     RankedLifecycleHook
 }
 
 // NewService returns a solo game service.
@@ -55,6 +69,12 @@ func NewServiceWithHook(repo *Repository, selector LocationSelector, media Locat
 		logger = slog.Default()
 	}
 	return &Service{repo: repo, selector: selector, media: media, clock: clk, logger: logger, idempotency: idempotency, metrics: metrics, completionHook: completionHook}
+}
+
+// WithRankedLifecycle attaches a ranked match lifecycle callback (no games→matchmaking import).
+func (s *Service) WithRankedLifecycle(hook RankedLifecycleHook) *Service {
+	s.rankedHook = hook
+	return s
 }
 
 // CreateGame creates a pending solo game.
@@ -193,7 +213,7 @@ func (s *Service) GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID
 	}
 	now := s.clock.Now()
 	if state != nil && state.Status == RoundStatusActive && state.EndsAt != nil && !now.Before(*state.EndsAt) {
-		if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now); err != nil && !errors.Is(err, ErrRoundClosed) {
+		if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooks()); err != nil && !errors.Is(err, ErrRoundClosed) {
 			return nil, err
 		}
 		state, err = s.repo.GetMultiplayerRoundState(ctx, gameID)
@@ -206,6 +226,7 @@ func (s *Service) GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID
 }
 
 // GetCurrentRound returns the current round without hidden coordinates.
+// For multiplayer/ranked modes, expired deadlines advance rounds/games before the read.
 func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, gameID string) (*CurrentRoundResponse, error) {
 	game, _, err := s.loadOwnedGame(ctx, sess, gameID)
 	if err != nil {
@@ -213,6 +234,29 @@ func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, ga
 	}
 	if game.Status != GameStatusActive {
 		return nil, ErrGameNotActive
+	}
+	now := s.clock.Now()
+	if IsMultiplayerMode(game.Mode) {
+		row, err := s.repo.GetCurrentRound(ctx, game.ID)
+		if err != nil {
+			return nil, err
+		}
+		if row != nil && row.EndsAt != nil && !now.Before(*row.EndsAt) {
+			if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks()); err != nil && !errors.Is(err, ErrRoundClosed) {
+				return nil, err
+			}
+			// Game may have completed via deadline; re-check.
+			game, err = s.repo.GetGameByID(ctx, game.ID)
+			if err != nil {
+				return nil, err
+			}
+			if game == nil {
+				return nil, ErrGameNotFound
+			}
+			if game.Status != GameStatusActive {
+				return nil, ErrGameNotActive
+			}
+		}
 	}
 	row, err := s.repo.GetCurrentRound(ctx, game.ID)
 	if err != nil {
@@ -222,6 +266,53 @@ func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, ga
 		return nil, ErrRoundNotFound
 	}
 	return &CurrentRoundResponse{Round: s.toRoundDTO(*row)}, nil
+}
+
+func (s *Service) multiplayerTxHooks() MultiplayerTxHooks {
+	hooks := MultiplayerTxHooks{}
+	if s.rankedHook == nil {
+		return hooks
+	}
+	hooks.OnMatchActive = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+		return s.rankedHook.ApplyStartedInTx(ctx, tx, gameID, now)
+	}
+	hooks.OnGameCompleted = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+		return s.rankedHook.ApplyCompletedInTx(ctx, tx, gameID, now)
+	}
+	hooks.OnGameCancelled = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time, failureCode string) error {
+		return s.rankedHook.ApplyCancelledInTx(ctx, tx, gameID, now, failureCode)
+	}
+	return hooks
+}
+
+// AbandonRankedGame abandons an active ranked multiplayer game and cancels the durable match atomically.
+func (s *Service) AbandonRankedGame(ctx context.Context, gameID uuid.UUID) error {
+	if s == nil || s.repo == nil {
+		return ErrGameNotFound
+	}
+	game, err := s.repo.GetGameByID(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	if game == nil || game.Mode != GameModeRanked {
+		return ErrGameNotFound
+	}
+	return s.repo.CancelMultiplayerGameTx(ctx, gameID, s.clock.Now().UTC(), GameStatusAbandoned, "", s.multiplayerTxHooks())
+}
+
+// CancelRankedGame cancels a ranked multiplayer game (optional failureCode maps to failed_to_start when still matched).
+func (s *Service) CancelRankedGame(ctx context.Context, gameID uuid.UUID, failureCode string) error {
+	if s == nil || s.repo == nil {
+		return ErrGameNotFound
+	}
+	game, err := s.repo.GetGameByID(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	if game == nil || game.Mode != GameModeRanked {
+		return ErrGameNotFound
+	}
+	return s.repo.CancelMultiplayerGameTx(ctx, gameID, s.clock.Now().UTC(), GameStatusCancelled, failureCode, s.multiplayerTxHooks())
 }
 
 // SubmitGuess submits one guess for the current round.
@@ -258,7 +349,7 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		return nil, ErrGameNotFound
 	}
 	var player *GamePlayer
-	if game.Mode == GameModePrivateRoom {
+	if IsMultiplayerMode(game.Mode) {
 		player, err = s.repo.GetPlayerByOwner(ctx, game.ID, owner)
 		if err != nil {
 			outcome = "rejected"
@@ -284,7 +375,7 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		s.logger.InfoContext(ctx, "solo game guess rejected", slog.String("game_id", game.ID.String()), slog.String("reason", "game_not_active"))
 		return nil, ErrGameNotActive
 	}
-	if game.Mode == GameModePrivateRoom {
+	if IsMultiplayerMode(game.Mode) {
 		return s.submitPrivateRoomGuess(ctx, game, player, roundID, idempotencyKey, req)
 	}
 	parsedRoundID, err := uuid.Parse(roundID)
@@ -435,7 +526,14 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 		return nil, ErrRoundNotCurrent
 	}
 	now := s.clock.Now()
+	if !CanGuessBeforeStart(game.Mode, current.StartsAt, now) {
+		return nil, ErrRoundClosed
+	}
 	if current.EndsAt != nil && now.After(*current.EndsAt) {
+		// Advance expired multiplayer deadline, then reject this late guess.
+		if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks()); err != nil && !errors.Is(err, ErrRoundClosed) {
+			return nil, err
+		}
 		return nil, ErrRoundClosed
 	}
 	key := strings.TrimSpace(idempotencyKey)
@@ -460,16 +558,20 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 	if existing != nil {
 		return nil, ErrAlreadyGuessed
 	}
-	saved, actual, err := s.repo.SubmitMultiplayerGuessTx(ctx, game.ID, parsedRoundID, player.ID, guess, now)
+	// Match becomes active on first accepted multiplayer guess (same TX as score write).
+	hooks := s.multiplayerTxHooks()
+	saved, actual, err := s.repo.SubmitMultiplayerGuessTx(ctx, game.ID, parsedRoundID, player.ID, guess, now, hooks)
 	if err != nil {
 		return nil, err
 	}
 	if saved == nil || actual == nil {
 		return nil, ErrRoundNotFound
 	}
-	if saved.GameCompleted && s.completionHook != nil {
-		if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
-			s.logger.ErrorContext(ctx, "private room completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+	if saved.GameCompleted {
+		if s.completionHook != nil {
+			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
+				s.logger.ErrorContext(ctx, "multiplayer completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+			}
 		}
 	}
 	return &GuessResultResponse{
@@ -601,12 +703,23 @@ func (s *Service) loadOwnedGame(ctx context.Context, sess *session.Context, game
 	if game == nil {
 		return nil, nil, ErrGameNotFound
 	}
-	player, err := s.repo.GetSoloPlayer(ctx, game.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if player == nil || !ownerMatches(owner, *player) {
-		return nil, nil, ErrForbidden
+	var player *GamePlayer
+	if IsMultiplayerMode(game.Mode) {
+		player, err = s.repo.GetPlayerByOwner(ctx, game.ID, owner)
+		if err != nil {
+			return nil, nil, err
+		}
+		if player == nil {
+			return nil, nil, ErrForbidden
+		}
+	} else {
+		player, err = s.repo.GetSoloPlayer(ctx, game.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if player == nil || !ownerMatches(owner, *player) {
+			return nil, nil, ErrForbidden
+		}
 	}
 	return game, player, nil
 }

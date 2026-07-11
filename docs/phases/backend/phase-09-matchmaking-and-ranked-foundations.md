@@ -52,6 +52,31 @@ Goal: introduce backend queueing and ranked match foundations after private room
 - Match formation and status reporting are observable and testable.
 - Ranked feature work has an approved backend foundation instead of ad hoc room logic.
 
+## Implementation Status (2026-07-11)
+
+Feature delivered on branch `008-matchmaking-ranked` (spec `specs/008-matchmaking-ranked/`):
+
+### Backend
+
+- Registered-only join/leave/status with CSRF, per-user rate limits, privacy-safe DTOs
+- Redis atomic join/leave/claim/finalize/release with original-priority preservation
+- Durable formation: ranked game + two players + rounds + match + match_players
+- Concurrent formation race (exactly one match)
+- Ranked multiplayer (`games.mode=ranked`) with scheduled first-round start
+- Match lifecycle + completed-result eligibility (no ratings)
+- Migration `00014_matchmaking_ranked.sql` validated up/down/up
+
+### Frontend
+
+- Localized `/[locale]/matchmaking` with 2s non-overlapping polling, leave race recovery, backoff
+- Ranked destination `/[locale]/games/[gameId]` with countdown, guess submit, results
+- EN/AR catalogs with parity tests; accessible controls/live regions/alerts
+- Same-origin status proxy
+
+**Explicitly out of scope still**: ratings, seasons, divisions, rewards, parties, tournaments, duel combat, Phase 12 background matcher/sweeper.
+
+**Residual**: interactive two-session browser QA and full AR/RTL keyboard pass (documented in `specs/008-matchmaking-ranked/quickstart.md` and `plan.md`).
+
 ## Dependencies
 
 - Phase 6

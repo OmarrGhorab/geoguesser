@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -70,6 +72,21 @@ func RateLimitByCookie(prefix, cookieName string) func(r *http.Request) string {
 			return fmt.Sprintf("%s:%s", prefix, remoteHost(r))
 		}
 		return fmt.Sprintf("%s:%s", prefix, c.Value)
+	}
+}
+
+// RateLimitByRegisteredUser returns a key extractor that uses the resolved
+// registered session user ID when present. The identity is hashed so raw user
+// IDs and tokens never appear in Redis rate-limit keys. Callers sharing an IP
+// remain isolated once authenticated. Unauthenticated requests fall back to IP.
+func RateLimitByRegisteredUser(prefix string) func(r *http.Request) string {
+	return func(r *http.Request) string {
+		sc := SessionFromContext(r.Context())
+		if sc != nil && sc.IsRegistered() && sc.UserID != nil && strings.TrimSpace(*sc.UserID) != "" {
+			sum := sha256.Sum256([]byte(*sc.UserID))
+			return fmt.Sprintf("%s:user:%s", prefix, hex.EncodeToString(sum[:8]))
+		}
+		return fmt.Sprintf("%s:ip:%s", prefix, remoteHost(r))
 	}
 }
 
