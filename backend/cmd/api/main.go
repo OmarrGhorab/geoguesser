@@ -141,7 +141,13 @@ func main() {
 		defaultChallengeMapID = parsed
 	}
 	challengesService := challenges.NewServiceWithIdempotency(challengesRepo, mapsService, clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, defaultChallengeMapID, obs.Metrics, challenges.NewRedisIdempotencyStore(redisClient))
-	leaderboardsService := leaderboards.NewService(leaderboardsRepo, leaderboards.NewRedisPageCache(redisClient), clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, challengesService)
+	leaderboardsMetrics, err := leaderboards.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register leaderboards metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	leaderboardsService := leaderboards.NewService(leaderboardsRepo, leaderboards.NewRedisPageCache(redisClient), clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, challengesService).
+		WithMetrics(leaderboardsMetrics)
 	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, leaderboardsService)
 	// Ranked lifecycle adapter is wired after matchmakingRepo is constructed below.
 
@@ -170,7 +176,7 @@ func main() {
 	locationsHandler := locations.NewHandler(locationsService, logger)
 	gamesHandler := games.NewHandler(gamesService, logger)
 	challengesHandler := challenges.NewHandler(challengesService, logger)
-	leaderboardsHandler := leaderboards.NewHandler(leaderboardsService, logger)
+	leaderboardsHandler := leaderboards.NewHandler(leaderboardsService, logger).WithMetrics(leaderboardsMetrics)
 	roomsService := rooms.NewServiceWithGames(roomsRepo, roomCoordinator, gamesService, logger, nil)
 	roomsHandler := rooms.NewHandler(roomsService, logger)
 	realtimeHandler := realtime.NewHandler(realtime.NewHub(), roomsService, logger, nil)

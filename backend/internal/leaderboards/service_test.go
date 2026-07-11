@@ -2,6 +2,7 @@ package leaderboards
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,27 @@ func TestServiceGetFriendsRequiresRegisteredSession(t *testing.T) {
 	_, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindGuest}, 20, "")
 	if err != ErrUnauthorized {
 		t.Fatalf("GetFriends error = %v, want ErrUnauthorized", err)
+	}
+}
+
+func TestServiceGetFriendsRejectsDisabledAccount(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	uid := userID.String()
+	svc := NewService(&serviceStoreStub{inactiveCaller: true}, nil, clock.Fixed(time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)), nil, 0, nil)
+	_, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindUser, UserID: &uid}, 20, "")
+	if err != ErrUnauthorized {
+		t.Fatalf("GetFriends error = %v, want ErrUnauthorized for disabled account", err)
+	}
+}
+
+func TestServiceGetFriendsMapsRepositoryFailureToUnavailable(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	uid := userID.String()
+	svc := NewService(&serviceStoreStub{activeUserErr: errors.New("postgres unavailable")}, nil, clock.Fixed(time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)), nil, 0, nil)
+
+	_, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindUser, UserID: &uid}, 20, "")
+	if !errors.Is(err, ErrDependencyFailure) {
+		t.Fatalf("GetFriends error = %v, want ErrDependencyFailure", err)
 	}
 }
 
@@ -158,6 +180,8 @@ type serviceStoreStub struct {
 	dailyListChallengeID uuid.UUID
 	generalEntries       []Entry
 	generalLimit         int
+	inactiveCaller       bool
+	activeUserErr        error
 }
 
 func (s *serviceStoreStub) EnsureGlobalLeaderboard(context.Context) (*Leaderboard, error) {
@@ -196,6 +220,16 @@ func (s *serviceStoreStub) ListFriendsEntries(_ context.Context, _ uuid.UUID, li
 		limit = len(s.generalEntries)
 	}
 	return s.generalEntries[:limit], nil
+}
+
+func (s *serviceStoreStub) FindActiveUser(context.Context, uuid.UUID) (bool, error) {
+	if s.activeUserErr != nil {
+		return false, s.activeUserErr
+	}
+	if s.inactiveCaller {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (s *serviceStoreStub) MaterializeCompletedGame(context.Context, uuid.UUID) ([]uuid.UUID, error) {

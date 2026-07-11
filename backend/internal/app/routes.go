@@ -123,7 +123,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 				})
 			api.With(
 				appmiddleware.RequireAuth(logger),
-				appmiddleware.RateLimit(rateLimiter, leaderboardLimit, appmiddleware.RateLimitByRegisteredUser("lb-friends"), logger),
+				appmiddleware.RateLimitWithObserver(rateLimiter, leaderboardLimit, appmiddleware.RateLimitByRegisteredUser("lb-friends"), logger, leaderboardsHandler.RecordRateLimited),
 			).Get("/leaderboards/friends", leaderboardsHandler.GetFriends)
 		}
 

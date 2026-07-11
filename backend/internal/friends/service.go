@@ -15,7 +15,7 @@ import (
 // store is the persistence contract the service depends on.
 type store interface {
 	FindActiveUser(ctx context.Context, userID uuid.UUID) (*uuid.UUID, error)
-	CreateRequest(ctx context.Context, requester, target uuid.UUID) (*Friendship, error)
+	CreateRequest(ctx context.Context, requester, target uuid.UUID) (*Friendship, *PublicProfile, error)
 	AcceptRequest(ctx context.Context, requestID, acceptor uuid.UUID) (*Friendship, *PublicProfile, error)
 	DeclineRequest(ctx context.Context, requestID, actor uuid.UUID) error
 	RemoveFriendship(ctx context.Context, actor, other uuid.UUID) error
@@ -59,12 +59,33 @@ func (s *Service) requireRegistered(sess session.Context) (uuid.UUID, error) {
 	return id, nil
 }
 
+// requireActiveRegistered enforces FR-001: registered JWT is not enough; the
+// account must still be active in PostgreSQL for every social command and read.
+func (s *Service) requireActiveRegistered(ctx context.Context, sess session.Context) (uuid.UUID, error) {
+	id, err := s.requireRegistered(sess)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	active, err := s.repo.FindActiveUser(ctx, id)
+	if err != nil {
+		if isDependency(err) {
+			s.metrics.ObserveDependencyFailure("postgres")
+			return uuid.Nil, ErrDependencyFailure
+		}
+		return uuid.Nil, err
+	}
+	if active == nil {
+		return uuid.Nil, ErrUnauthorized
+	}
+	return id, nil
+}
+
 // CreateRequest sends a friend request to targetUserID.
 func (s *Service) CreateRequest(ctx context.Context, sess session.Context, targetUserID string) (*RequestResponse, error) {
 	start := time.Now()
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.observeCommand("request", "unauthorized", start)
+		s.observeCommand("request", mapErrorOutcome(err), start)
 		return nil, err
 	}
 	target, err := uuid.Parse(targetUserID)
@@ -77,7 +98,7 @@ func (s *Service) CreateRequest(ctx context.Context, sess session.Context, targe
 		return nil, ErrSelfPair
 	}
 
-	f, err := s.repo.CreateRequest(ctx, actor, target)
+	f, profile, err := s.repo.CreateRequest(ctx, actor, target)
 	if err != nil {
 		outcome := mapErrorOutcome(err)
 		s.observeCommand("request", outcome, start)
@@ -90,17 +111,6 @@ func (s *Service) CreateRequest(ctx context.Context, sess session.Context, targe
 			slog.String("outcome", outcome),
 		)
 		return nil, err
-	}
-
-	profile, err := s.repo.LoadPublicProfile(ctx, target)
-	if err != nil {
-		s.metrics.ObserveDependencyFailure("postgres")
-		s.observeCommand("request", "error", start)
-		return nil, ErrDependencyFailure
-	}
-	if profile == nil {
-		s.observeCommand("request", "not_found", start)
-		return nil, ErrTargetNotFound
 	}
 
 	s.observeCommand("request", "success", start)
@@ -134,9 +144,9 @@ func (s *Service) listRequests(
 	direction string,
 	listFn func(context.Context, uuid.UUID, int, string) (*Page, error),
 ) (*RequestListResponse, error) {
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.metrics.ObserveList(direction, "unauthorized")
+		s.metrics.ObserveList(direction, mapErrorOutcome(err))
 		return nil, err
 	}
 	limit, err = normalizeLimit(limit)
@@ -172,9 +182,9 @@ func (s *Service) listRequests(
 // AcceptRequest accepts a pending friend request.
 func (s *Service) AcceptRequest(ctx context.Context, sess session.Context, requestID string) (*FriendshipResponse, error) {
 	start := time.Now()
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.observeCommand("accept", "unauthorized", start)
+		s.observeCommand("accept", mapErrorOutcome(err), start)
 		return nil, err
 	}
 	id, err := uuid.Parse(requestID)
@@ -203,9 +213,9 @@ func (s *Service) AcceptRequest(ctx context.Context, sess session.Context, reque
 // DeclineRequest declines (deletes) a pending friend request.
 func (s *Service) DeclineRequest(ctx context.Context, sess session.Context, requestID string) error {
 	start := time.Now()
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.observeCommand("decline", "unauthorized", start)
+		s.observeCommand("decline", mapErrorOutcome(err), start)
 		return err
 	}
 	id, err := uuid.Parse(requestID)
@@ -232,9 +242,9 @@ func (s *Service) DeclineRequest(ctx context.Context, sess session.Context, requ
 
 // ListFriends returns accepted friends.
 func (s *Service) ListFriends(ctx context.Context, sess session.Context, limit int, cursor string) (*FriendListResponse, error) {
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.metrics.ObserveList("friends", "unauthorized")
+		s.metrics.ObserveList("friends", mapErrorOutcome(err))
 		return nil, err
 	}
 	limit, err = normalizeLimit(limit)
@@ -270,9 +280,9 @@ func (s *Service) ListFriends(ctx context.Context, sess session.Context, limit i
 // RemoveFriend removes an accepted friendship (idempotent).
 func (s *Service) RemoveFriend(ctx context.Context, sess session.Context, otherUserID string) error {
 	start := time.Now()
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.observeCommand("remove", "unauthorized", start)
+		s.observeCommand("remove", mapErrorOutcome(err), start)
 		return err
 	}
 	other, err := uuid.Parse(otherUserID)
@@ -305,9 +315,9 @@ func (s *Service) RemoveFriend(ctx context.Context, sess session.Context, otherU
 // Block blocks a target user (idempotent for same blocker).
 func (s *Service) Block(ctx context.Context, sess session.Context, targetUserID string) error {
 	start := time.Now()
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.observeCommand("block", "unauthorized", start)
+		s.observeCommand("block", mapErrorOutcome(err), start)
 		return err
 	}
 	target, err := uuid.Parse(targetUserID)
@@ -336,9 +346,9 @@ func (s *Service) Block(ctx context.Context, sess session.Context, targetUserID 
 // Unblock removes a block owned by the caller (privacy-safe no-op otherwise).
 func (s *Service) Unblock(ctx context.Context, sess session.Context, targetUserID string) error {
 	start := time.Now()
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.observeCommand("unblock", "unauthorized", start)
+		s.observeCommand("unblock", mapErrorOutcome(err), start)
 		return err
 	}
 	target, err := uuid.Parse(targetUserID)
@@ -366,9 +376,9 @@ func (s *Service) Unblock(ctx context.Context, sess session.Context, targetUserI
 
 // ListBlocked returns users blocked by the caller.
 func (s *Service) ListBlocked(ctx context.Context, sess session.Context, limit int, cursor string) (*BlockedListResponse, error) {
-	actor, err := s.requireRegistered(sess)
+	actor, err := s.requireActiveRegistered(ctx, sess)
 	if err != nil {
-		s.metrics.ObserveList("blocked", "unauthorized")
+		s.metrics.ObserveList("blocked", mapErrorOutcome(err))
 		return nil, err
 	}
 	limit, err = normalizeLimit(limit)
@@ -432,7 +442,6 @@ func isDependency(err error) bool {
 	if err == nil {
 		return false
 	}
-	// Domain errors are not dependency failures.
 	for _, known := range []error{
 		ErrUnauthorized, ErrInvalidUserID, ErrInvalidRequestID, ErrSelfPair, ErrInvalidState,
 		ErrInvalidCursor, ErrInvalidLimit, ErrNotFound, ErrTargetNotFound, ErrConflict,

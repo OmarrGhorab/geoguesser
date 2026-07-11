@@ -80,6 +80,7 @@ PostgreSQL integration tests skip when `DATABASE_URL` is unset.
 
 ## Residual risks
 
-- Large friend graphs without covering indexes could degrade list latency — mitigated by migration indexes.
+- Large friend graphs without covering indexes could degrade list latency — mitigated by migration indexes; `BenchmarkListAcceptedFriends` exercises list queries when `DATABASE_URL` is set.
 - Privacy regressions if new fields are added to DTOs without review — covered by privacy regression tests.
-- Windows hosts cannot run the race detector without CGO; rely on `.github/workflows/ci.yml` ubuntu race job.
+- Windows hosts cannot run the race detector without CGO; rely on `.github/workflows/ci.yml` ubuntu race job (T059).
+- Active-account revalidation requires a PostgreSQL read per social call; acceptable for correctness under FR-001.

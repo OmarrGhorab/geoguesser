@@ -728,11 +728,12 @@ func newFriendsRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 // friendsRouteStore is a minimal store for route-level tests.
 type friendsRouteStore struct{}
 
-func (friendsRouteStore) FindActiveUser(context.Context, uuid.UUID) (*uuid.UUID, error) {
-	return nil, nil
+func (friendsRouteStore) FindActiveUser(_ context.Context, userID uuid.UUID) (*uuid.UUID, error) {
+	id := userID
+	return &id, nil
 }
-func (friendsRouteStore) CreateRequest(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-	return nil, friends.ErrTargetNotFound
+func (friendsRouteStore) CreateRequest(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+	return nil, nil, friends.ErrTargetNotFound
 }
 func (friendsRouteStore) AcceptRequest(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
 	return nil, nil, friends.ErrNotFound

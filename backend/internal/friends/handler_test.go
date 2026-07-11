@@ -72,8 +72,8 @@ func TestHandlerCreateRequestSuccess(t *testing.T) {
 	reqID := uuid.New()
 	now := time.Now().UTC()
 	store := &fakeStore{
-		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-			return &friends.Friendship{ID: reqID, Status: friends.StatusPending, CreatedAt: now}, nil
+		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+			return &friends.Friendship{ID: reqID, Status: friends.StatusPending, CreatedAt: now}, &friends.PublicProfile{UserID: target, DisplayName: "Target"}, nil
 		},
 		profiles: map[uuid.UUID]*friends.PublicProfile{
 			target: {UserID: target, DisplayName: "Target"},
@@ -136,8 +136,8 @@ func TestHandlerConflictMapping(t *testing.T) {
 	actor := uuid.New()
 	target := uuid.New()
 	store := &fakeStore{
-		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-			return nil, friends.ErrAlreadyFriends
+		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+			return nil, nil, friends.ErrAlreadyFriends
 		},
 	}
 	h := friends.NewHandler(friends.NewService(store, nil), nil)
@@ -155,8 +155,8 @@ func TestHandlerNotFoundMapping(t *testing.T) {
 	actor := uuid.New()
 	target := uuid.New()
 	store := &fakeStore{
-		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-			return nil, friends.ErrTargetNotFound
+		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+			return nil, nil, friends.ErrTargetNotFound
 		},
 	}
 	h := friends.NewHandler(friends.NewService(store, nil), nil)

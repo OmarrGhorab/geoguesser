@@ -1,8 +1,8 @@
 # Feature Specification: Friends And Social Graph Backend
 
-**Feature Branch**: `009-friends-social-graph`  
-**Created**: 2026-07-11  
-**Status**: Approved for backend implementation  
+**Feature Branch**: `009-friends-social-graph`
+**Created**: 2026-07-11
+**Status**: Approved for backend implementation
 **Input**: Phase 10 friends social graph and access controls; phase design sources for friendships, friend APIs, and friends leaderboards.
 
 ## User Scenarios & Testing *(mandatory)*

@@ -29,6 +29,7 @@ type store interface {
 	ListGeneralEntries(ctx context.Context, leaderboardID uuid.UUID, limit int, cursor string) ([]Entry, error)
 	ListDailyEntries(ctx context.Context, challengeID uuid.UUID, limit int, cursor string) ([]challenges.LeaderboardEntry, error)
 	ListFriendsEntries(ctx context.Context, viewerID uuid.UUID, limit int, cursor string) ([]Entry, error)
+	FindActiveUser(ctx context.Context, userID uuid.UUID) (bool, error)
 	MaterializeCompletedGame(ctx context.Context, gameID uuid.UUID) ([]uuid.UUID, error)
 	DailyCacheScopeForGame(ctx context.Context, gameID uuid.UUID) (*string, error)
 }
@@ -41,6 +42,7 @@ type Service struct {
 	logger        *slog.Logger
 	resetHourUTC  int
 	challengeHook GameCompletionHook
+	metrics       *Metrics
 }
 
 type GameCompletionHook interface {
@@ -56,6 +58,15 @@ func NewService(repo store, cache pageCache, clk clock.Clock, logger *slog.Logge
 		logger = slog.Default()
 	}
 	return &Service{repo: repo, cache: cache, clock: clk, logger: logger, resetHourUTC: resetHourUTC, challengeHook: challengeHook}
+}
+
+// WithMetrics attaches optional friends-leaderboard metrics.
+func (s *Service) WithMetrics(m *Metrics) *Service {
+	if s == nil {
+		return nil
+	}
+	s.metrics = m
+	return s
 }
 
 func (s *Service) GetGlobal(ctx context.Context, limit int, cursor string) (*Response, error) {
@@ -75,40 +86,71 @@ func (s *Service) GetGlobal(ctx context.Context, limit int, cursor string) (*Res
 
 // GetFriends returns a cohort leaderboard of the caller plus accepted friends.
 // Reads always go to PostgreSQL (no Redis page cache) for immediate consistency.
+// Disabled accounts with an unexpired JWT are rejected (active-user revalidation).
 func (s *Service) GetFriends(ctx context.Context, sess session.Context, limit int, cursor string) (*Response, error) {
+	start := time.Now()
 	if !sess.IsRegistered() {
+		s.observeFriends("unauthorized", start)
 		return nil, ErrUnauthorized
 	}
 	viewerID, err := uuid.Parse(*sess.UserID)
 	if err != nil {
+		s.observeFriends("unauthorized", start)
+		return nil, ErrUnauthorized
+	}
+	active, err := s.repo.FindActiveUser(ctx, viewerID)
+	if err != nil {
+		s.observeFriends("error", start)
+		if s.metrics != nil {
+			s.metrics.ObserveDependencyFailure("postgres")
+		}
+		return nil, ErrDependencyFailure
+	}
+	if !active {
+		s.observeFriends("unauthorized", start)
 		return nil, ErrUnauthorized
 	}
 	limit, err = normalizeLimit(limit)
 	if err != nil {
+		s.observeFriends("validation_failed", start)
 		return nil, err
 	}
 	if err := validateCursor(cursor); err != nil {
+		s.observeFriends("validation_failed", start)
 		return nil, err
 	}
 	if cursor != "" {
 		if _, err := decodeCursor(cursor); err != nil {
+			s.observeFriends("validation_failed", start)
 			return nil, ErrInvalidCursor
 		}
 	}
 	entries, err := s.repo.ListFriendsEntries(ctx, viewerID, limit+1, cursor)
 	if err != nil {
-		return nil, err
+		s.observeFriends("error", start)
+		if s.metrics != nil {
+			s.metrics.ObserveDependencyFailure("postgres")
+		}
+		return nil, ErrDependencyFailure
 	}
 	hasNext := len(entries) > limit
 	if hasNext {
 		entries = entries[:limit]
 	}
 	resp := &Response{Data: generalDTOs(entries), Page: pageInfo(limit, generalNextCursor(entries, hasNext))}
+	s.observeFriends("success", start)
 	s.logger.InfoContext(ctx, "friends leaderboard read",
 		slog.String("user_id", viewerID.String()),
 		slog.Int("entries", len(resp.Data)),
 	)
 	return resp, nil
+}
+
+func (s *Service) observeFriends(outcome string, start time.Time) {
+	if s == nil || s.metrics == nil {
+		return
+	}
+	s.metrics.ObserveFriendsRead(outcome, time.Since(start))
 }
 
 func (s *Service) GetMap(ctx context.Context, rawMapID string, limit int, cursor string) (*Response, error) {

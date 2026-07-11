@@ -21,6 +21,16 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+// FindActiveUser reports whether userID exists with status active.
+func (r *Repository) FindActiveUser(ctx context.Context, userID uuid.UUID) (bool, error) {
+	var id uuid.UUID
+	err := r.db.WithContext(ctx).Raw(`SELECT id FROM users WHERE id = ? AND status = 'active'`, userID).Scan(&id).Error
+	if err != nil {
+		return false, fmt.Errorf("find active user: %w", err)
+	}
+	return id != uuid.Nil, nil
+}
+
 func (r *Repository) EnsureGlobalLeaderboard(ctx context.Context) (*Leaderboard, error) {
 	board := Leaderboard{
 		Kind:        KindGlobal,

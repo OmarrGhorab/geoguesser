@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/raven/geoguess/backend/internal/session"
 )
@@ -54,6 +55,31 @@ func TestHandlerRejectsMalformedLimit(t *testing.T) {
 		if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
 			t.Fatalf("GET %s content-type = %q body=%s", path, got, rec.Body.String())
 		}
+	}
+}
+
+func TestHandlerRecordsFriendsLeaderboardRateLimit(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics, err := NewMetrics(registry)
+	if err != nil {
+		t.Fatalf("NewMetrics: %v", err)
+	}
+	handler := NewHandler(handlerServiceStub{}, nil).WithMetrics(metrics)
+
+	handler.RecordRateLimited(httptest.NewRequest(http.MethodGet, "/leaderboards/friends", nil))
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	var got float64
+	for _, family := range families {
+		if family.GetName() == "leaderboards_friends_rate_limited_total" && len(family.Metric) == 1 {
+			got = family.Metric[0].GetCounter().GetValue()
+		}
+	}
+	if got != 1 {
+		t.Fatalf("rate limited total = %v, want 1", got)
 	}
 }
 

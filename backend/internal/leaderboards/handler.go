@@ -24,6 +24,22 @@ type ServiceAPI interface {
 type Handler struct {
 	service ServiceAPI
 	logger  *slog.Logger
+	metrics *Metrics
+}
+
+// WithMetrics attaches optional friends-leaderboard metrics.
+func (h *Handler) WithMetrics(metrics *Metrics) *Handler {
+	if h != nil {
+		h.metrics = metrics
+	}
+	return h
+}
+
+// RecordRateLimited is the rate-limiter observer for the friends leaderboard.
+func (h *Handler) RecordRateLimited(_ *http.Request) {
+	if h != nil {
+		h.metrics.ObserveRateLimited()
+	}
 }
 
 func NewHandler(service ServiceAPI, logger *slog.Logger) *Handler {

@@ -14,7 +14,7 @@ import (
 
 type fakeStore struct {
 	active          map[uuid.UUID]bool
-	createFn        func(ctx context.Context, requester, target uuid.UUID) (*friends.Friendship, error)
+	createFn        func(ctx context.Context, requester, target uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error)
 	acceptFn        func(ctx context.Context, requestID, acceptor uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error)
 	declineFn       func(ctx context.Context, requestID, actor uuid.UUID) error
 	removeFn        func(ctx context.Context, actor, other uuid.UUID) error
@@ -32,18 +32,22 @@ type fakeStore struct {
 }
 
 func (f *fakeStore) FindActiveUser(_ context.Context, userID uuid.UUID) (*uuid.UUID, error) {
-	if f.active != nil && f.active[userID] {
-		id := userID
-		return &id, nil
+	// When active map is nil, every user is treated as active (default for unit tests).
+	// When set, only explicitly true entries are active (disabled/missing => unauthorized).
+	if f.active != nil {
+		if !f.active[userID] {
+			return nil, nil
+		}
 	}
-	return nil, nil
+	id := userID
+	return &id, nil
 }
 
-func (f *fakeStore) CreateRequest(ctx context.Context, requester, target uuid.UUID) (*friends.Friendship, error) {
+func (f *fakeStore) CreateRequest(ctx context.Context, requester, target uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
 	if f.createFn != nil {
 		return f.createFn(ctx, requester, target)
 	}
-	return nil, errors.New("not implemented")
+	return nil, nil, errors.New("not implemented")
 }
 
 func (f *fakeStore) AcceptRequest(ctx context.Context, requestID, acceptor uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
@@ -141,6 +145,39 @@ func TestCreateRequestRequiresRegisteredSession(t *testing.T) {
 	}
 }
 
+func TestDisabledCallerRejectedOnSocialOperations(t *testing.T) {
+	actor := uuid.New()
+	other := uuid.New()
+	store := &fakeStore{active: map[uuid.UUID]bool{ /* actor omitted => disabled */ }}
+	svc := friends.NewService(store, nil)
+	sess := registered(actor)
+
+	if _, err := svc.CreateRequest(context.Background(), sess, other.String()); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := svc.ListFriends(context.Background(), sess, 20, ""); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("list friends: %v", err)
+	}
+	if _, err := svc.ListIncoming(context.Background(), sess, 20, ""); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("list incoming: %v", err)
+	}
+	if _, err := svc.AcceptRequest(context.Background(), sess, uuid.New().String()); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("accept: %v", err)
+	}
+	if err := svc.DeclineRequest(context.Background(), sess, uuid.New().String()); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("decline: %v", err)
+	}
+	if err := svc.RemoveFriend(context.Background(), sess, other.String()); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("remove: %v", err)
+	}
+	if err := svc.Unblock(context.Background(), sess, other.String()); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("unblock: %v", err)
+	}
+	if _, err := svc.ListBlocked(context.Background(), sess, 20, ""); !errors.Is(err, friends.ErrUnauthorized) {
+		t.Fatalf("list blocked: %v", err)
+	}
+}
+
 func TestCreateRequestRejectsInvalidUUID(t *testing.T) {
 	actor := uuid.New()
 	svc := friends.NewService(&fakeStore{}, nil)
@@ -163,8 +200,8 @@ func TestCreateRequestMissingTarget(t *testing.T) {
 	actor := uuid.New()
 	target := uuid.New()
 	store := &fakeStore{
-		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-			return nil, friends.ErrTargetNotFound
+		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+			return nil, nil, friends.ErrTargetNotFound
 		},
 	}
 	svc := friends.NewService(store, nil)
@@ -178,8 +215,8 @@ func TestCreateRequestDuplicatePending(t *testing.T) {
 	actor := uuid.New()
 	target := uuid.New()
 	store := &fakeStore{
-		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-			return nil, friends.ErrAlreadyPending
+		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+			return nil, nil, friends.ErrAlreadyPending
 		},
 	}
 	svc := friends.NewService(store, nil)
@@ -193,8 +230,8 @@ func TestCreateRequestReciprocalConflict(t *testing.T) {
 	actor := uuid.New()
 	target := uuid.New()
 	store := &fakeStore{
-		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
-			return nil, friends.ErrAlreadyPending
+		createFn: func(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+			return nil, nil, friends.ErrAlreadyPending
 		},
 	}
 	svc := friends.NewService(store, nil)
@@ -210,11 +247,11 @@ func TestCreateRequestSuccess(t *testing.T) {
 	now := time.Now().UTC()
 	reqID := uuid.New()
 	store := &fakeStore{
-		createFn: func(_ context.Context, requester, tgt uuid.UUID) (*friends.Friendship, error) {
+		createFn: func(_ context.Context, requester, tgt uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
 			if requester != actor || tgt != target {
 				t.Fatalf("unexpected pair")
 			}
-			return &friends.Friendship{ID: reqID, Status: friends.StatusPending, CreatedAt: now}, nil
+			return &friends.Friendship{ID: reqID, Status: friends.StatusPending, CreatedAt: now}, &friends.PublicProfile{UserID: tgt, DisplayName: "Target"}, nil
 		},
 		profiles: map[uuid.UUID]*friends.PublicProfile{
 			target: {UserID: target, DisplayName: "Target"},

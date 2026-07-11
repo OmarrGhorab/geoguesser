@@ -95,21 +95,22 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Friendship, er
 	return &f, nil
 }
 
-// CreateRequest creates a pending friendship or returns a domain conflict/not-found error.
-func (r *Repository) CreateRequest(ctx context.Context, requester, target uuid.UUID) (*Friendship, error) {
+// CreateRequest creates a pending friendship and returns the target public profile
+// from the same transaction so success responses cannot race a post-commit failure.
+func (r *Repository) CreateRequest(ctx context.Context, requester, target uuid.UUID) (*Friendship, *PublicProfile, error) {
 	userA, userB, err := NormalizePair(requester, target)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var created *Friendship
+	var targetProfile *PublicProfile
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Global lock order: users (sorted) then friendship pair row.
 		if err := r.lockUsersInOrder(tx, requester, target); err != nil {
-			// Distinguish inactive/missing target vs missing requester later in service.
 			return err
 		}
 
-		// Ensure both are active (lock only checked existence; re-check status).
 		activeReq, err := r.findActiveUserTx(tx, requester)
 		if err != nil {
 			return err
@@ -155,20 +156,58 @@ func (r *Repository) CreateRequest(ctx context.Context, requester, target uuid.U
 		if err := tx.Create(&f).Error; err != nil {
 			return fmt.Errorf("create friend request: %w", err)
 		}
+		profile, err := r.loadPublicProfileTx(tx, target)
+		if err != nil {
+			return err
+		}
+		if profile == nil {
+			return ErrTargetNotFound
+		}
 		created = &f
+		targetProfile = profile
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return created, nil
+	return created, targetProfile, nil
 }
 
 // AcceptRequest accepts a pending request when the acceptor is the non-requester participant.
+// Lock order matches CreateRequest: sorted users first, then friendship row.
 func (r *Repository) AcceptRequest(ctx context.Context, requestID, acceptor uuid.UUID) (*Friendship, *PublicProfile, error) {
 	var accepted *Friendship
 	var other PublicProfile
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Read without lock to discover pair members for ordered user locks.
+		var preview Friendship
+		if err := tx.Where("id = ?", requestID).First(&preview).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("load friendship: %w", err)
+		}
+		if preview.Status != StatusPending {
+			return ErrNotFound
+		}
+		if acceptor != preview.UserAID && acceptor != preview.UserBID {
+			return ErrNotFound
+		}
+		if preview.RequestedByUserID == acceptor {
+			return ErrNotFound // only recipient may accept
+		}
+
+		if err := r.lockUsersInOrder(tx, preview.UserAID, preview.UserBID); err != nil {
+			return err
+		}
+		activeAcceptor, err := r.findActiveUserTx(tx, acceptor)
+		if err != nil {
+			return err
+		}
+		if activeAcceptor == nil {
+			return ErrUnauthorized
+		}
+
 		var f Friendship
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ?", requestID).
@@ -185,11 +224,7 @@ func (r *Repository) AcceptRequest(ctx context.Context, requestID, acceptor uuid
 			return ErrNotFound
 		}
 		if f.RequestedByUserID == acceptor {
-			return ErrNotFound // only recipient may accept
-		}
-
-		if err := r.lockUsersInOrder(tx, f.UserAID, f.UserBID); err != nil {
-			return err
+			return ErrNotFound
 		}
 
 		now := time.Now().UTC()
@@ -228,8 +263,37 @@ func (r *Repository) AcceptRequest(ctx context.Context, requestID, acceptor uuid
 }
 
 // DeclineRequest deletes a pending request when the caller is the recipient.
+// Lock order matches create/accept: sorted users first, then friendship row.
 func (r *Repository) DeclineRequest(ctx context.Context, requestID, actor uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var preview Friendship
+		if err := tx.Where("id = ?", requestID).First(&preview).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("load friendship: %w", err)
+		}
+		if preview.Status != StatusPending {
+			return ErrNotFound
+		}
+		if actor != preview.UserAID && actor != preview.UserBID {
+			return ErrNotFound
+		}
+		if preview.RequestedByUserID == actor {
+			return ErrNotFound
+		}
+
+		if err := r.lockUsersInOrder(tx, preview.UserAID, preview.UserBID); err != nil {
+			return err
+		}
+		activeActor, err := r.findActiveUserTx(tx, actor)
+		if err != nil {
+			return err
+		}
+		if activeActor == nil {
+			return ErrUnauthorized
+		}
+
 		var f Friendship
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ?", requestID).
@@ -374,53 +438,64 @@ func (r *Repository) UnblockUser(ctx context.Context, actor, other uuid.UUID) er
 // ListIncomingRequests returns pending requests where viewer is the recipient.
 func (r *Repository) ListIncomingRequests(ctx context.Context, viewer uuid.UUID, limit int, cursor string) (*Page, error) {
 	return r.listRelationships(ctx, listParams{
-		viewer: viewer,
-		limit:  limit,
-		cursor: cursor,
-		where:  `f.status = 'pending' AND f.requested_by_user_id <> ? AND (f.user_a_id = ? OR f.user_b_id = ?)`,
-		args:   []any{viewer, viewer, viewer},
+		viewer:          viewer,
+		limit:           limit,
+		cursor:          cursor,
+		where:           `f.status = 'pending' AND f.requested_by_user_id <> ? AND (f.user_a_id = ? OR f.user_b_id = ?)`,
+		args:            []any{viewer, viewer, viewer},
+		orderColumn:     "created_at",
+		cursorOnCreated: true,
 	})
 }
 
 // ListOutgoingRequests returns pending requests created by the viewer.
 func (r *Repository) ListOutgoingRequests(ctx context.Context, viewer uuid.UUID, limit int, cursor string) (*Page, error) {
 	return r.listRelationships(ctx, listParams{
-		viewer: viewer,
-		limit:  limit,
-		cursor: cursor,
-		where:  `f.status = 'pending' AND f.requested_by_user_id = ?`,
-		args:   []any{viewer},
+		viewer:          viewer,
+		limit:           limit,
+		cursor:          cursor,
+		where:           `f.status = 'pending' AND f.requested_by_user_id = ?`,
+		args:            []any{viewer},
+		orderColumn:     "created_at",
+		cursorOnCreated: true,
 	})
 }
 
 // ListAcceptedFriends returns accepted friends for the viewer.
 func (r *Repository) ListAcceptedFriends(ctx context.Context, viewer uuid.UUID, limit int, cursor string) (*Page, error) {
 	return r.listRelationships(ctx, listParams{
-		viewer: viewer,
-		limit:  limit,
-		cursor: cursor,
-		where:  `f.status = 'accepted' AND (f.user_a_id = ? OR f.user_b_id = ?)`,
-		args:   []any{viewer, viewer},
+		viewer:          viewer,
+		limit:           limit,
+		cursor:          cursor,
+		where:           `f.status = 'accepted' AND (f.user_a_id = ? OR f.user_b_id = ?)`,
+		args:            []any{viewer, viewer},
+		orderColumn:     "created_at",
+		cursorOnCreated: true,
 	})
 }
 
-// ListBlockedUsers returns users blocked by the viewer.
+// ListBlockedUsers returns users blocked by the viewer, ordered by block time
+// (updated_at) so recently blocked former friends surface first.
 func (r *Repository) ListBlockedUsers(ctx context.Context, viewer uuid.UUID, limit int, cursor string) (*Page, error) {
 	return r.listRelationships(ctx, listParams{
-		viewer: viewer,
-		limit:  limit,
-		cursor: cursor,
-		where:  `f.status = 'blocked' AND f.blocked_by_user_id = ?`,
-		args:   []any{viewer},
+		viewer:          viewer,
+		limit:           limit,
+		cursor:          cursor,
+		where:           `f.status = 'blocked' AND f.blocked_by_user_id = ?`,
+		args:            []any{viewer},
+		orderColumn:     "updated_at",
+		cursorOnCreated: false,
 	})
 }
 
 type listParams struct {
-	viewer uuid.UUID
-	limit  int
-	cursor string
-	where  string
-	args   []any
+	viewer          uuid.UUID
+	limit           int
+	cursor          string
+	where           string
+	args            []any
+	orderColumn     string // created_at | updated_at
+	cursorOnCreated bool   // true = cursor on created_at; false = updated_at
 }
 
 type listScanRow struct {
@@ -469,12 +544,16 @@ func (r *Repository) listRelationships(ctx context.Context, p listParams) (*Page
 		WHERE ` + p.where + `
 		  AND other_u.status = 'active'
 	`
+	orderCol := p.orderColumn
+	if orderCol != "updated_at" {
+		orderCol = "created_at"
+	}
 	args := append([]any{p.viewer}, p.args...)
 	if parsed != nil {
-		query += ` AND (f.created_at, f.id) < (?, ?)`
+		query += fmt.Sprintf(` AND (f.%s, f.id) < (?, ?)`, orderCol)
 		args = append(args, parsed.CreatedAt, parsed.ID)
 	}
-	query += ` ORDER BY f.created_at DESC, f.id DESC LIMIT ?`
+	query += fmt.Sprintf(` ORDER BY f.%s DESC, f.id DESC LIMIT ?`, orderCol)
 	args = append(args, p.limit+1)
 
 	var rows []listScanRow
@@ -513,7 +592,11 @@ func (r *Repository) listRelationships(ctx context.Context, p listParams) (*Page
 	page := &Page{Items: items, Limit: p.limit}
 	if hasNext && len(items) > 0 {
 		last := items[len(items)-1]
-		c := encodeListCursor(last.Friendship.CreatedAt, last.Friendship.ID)
+		sortAt := last.Friendship.CreatedAt
+		if !p.cursorOnCreated {
+			sortAt = last.Friendship.UpdatedAt
+		}
+		c := encodeListCursor(sortAt, last.Friendship.ID)
 		page.NextCursor = &c
 	}
 	return page, nil

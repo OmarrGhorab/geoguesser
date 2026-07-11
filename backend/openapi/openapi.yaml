@@ -1309,6 +1309,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends/requests/outgoing:
     get:
@@ -1333,6 +1335,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends/requests/{requestId}/accept:
     post:
@@ -1356,12 +1360,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FriendshipResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends/requests/{requestId}/decline:
     post:
@@ -1382,12 +1390,16 @@ paths:
       responses:
         '204':
           description: Request declined and deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends:
     get:
@@ -1412,6 +1424,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends/{userId}:
     delete:
@@ -1438,6 +1452,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends/{userId}/block:
     post:
@@ -1466,6 +1482,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags: [Friends]
       summary: Unblock a user
@@ -1490,6 +1508,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /friends/blocked:
     get:
@@ -1514,6 +1534,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /leaderboards/friends:
     get:
@@ -1522,6 +1544,7 @@ paths:
       description: >
         Authenticated cohort ranking of the caller plus accepted active friends.
         Ranks are relative to the cohort. No Redis page cache is used.
+        Disabled accounts are rejected even with a valid access token.
       operationId: getFriendsLeaderboard
       security:
         - accessCookie: []
@@ -1541,6 +1564,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /leaderboards/global:
     get:
