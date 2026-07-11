@@ -135,8 +135,14 @@ func (q *memoryQueue) Join(ctx context.Context, userID uuid.UUID, mode string, n
 	if q.redisDown {
 		return nil, matchmaking.ErrUnavailable
 	}
-	if existing, ok := q.entries[userID]; ok && existing.State == matchmaking.QueueStateSearching {
-		return existing, nil
+	// Mirror Redis: searching (same mode) and claimed entries are immutable until leave/finalize/release.
+	if existing, ok := q.entries[userID]; ok {
+		if existing.State == matchmaking.QueueStateSearching && existing.Mode == mode {
+			return existing, nil
+		}
+		if existing.State == matchmaking.QueueStateClaimed {
+			return existing, nil
+		}
 	}
 	entry := &matchmaking.QueueEntry{
 		EntryID:          uuid.NewString(),
@@ -341,6 +347,49 @@ func TestJoinQueue_FirstAndDuplicatePreservePriority(t *testing.T) {
 	}
 	if second.Queue == nil || second.Queue.SearchStartedAt.UnixMilli() != first.Queue.SearchStartedAt.UnixMilli() {
 		t.Fatalf("priority not preserved: first=%v second=%v", first.Queue.SearchStartedAt, second.Queue.SearchStartedAt)
+	}
+}
+
+func TestJoinQueue_DuplicateJoinWhileClaimedPreservesEntry(t *testing.T) {
+	userA, userB := uuid.New(), uuid.New()
+	store := newMemoryStore()
+	store.users[userA] = &matchmaking.ActiveUser{ID: userA, Status: "active"}
+	store.users[userB] = &matchmaking.ActiveUser{ID: userB, Status: "active"}
+	claimID := uuid.NewString()
+	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	queue := newMemoryQueue()
+	original := &matchmaking.QueueEntry{
+		EntryID: "e-claimed-a", UserID: userA, Mode: matchmaking.ModeRankedStandard,
+		State: matchmaking.QueueStateClaimed, ClaimID: claimID,
+		EnqueuedAtMs: now.UnixMilli(), LeaseExpiresAtMs: now.Add(time.Minute).UnixMilli(),
+	}
+	queue.entries[userA] = original
+	queue.claims[claimID] = &matchmaking.PairClaim{
+		ClaimID: claimID, FormationKey: claimID, Mode: matchmaking.ModeRankedStandard,
+		UserIDA: userA, UserIDB: userB, EntryIDA: "e-claimed-a", EntryIDB: "e-b",
+		EnqueuedAtMsA: now.UnixMilli(), EnqueuedAtMsB: now.UnixMilli(),
+		// Still within claim TTL so recovery returns temporarily_unavailable (not requeue).
+		RecoverAfterMs: now.Add(15 * time.Second).UnixMilli(),
+	}
+	locs := &memoryLocations{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}
+	svc := matchmaking.NewService(store, queue, testConfig(), nil, nil).
+		WithClock(stubClock{now: now}).
+		WithLocations(locs)
+
+	status, err := svc.JoinQueue(context.Background(), userSession(userA), matchmaking.JoinQueueRequest{Mode: matchmaking.ModeRankedStandard})
+	if err != nil {
+		t.Fatalf("join while claimed: %v", err)
+	}
+	// Active claim without durable match yet: recovery path, not a new searching entry.
+	if status.Status != matchmaking.PublicStatusTemporarilyUnavailable {
+		t.Fatalf("status = %q, want temporarily_unavailable during active claim", status.Status)
+	}
+	preserved := queue.entries[userA]
+	if preserved == nil || preserved.EntryID != original.EntryID || preserved.State != matchmaking.QueueStateClaimed || preserved.ClaimID != claimID {
+		t.Fatalf("claimed entry destroyed by duplicate join: got=%+v want entry=%s claim=%s", preserved, original.EntryID, claimID)
+	}
+	if queue.releaseCalls != 0 {
+		t.Fatalf("releaseCalls=%d, claim must remain until finalize/expiry recovery", queue.releaseCalls)
 	}
 }
 

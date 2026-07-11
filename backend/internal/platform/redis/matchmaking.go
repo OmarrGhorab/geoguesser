@@ -77,7 +77,10 @@ type PairClaim struct {
 	RecoverAfterMs int64
 }
 
-// joinScript atomically joins or returns an existing valid searching entry.
+// joinScript atomically joins or returns an existing valid entry.
+// Searching entries (same mode, unexpired lease) and claimed entries are immutable:
+// claimed players must not be rewritten by a concurrent/retried Join — only
+// explicit finalize/release may clear claim pointers.
 // KEYS[1] = player hash, KEYS[2] = queue sorted set
 // ARGV: user_id, mode, entry_id, now_ms, lease_expires_ms, state_searching, state_claimed
 var joinScript = redis.NewScript(`
@@ -110,6 +113,7 @@ if #existing > 0 then
       'existing'
     }
   end
+  -- Claimed is immutable until finalize/release (no lease-based destroy).
   if map['state'] == stateClaimed then
     return {
       map['entry_id'] or '',
@@ -122,7 +126,7 @@ if #existing > 0 then
       'existing_claimed'
     }
   end
-  -- Stale self-entry cleanup.
+  -- Stale searching (expired lease / mode change) self-entry cleanup only.
   if map['entry_id'] and map['mode'] then
     redis.call('ZREM', 'matchmaking:v1:queue:' .. map['mode'], map['entry_id'])
     redis.call('DEL', 'matchmaking:v1:entry:' .. map['entry_id'])

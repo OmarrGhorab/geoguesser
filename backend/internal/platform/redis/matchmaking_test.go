@@ -476,6 +476,20 @@ func TestMatchmakingDuplicateJoinPreservesActiveClaim(t *testing.T) {
 		t.Fatalf("claim: claim=%+v err=%v", claim, err)
 	}
 
+	// Capture entry→user pointers before the duplicate join.
+	entryPtrA, err := client.Get(ctx, "matchmaking:v1:entry:"+entryA.EntryID).Result()
+	if err != nil {
+		t.Fatalf("entry pointer A before: %v", err)
+	}
+	entryPtrB, err := client.Get(ctx, "matchmaking:v1:entry:"+entryB.EntryID).Result()
+	if err != nil {
+		t.Fatalf("entry pointer B before: %v", err)
+	}
+	scoreBefore, err := client.ZScore(ctx, matchmakingClaimsIndexKey(), claim.ClaimID).Result()
+	if err != nil {
+		t.Fatalf("claim index before: %v", err)
+	}
+
 	duplicate, err := coord.Join(ctx, userA, mode, now.Add(2*time.Second), 30*time.Second)
 	if err != nil {
 		t.Fatalf("duplicate join while claimed: %v", err)
@@ -490,8 +504,32 @@ func TestMatchmakingDuplicateJoinPreservesActiveClaim(t *testing.T) {
 			t.Fatalf("player %s claim not preserved: entry=%+v err=%v", userID, preserved, getErr)
 		}
 	}
+	// Opponent claim pointer must remain; entry maps and recovery index must be untouched.
+	entryPtrAAfter, err := client.Get(ctx, "matchmaking:v1:entry:"+entryA.EntryID).Result()
+	if err != nil || entryPtrAAfter != entryPtrA {
+		t.Fatalf("entry pointer A changed: before=%s after=%s err=%v", entryPtrA, entryPtrAAfter, err)
+	}
+	entryPtrBAfter, err := client.Get(ctx, "matchmaking:v1:entry:"+entryB.EntryID).Result()
+	if err != nil || entryPtrBAfter != entryPtrB {
+		t.Fatalf("entry pointer B changed: before=%s after=%s err=%v", entryPtrB, entryPtrBAfter, err)
+	}
+	scoreAfter, err := client.ZScore(ctx, matchmakingClaimsIndexKey(), claim.ClaimID).Result()
+	if err != nil || scoreAfter != scoreBefore {
+		t.Fatalf("claim index changed: before=%v after=%v err=%v", scoreBefore, scoreAfter, err)
+	}
 	storedClaim, err := coord.GetClaim(ctx, claim.ClaimID)
 	if err != nil || storedClaim == nil {
 		t.Fatalf("claim payload lost: claim=%+v err=%v", storedClaim, err)
+	}
+	if storedClaim.UserIDA != claim.UserIDA || storedClaim.UserIDB != claim.UserIDB {
+		t.Fatalf("claim participants changed: got=%+v want=%+v", storedClaim, claim)
+	}
+	// Second player duplicate join must also be a no-op.
+	duplicateB, err := coord.Join(ctx, userB, mode, now.Add(3*time.Second), 30*time.Second)
+	if err != nil {
+		t.Fatalf("duplicate join B while claimed: %v", err)
+	}
+	if duplicateB.EntryID != entryB.EntryID || duplicateB.State != "claimed" || duplicateB.ClaimID != claim.ClaimID {
+		t.Fatalf("duplicate join B replaced claim: got=%+v original=%+v", duplicateB, entryB)
 	}
 }
