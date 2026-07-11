@@ -10,17 +10,36 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	apphttp "github.com/raven/geoguess/backend/internal/http"
+	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
+	"github.com/raven/geoguess/backend/internal/session"
 )
 
 type ServiceAPI interface {
 	GetGlobal(context.Context, int, string) (*Response, error)
 	GetDaily(context.Context, int, string, string) (*Response, error)
 	GetMap(context.Context, string, int, string) (*Response, error)
+	GetFriends(context.Context, session.Context, int, string) (*Response, error)
 }
 
 type Handler struct {
 	service ServiceAPI
 	logger  *slog.Logger
+	metrics *Metrics
+}
+
+// WithMetrics attaches optional friends-leaderboard metrics.
+func (h *Handler) WithMetrics(metrics *Metrics) *Handler {
+	if h != nil {
+		h.metrics = metrics
+	}
+	return h
+}
+
+// RecordRateLimited is the rate-limiter observer for the friends leaderboard.
+func (h *Handler) RecordRateLimited(_ *http.Request) {
+	if h != nil {
+		h.metrics.ObserveRateLimited()
+	}
 }
 
 func NewHandler(service ServiceAPI, logger *slog.Logger) *Handler {
@@ -31,6 +50,22 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/leaderboards/global", h.GetGlobal)
 	r.Get("/leaderboards/daily", h.GetDaily)
 	r.Get("/leaderboards/maps/{mapId}", h.GetMap)
+}
+
+// GetFriends handles GET /leaderboards/friends (registered auth required at route mount).
+func (h *Handler) GetFriends(w http.ResponseWriter, r *http.Request) {
+	limit, err := parseLimitParam(r)
+	if err != nil {
+		apphttp.Error(w, r, h.logger, ToAPIError(err))
+		return
+	}
+	sess := appmiddleware.SessionFromContext(r.Context())
+	resp, err := h.service.GetFriends(r.Context(), *sess, limit, r.URL.Query().Get("cursor"))
+	if err != nil {
+		apphttp.Error(w, r, h.logger, ToAPIError(err))
+		return
+	}
+	apphttp.OK(w, r, resp)
 }
 
 func (h *Handler) GetGlobal(w http.ResponseWriter, r *http.Request) {

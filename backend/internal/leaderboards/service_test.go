@@ -2,6 +2,7 @@ package leaderboards
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,53 @@ func TestServiceRejectsInvalidLimit(t *testing.T) {
 
 	if err != ErrInvalidLimit {
 		t.Fatalf("GetGlobal error = %v, want ErrInvalidLimit", err)
+	}
+}
+
+func TestServiceGetFriendsRequiresRegisteredSession(t *testing.T) {
+	svc := NewService(&serviceStoreStub{}, nil, clock.Fixed(time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)), nil, 0, nil)
+	_, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindGuest}, 20, "")
+	if err != ErrUnauthorized {
+		t.Fatalf("GetFriends error = %v, want ErrUnauthorized", err)
+	}
+}
+
+func TestServiceGetFriendsRejectsDisabledAccount(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	uid := userID.String()
+	svc := NewService(&serviceStoreStub{inactiveCaller: true}, nil, clock.Fixed(time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)), nil, 0, nil)
+	_, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindUser, UserID: &uid}, 20, "")
+	if err != ErrUnauthorized {
+		t.Fatalf("GetFriends error = %v, want ErrUnauthorized for disabled account", err)
+	}
+}
+
+func TestServiceGetFriendsMapsRepositoryFailureToUnavailable(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	uid := userID.String()
+	svc := NewService(&serviceStoreStub{activeUserErr: errors.New("postgres unavailable")}, nil, clock.Fixed(time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)), nil, 0, nil)
+
+	_, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindUser, UserID: &uid}, 20, "")
+	if !errors.Is(err, ErrDependencyFailure) {
+		t.Fatalf("GetFriends error = %v, want ErrDependencyFailure", err)
+	}
+}
+
+func TestServiceGetFriendsReturnsCohortPage(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	store := &serviceStoreStub{
+		generalEntries: []Entry{
+			{Rank: 1, UserID: userID, DisplayNameSnapshot: "Me", Score: 100, GamesPlayed: 2, CompletedAt: time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)},
+		},
+	}
+	svc := NewService(store, nil, clock.Fixed(time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)), nil, 0, nil)
+	uid := userID.String()
+	resp, err := svc.GetFriends(context.Background(), session.Context{Kind: session.KindUser, UserID: &uid}, 20, "")
+	if err != nil {
+		t.Fatalf("GetFriends: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].UserID != userID {
+		t.Fatalf("unexpected friends leaderboard: %+v", resp.Data)
 	}
 }
 
@@ -132,6 +180,8 @@ type serviceStoreStub struct {
 	dailyListChallengeID uuid.UUID
 	generalEntries       []Entry
 	generalLimit         int
+	inactiveCaller       bool
+	activeUserErr        error
 }
 
 func (s *serviceStoreStub) EnsureGlobalLeaderboard(context.Context) (*Leaderboard, error) {
@@ -163,6 +213,23 @@ func (s *serviceStoreStub) ListGeneralEntries(_ context.Context, _ uuid.UUID, li
 func (s *serviceStoreStub) ListDailyEntries(_ context.Context, challengeID uuid.UUID, _ int, _ string) ([]challenges.LeaderboardEntry, error) {
 	s.dailyListChallengeID = challengeID
 	return nil, nil
+}
+
+func (s *serviceStoreStub) ListFriendsEntries(_ context.Context, _ uuid.UUID, limit int, _ string) ([]Entry, error) {
+	if limit > len(s.generalEntries) {
+		limit = len(s.generalEntries)
+	}
+	return s.generalEntries[:limit], nil
+}
+
+func (s *serviceStoreStub) FindActiveUser(context.Context, uuid.UUID) (bool, error) {
+	if s.activeUserErr != nil {
+		return false, s.activeUserErr
+	}
+	if s.inactiveCaller {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (s *serviceStoreStub) MaterializeCompletedGame(context.Context, uuid.UUID) ([]uuid.UUID, error) {

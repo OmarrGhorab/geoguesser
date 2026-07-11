@@ -43,6 +43,15 @@ func TestRepositoryMaterializeCompletedGameRanksAndRetries(t *testing.T) {
 	repo, db := setupLeaderboardsRepositoryTest(t)
 	ctx := context.Background()
 
+	// Isolate from leftover global entries left by other packages on a shared DATABASE_URL.
+	global, err := repo.EnsureGlobalLeaderboard(ctx)
+	if err != nil {
+		t.Fatalf("EnsureGlobalLeaderboard failed: %v", err)
+	}
+	if err := db.Exec(`DELETE FROM leaderboard_entries WHERE leaderboard_id = ?`, global.ID).Error; err != nil {
+		t.Fatalf("cleanup global leaderboard entries: %v", err)
+	}
+
 	mapID := seedLeaderboardMap(t, db)
 	firstUser := seedLeaderboardUser(t, db, "active", "First")
 	secondUser := seedLeaderboardUser(t, db, "active", "Second")
@@ -60,10 +69,6 @@ func TestRepositoryMaterializeCompletedGameRanksAndRetries(t *testing.T) {
 		}
 	}
 
-	global, err := repo.EnsureGlobalLeaderboard(ctx)
-	if err != nil {
-		t.Fatalf("EnsureGlobalLeaderboard failed: %v", err)
-	}
 	entries, err := repo.ListGeneralEntries(ctx, global.ID, 10, "")
 	if err != nil {
 		t.Fatalf("ListGeneralEntries failed: %v", err)
@@ -106,6 +111,114 @@ func TestRepositoryMaterializeCompletedGameRanksAndRetries(t *testing.T) {
 	if len(secondPage.Data) != 1 || secondPage.Data[0].UserID != secondUser {
 		t.Fatalf("second page after higher insert = %+v, want original second user", secondPage.Data)
 	}
+}
+
+func TestRepositoryListFriendsEntriesCohortFiltering(t *testing.T) {
+	repo, db := setupLeaderboardsRepositoryTest(t)
+	ctx := context.Background()
+
+	// Isolate global board for deterministic ranks.
+	global, err := repo.EnsureGlobalLeaderboard(ctx)
+	if err != nil {
+		t.Fatalf("EnsureGlobalLeaderboard: %v", err)
+	}
+	if err := db.Exec(`DELETE FROM leaderboard_entries WHERE leaderboard_id = ?`, global.ID).Error; err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+
+	mapID := seedLeaderboardMap(t, db)
+	viewer := seedLeaderboardUser(t, db, "active", "Viewer")
+	friend := seedLeaderboardUser(t, db, "active", "Friend")
+	pending := seedLeaderboardUser(t, db, "active", "Pending")
+	blocked := seedLeaderboardUser(t, db, "active", "Blocked")
+	stranger := seedLeaderboardUser(t, db, "active", "Stranger")
+	inactiveFriend := seedLeaderboardUser(t, db, "active", "InactiveFriend")
+	now := time.Now().UTC().Truncate(time.Second)
+
+	// Friendships: accepted, pending, blocked.
+	mustFriend := func(a, b uuid.UUID, status, requestedBy string) {
+		t.Helper()
+		ua, ub := a, b
+		if bytesLessUUID(ub, ua) {
+			ua, ub = ub, ua
+		}
+		req := a
+		if requestedBy == "b" {
+			req = b
+		}
+		acceptedAt := any(nil)
+		var blockedBy any
+		if status == "accepted" {
+			acceptedAt = now
+		}
+		if status == "blocked" {
+			blockedBy = a
+		}
+		if err := db.Exec(`
+			INSERT INTO friendships (id, user_a_id, user_b_id, requested_by_user_id, status, blocked_by_user_id, accepted_at, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, uuid.New(), ua, ub, req, status, blockedBy, acceptedAt, now, now).Error; err != nil {
+			t.Fatalf("insert friendship: %v", err)
+		}
+	}
+	mustFriend(viewer, friend, "accepted", "a")
+	mustFriend(viewer, pending, "pending", "a")
+	mustFriend(viewer, blocked, "blocked", "a")
+	mustFriend(viewer, inactiveFriend, "accepted", "a")
+	if err := db.Exec(`UPDATE users SET status = 'disabled' WHERE id = ?`, inactiveFriend).Error; err != nil {
+		t.Fatalf("disable friend: %v", err)
+	}
+
+	// Scores: stranger has highest global score but must be excluded from friends cohort.
+	for _, item := range []struct {
+		user  uuid.UUID
+		score int
+	}{
+		{viewer, 100},
+		{friend, 200},
+		{pending, 500},
+		{blocked, 600},
+		{stranger, 999},
+		{inactiveFriend, 800},
+	} {
+		gameID := seedLeaderboardGame(t, db, item.user, mapID, item.score, now.Add(-time.Hour), now)
+		if _, err := repo.MaterializeCompletedGame(ctx, gameID); err != nil {
+			t.Fatalf("materialize %s: %v", item.user, err)
+		}
+	}
+
+	entries, err := repo.ListFriendsEntries(ctx, viewer, 20, "")
+	if err != nil {
+		t.Fatalf("ListFriendsEntries: %v", err)
+	}
+	ids := map[uuid.UUID]int{}
+	for _, e := range entries {
+		ids[e.UserID] = e.Rank
+	}
+	if _, ok := ids[viewer]; !ok {
+		t.Fatal("viewer missing from friends cohort")
+	}
+	if _, ok := ids[friend]; !ok {
+		t.Fatal("accepted friend missing from friends cohort")
+	}
+	for _, excluded := range []uuid.UUID{pending, blocked, stranger, inactiveFriend} {
+		if _, ok := ids[excluded]; ok {
+			t.Fatalf("excluded user %s appeared in friends cohort", excluded)
+		}
+	}
+	// Friend (200) ranks above viewer (100) inside cohort.
+	if ids[friend] != 1 || ids[viewer] != 2 {
+		t.Fatalf("cohort ranks = friend %d viewer %d, want 1 and 2", ids[friend], ids[viewer])
+	}
+}
+
+func bytesLessUUID(a, b uuid.UUID) bool {
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
 }
 
 func seedLeaderboardUser(t *testing.T, db *gorm.DB, status string, namePrefix string) uuid.UUID {

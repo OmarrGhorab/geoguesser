@@ -21,6 +21,16 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+// FindActiveUser reports whether userID exists with status active.
+func (r *Repository) FindActiveUser(ctx context.Context, userID uuid.UUID) (bool, error) {
+	var id uuid.UUID
+	err := r.db.WithContext(ctx).Raw(`SELECT id FROM users WHERE id = ? AND status = 'active'`, userID).Scan(&id).Error
+	if err != nil {
+		return false, fmt.Errorf("find active user: %w", err)
+	}
+	return id != uuid.Nil, nil
+}
+
 func (r *Repository) EnsureGlobalLeaderboard(ctx context.Context) (*Leaderboard, error) {
 	board := Leaderboard{
 		Kind:        KindGlobal,
@@ -73,6 +83,75 @@ func (r *Repository) GetDailyChallengeByDate(ctx context.Context, date time.Time
 		return nil, fmt.Errorf("get daily challenge leaderboard scope: %w", err)
 	}
 	return &challenge, nil
+}
+
+// ListFriendsEntries returns global leaderboard entries filtered to the viewer
+// plus accepted active friends, with ranks recalculated inside that cohort.
+// It references the friendships table without importing the friends package.
+func (r *Repository) ListFriendsEntries(ctx context.Context, viewerID uuid.UUID, limit int, cursor string) ([]Entry, error) {
+	board, err := r.EnsureGlobalLeaderboard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	parsedCursor, err := decodeCursor(cursor)
+	if err := wrapInvalidCursor(err); err != nil {
+		return nil, err
+	}
+
+	query := `
+		WITH cohort AS (
+			SELECT ?::uuid AS user_id
+			UNION
+			SELECT CASE
+				WHEN f.user_a_id = ? THEN f.user_b_id
+				ELSE f.user_a_id
+			END AS user_id
+			FROM friendships f
+			JOIN users u ON u.id = CASE
+				WHEN f.user_a_id = ? THEN f.user_b_id
+				ELSE f.user_a_id
+			END
+			WHERE f.status = 'accepted'
+			  AND (f.user_a_id = ? OR f.user_b_id = ?)
+			  AND u.status = 'active'
+		),
+		ranked AS (
+			SELECT
+				le.id,
+				le.leaderboard_id,
+				le.game_id,
+				le.user_id,
+				le.display_name_snapshot,
+				le.score,
+				le.games_played,
+				le.completion_duration_ms,
+				le.completed_at,
+				ROW_NUMBER() OVER (
+					ORDER BY le.score DESC, le.completion_duration_ms ASC NULLS LAST, le.completed_at ASC, le.user_id ASC
+				)::INT AS rank,
+				le.created_at,
+				le.updated_at
+			FROM leaderboard_entries le
+			INNER JOIN cohort c ON c.user_id = le.user_id
+			WHERE le.leaderboard_id = ?
+		)
+		SELECT *
+		FROM ranked
+		WHERE 1=1
+	`
+	args := []any{viewerID, viewerID, viewerID, viewerID, viewerID, board.ID}
+	if parsedCursor != nil {
+		query += ` AND ` + seekAfterPredicate("user_id")
+		args = append(args, cursorSortValues(*parsedCursor)...)
+	}
+	query += ` ORDER BY rank ASC, user_id ASC LIMIT ?`
+	args = append(args, limit)
+
+	var entries []Entry
+	if err := r.db.WithContext(ctx).Raw(query, args...).Scan(&entries).Error; err != nil {
+		return nil, fmt.Errorf("list friends leaderboard entries: %w", err)
+	}
+	return entries, nil
 }
 
 func (r *Repository) ListGeneralEntries(ctx context.Context, leaderboardID uuid.UUID, limit int, cursor string) ([]Entry, error) {
