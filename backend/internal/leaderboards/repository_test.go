@@ -43,6 +43,15 @@ func TestRepositoryMaterializeCompletedGameRanksAndRetries(t *testing.T) {
 	repo, db := setupLeaderboardsRepositoryTest(t)
 	ctx := context.Background()
 
+	// Isolate from leftover global entries left by other packages on a shared DATABASE_URL.
+	global, err := repo.EnsureGlobalLeaderboard(ctx)
+	if err != nil {
+		t.Fatalf("EnsureGlobalLeaderboard failed: %v", err)
+	}
+	if err := db.Exec(`DELETE FROM leaderboard_entries WHERE leaderboard_id = ?`, global.ID).Error; err != nil {
+		t.Fatalf("cleanup global leaderboard entries: %v", err)
+	}
+
 	mapID := seedLeaderboardMap(t, db)
 	firstUser := seedLeaderboardUser(t, db, "active", "First")
 	secondUser := seedLeaderboardUser(t, db, "active", "Second")
@@ -60,10 +69,6 @@ func TestRepositoryMaterializeCompletedGameRanksAndRetries(t *testing.T) {
 		}
 	}
 
-	global, err := repo.EnsureGlobalLeaderboard(ctx)
-	if err != nil {
-		t.Fatalf("EnsureGlobalLeaderboard failed: %v", err)
-	}
 	entries, err := repo.ListGeneralEntries(ctx, global.ID, 10, "")
 	if err != nil {
 		t.Fatalf("ListGeneralEntries failed: %v", err)

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/raven/geoguess/backend/internal/session"
 )
 
 func TestHandlerRoutesReturnJSON(t *testing.T) {
@@ -67,4 +69,8 @@ func (handlerServiceStub) GetDaily(context.Context, int, string, string) (*Respo
 
 func (handlerServiceStub) GetMap(context.Context, string, int, string) (*Response, error) {
 	return nil, ErrInvalidMapID
+}
+
+func (handlerServiceStub) GetFriends(context.Context, session.Context, int, string) (*Response, error) {
+	return &Response{}, nil
 }

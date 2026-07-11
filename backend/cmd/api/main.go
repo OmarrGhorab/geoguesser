@@ -17,6 +17,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/challenges"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/leaderboards"
@@ -204,7 +205,16 @@ func main() {
 		WithLocations(matchmaking.NewMapsLocationSelector(mapsService))
 	matchmakingHandler := matchmaking.NewHandlerWithMetrics(matchmakingService, logger, matchmakingMetrics)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler)
+	friendsMetrics, err := friends.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register friends metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	friendsRepo := friends.NewRepository(db)
+	friendsService := friends.NewServiceWithLogger(friendsRepo, friendsMetrics, logger)
+	friendsHandler := friends.NewHandler(friendsService, logger)
+
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler, friendsHandler)
 
 	errCh := make(chan error, 1)
 	go func() {

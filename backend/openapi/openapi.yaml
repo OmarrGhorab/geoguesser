@@ -25,6 +25,7 @@ tags:
   - name: Games
   - name: Rooms
   - name: Matchmaking
+  - name: Friends
   - name: Leaderboards
   - name: Challenges
   - name: Missions
@@ -1243,6 +1244,303 @@ paths:
                 $ref: '#/components/schemas/StreakSummary'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /friends/requests:
+    post:
+      tags: [Friends]
+      summary: Send a friend request
+      description: >
+        Creates a pending friendship request to another registered active user.
+        Missing, inactive, and blocked targets return privacy-safe not_found.
+      operationId: createFriendRequest
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFriendRequest'
+            examples:
+              default:
+                value:
+                  user_id: 00000000-0000-4000-8000-000000000002
+      responses:
+        '201':
+          description: Friend request created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /friends/requests/incoming:
+    get:
+      tags: [Friends]
+      summary: List incoming friend requests
+      operationId: listIncomingFriendRequests
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Incoming pending requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequestListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends/requests/outgoing:
+    get:
+      tags: [Friends]
+      summary: List outgoing friend requests
+      operationId: listOutgoingFriendRequests
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Outgoing pending requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequestListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends/requests/{requestId}/accept:
+    post:
+      tags: [Friends]
+      summary: Accept a friend request
+      operationId: acceptFriendRequest
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friendship accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends/requests/{requestId}/decline:
+    post:
+      tags: [Friends]
+      summary: Decline a friend request
+      description: Deletes the pending request row. Only the recipient may decline.
+      operationId: declineFriendRequest
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Request declined and deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends:
+    get:
+      tags: [Friends]
+      summary: List accepted friends
+      operationId: listFriends
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Accepted friends.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends/{userId}:
+    delete:
+      tags: [Friends]
+      summary: Remove an accepted friendship
+      description: Idempotent for the caller. Either participant may remove.
+      operationId: removeFriend
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Friendship removed or already absent.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends/{userId}/block:
+    post:
+      tags: [Friends]
+      summary: Block a user
+      description: >
+        Replaces any pending or accepted relationship with a block owned by the caller.
+        Same-blocker retries are idempotent. Responses never reveal block ownership to others.
+      operationId: blockUser
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: User blocked (or privacy-safe no-op).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      tags: [Friends]
+      summary: Unblock a user
+      description: Removes a block only when the caller created it. Other cases are privacy-safe no-ops.
+      operationId: unblockUser
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Block removed or already absent for this blocker.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /friends/blocked:
+    get:
+      tags: [Friends]
+      summary: List users blocked by the current user
+      operationId: listBlockedUsers
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Users blocked by the caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockedListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /leaderboards/friends:
+    get:
+      tags: [Leaderboards]
+      summary: Get friends leaderboard
+      description: >
+        Authenticated cohort ranking of the caller plus accepted active friends.
+        Ranks are relative to the cohort. No Redis page cache is used.
+      operationId: getFriendsLeaderboard
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Friends leaderboard page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /leaderboards/global:
     get:
@@ -2899,6 +3197,110 @@ components:
         # - Round 1 uses a server-controlled starts_at countdown; guesses before starts_at are rejected.
         # - Rounds advance when both eligible players submit or the deadline expires.
         # - Status payloads never include opponent identity, hidden location IDs, or coordinates.
+
+    CreateFriendRequest:
+      type: object
+      required: [user_id]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+    PublicFriendUser:
+      type: object
+      required: [user_id, display_name]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        avatar_url:
+          type: [string, 'null']
+        country_code:
+          type: [string, 'null']
+    FriendRequest:
+      type: object
+      required: [request_id, user, created_at]
+      additionalProperties: false
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        user:
+          $ref: '#/components/schemas/PublicFriendUser'
+        created_at:
+          type: string
+          format: date-time
+        direction:
+          type: string
+          enum: [incoming, outgoing]
+    FriendRequestResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FriendRequest'
+    FriendRequestListResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendRequest'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    Friend:
+      type: object
+      required: [user, since, created_at]
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/PublicFriendUser'
+        since:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    FriendshipResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Friend'
+    FriendListResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Friend'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    BlockedUser:
+      type: object
+      required: [user, blocked_at]
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/PublicFriendUser'
+        blocked_at:
+          type: string
+          format: date-time
+    BlockedListResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockedUser'
+        page:
+          $ref: '#/components/schemas/PageInfo'
 
     LeaderboardResponse:
       type: object

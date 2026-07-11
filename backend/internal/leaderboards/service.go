@@ -28,6 +28,7 @@ type store interface {
 	GetDailyChallengeByDate(ctx context.Context, date time.Time) (*challenges.Challenge, error)
 	ListGeneralEntries(ctx context.Context, leaderboardID uuid.UUID, limit int, cursor string) ([]Entry, error)
 	ListDailyEntries(ctx context.Context, challengeID uuid.UUID, limit int, cursor string) ([]challenges.LeaderboardEntry, error)
+	ListFriendsEntries(ctx context.Context, viewerID uuid.UUID, limit int, cursor string) ([]Entry, error)
 	MaterializeCompletedGame(ctx context.Context, gameID uuid.UUID) ([]uuid.UUID, error)
 	DailyCacheScopeForGame(ctx context.Context, gameID uuid.UUID) (*string, error)
 }
@@ -70,6 +71,44 @@ func (s *Service) GetGlobal(ctx context.Context, limit int, cursor string) (*Res
 		return nil, err
 	}
 	return s.getGeneral(ctx, "global", board.ID, limit, cursor)
+}
+
+// GetFriends returns a cohort leaderboard of the caller plus accepted friends.
+// Reads always go to PostgreSQL (no Redis page cache) for immediate consistency.
+func (s *Service) GetFriends(ctx context.Context, sess session.Context, limit int, cursor string) (*Response, error) {
+	if !sess.IsRegistered() {
+		return nil, ErrUnauthorized
+	}
+	viewerID, err := uuid.Parse(*sess.UserID)
+	if err != nil {
+		return nil, ErrUnauthorized
+	}
+	limit, err = normalizeLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCursor(cursor); err != nil {
+		return nil, err
+	}
+	if cursor != "" {
+		if _, err := decodeCursor(cursor); err != nil {
+			return nil, ErrInvalidCursor
+		}
+	}
+	entries, err := s.repo.ListFriendsEntries(ctx, viewerID, limit+1, cursor)
+	if err != nil {
+		return nil, err
+	}
+	hasNext := len(entries) > limit
+	if hasNext {
+		entries = entries[:limit]
+	}
+	resp := &Response{Data: generalDTOs(entries), Page: pageInfo(limit, generalNextCursor(entries, hasNext))}
+	s.logger.InfoContext(ctx, "friends leaderboard read",
+		slog.String("user_id", viewerID.String()),
+		slog.Int("entries", len(resp.Data)),
+	)
+	return resp, nil
 }
 
 func (s *Service) GetMap(ctx context.Context, rawMapID string, limit int, cursor string) (*Response, error) {

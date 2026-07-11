@@ -11,6 +11,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/challenges"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/leaderboards"
@@ -25,7 +26,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/uploads"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler, matchmakingHandler *matchmaking.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler, matchmakingHandler *matchmaking.Handler, friendsHandler *friends.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -120,6 +121,10 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 				Group(func(l chi.Router) {
 					leaderboardsHandler.RegisterRoutes(l)
 				})
+			api.With(
+				appmiddleware.RequireAuth(logger),
+				appmiddleware.RateLimit(rateLimiter, leaderboardLimit, appmiddleware.RateLimitByRegisteredUser("lb-friends"), logger),
+			).Get("/leaderboards/friends", leaderboardsHandler.GetFriends)
 		}
 
 		if roomsHandler != nil {
@@ -147,6 +152,54 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 					appmiddleware.RequireAuth(logger),
 					appmiddleware.RateLimitWithObserver(rateLimiter, statusLimit, appmiddleware.RateLimitByRegisteredUser("mm-status"), logger, matchmakingHandler.RecordStatusRateLimited),
 				).Get("/matchmaking/status", matchmakingHandler.GetStatus)
+			})
+		}
+
+		if friendsHandler != nil {
+			requestLimit := appmiddleware.RateLimitConfig{Limit: 10, Window: 1 * time.Minute}
+			actionLimit := appmiddleware.RateLimitConfig{Limit: 30, Window: 1 * time.Minute}
+			readLimit := appmiddleware.RateLimitConfig{Limit: 120, Window: 1 * time.Minute}
+			api.Group(func(f chi.Router) {
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, requestLimit, appmiddleware.RateLimitByRegisteredUser("friends-req"), logger, friendsHandler.RecordRateLimited),
+				).Post("/friends/requests", friendsHandler.CreateRequest)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, readLimit, appmiddleware.RateLimitByRegisteredUser("friends-read"), logger, friendsHandler.RecordRateLimited),
+				).Get("/friends/requests/incoming", friendsHandler.ListIncoming)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, readLimit, appmiddleware.RateLimitByRegisteredUser("friends-read"), logger, friendsHandler.RecordRateLimited),
+				).Get("/friends/requests/outgoing", friendsHandler.ListOutgoing)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, actionLimit, appmiddleware.RateLimitByRegisteredUser("friends-action"), logger, friendsHandler.RecordRateLimited),
+				).Post("/friends/requests/{requestId}/accept", friendsHandler.AcceptRequest)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, actionLimit, appmiddleware.RateLimitByRegisteredUser("friends-action"), logger, friendsHandler.RecordRateLimited),
+				).Post("/friends/requests/{requestId}/decline", friendsHandler.DeclineRequest)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, readLimit, appmiddleware.RateLimitByRegisteredUser("friends-read"), logger, friendsHandler.RecordRateLimited),
+				).Get("/friends", friendsHandler.ListFriends)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, actionLimit, appmiddleware.RateLimitByRegisteredUser("friends-action"), logger, friendsHandler.RecordRateLimited),
+				).Delete("/friends/{userId}", friendsHandler.RemoveFriend)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, actionLimit, appmiddleware.RateLimitByRegisteredUser("friends-action"), logger, friendsHandler.RecordRateLimited),
+				).Post("/friends/{userId}/block", friendsHandler.BlockUser)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, actionLimit, appmiddleware.RateLimitByRegisteredUser("friends-action"), logger, friendsHandler.RecordRateLimited),
+				).Delete("/friends/{userId}/block", friendsHandler.UnblockUser)
+				f.With(
+					appmiddleware.RequireAuth(logger),
+					appmiddleware.RateLimitWithObserver(rateLimiter, readLimit, appmiddleware.RateLimitByRegisteredUser("friends-read"), logger, friendsHandler.RecordRateLimited),
+				).Get("/friends/blocked", friendsHandler.ListBlocked)
 			})
 		}
 	})

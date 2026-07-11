@@ -17,6 +17,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/challenges"
 	"github.com/raven/geoguess/backend/internal/config"
+	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
 	"github.com/raven/geoguess/backend/internal/leaderboards"
@@ -44,7 +45,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -75,7 +76,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(nil, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -122,7 +123,7 @@ func TestRouterPublicUserRoutesUseProfilesContract(t *testing.T) {
 
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID.String()+"/stats", nil)
@@ -224,7 +225,7 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -258,7 +259,7 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	challengesHandler := challenges.NewHandler(stubChallengeService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -296,7 +297,7 @@ func TestRouterMountsDocumentedLeaderboardRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil)
 
 	endpoints := []string{
 		"/api/v1/leaderboards/global",
@@ -380,6 +381,10 @@ func (stubLeaderboardService) GetDaily(context.Context, int, string, string) (*l
 
 func (stubLeaderboardService) GetMap(context.Context, string, int, string) (*leaderboards.Response, error) {
 	return nil, leaderboards.ErrInvalidMapID
+}
+
+func (stubLeaderboardService) GetFriends(context.Context, session.Context, int, string) (*leaderboards.Response, error) {
+	return &leaderboards.Response{}, nil
 }
 
 type staticRateLimiter struct {
@@ -484,7 +489,7 @@ func newProfileRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, profileMetrics), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	return router, csrfManager, accessToken
 }
@@ -507,7 +512,7 @@ func TestRouterMatchmakingRequiresRegisteredAuth(t *testing.T) {
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 
 	// Nil matchmaking handler means routes are not mounted.
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
 	router.ServeHTTP(w, req)
@@ -559,7 +564,7 @@ func newMatchmakingRouter(t *testing.T, cfg config.Config, limiter appmiddleware
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	mmHandler := matchmaking.NewHandler(svc, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler, nil)
 	return router, csrfManager, accessToken, userID
 }
 
@@ -690,5 +695,176 @@ func TestRouterMatchmakingRateLimitsCommandsAndStatus(t *testing.T) {
 	}
 	if w.Header().Get("Retry-After") == "" {
 		t.Fatal("expected Retry-After on status rate limit")
+	}
+}
+
+func newFriendsRouter(t *testing.T, cfg config.Config, limiter appmiddleware.RateLimiter) (http.Handler, *auth.CSRFManager, string) {
+	t.Helper()
+	userID := uuid.New()
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+	csrfManager, err := auth.NewCSRFManager(cfg.CSRFSecret)
+	if err != nil {
+		t.Fatalf("csrf manager setup failed: %v", err)
+	}
+	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("token manager setup failed: %v", err)
+	}
+	accessToken, _, err := tokenManager.GenerateAccessToken(userID, "user")
+	if err != nil {
+		t.Fatalf("access token generation failed: %v", err)
+	}
+	authService := auth.NewService(nil, nil, tokenManager, nil, csrfManager, nil, nil, nil, nil, nil, cfg, clock.NewSystem())
+	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	friendsHandler := friends.NewHandler(friends.NewService(friendsRouteStore{}, nil), obs.Logger)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, friendsHandler)
+	return router, csrfManager, accessToken
+}
+
+// friendsRouteStore is a minimal store for route-level tests.
+type friendsRouteStore struct{}
+
+func (friendsRouteStore) FindActiveUser(context.Context, uuid.UUID) (*uuid.UUID, error) {
+	return nil, nil
+}
+func (friendsRouteStore) CreateRequest(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, error) {
+	return nil, friends.ErrTargetNotFound
+}
+func (friendsRouteStore) AcceptRequest(context.Context, uuid.UUID, uuid.UUID) (*friends.Friendship, *friends.PublicProfile, error) {
+	return nil, nil, friends.ErrNotFound
+}
+func (friendsRouteStore) DeclineRequest(context.Context, uuid.UUID, uuid.UUID) error {
+	return friends.ErrNotFound
+}
+func (friendsRouteStore) RemoveFriendship(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+func (friendsRouteStore) BlockUser(context.Context, uuid.UUID, uuid.UUID) error { return nil }
+func (friendsRouteStore) UnblockUser(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+func (friendsRouteStore) ListIncomingRequests(context.Context, uuid.UUID, int, string) (*friends.Page, error) {
+	return &friends.Page{Limit: 20}, nil
+}
+func (friendsRouteStore) ListOutgoingRequests(context.Context, uuid.UUID, int, string) (*friends.Page, error) {
+	return &friends.Page{Limit: 20}, nil
+}
+func (friendsRouteStore) ListAcceptedFriends(context.Context, uuid.UUID, int, string) (*friends.Page, error) {
+	return &friends.Page{Limit: 20}, nil
+}
+func (friendsRouteStore) ListBlockedUsers(context.Context, uuid.UUID, int, string) (*friends.Page, error) {
+	return &friends.Page{Limit: 20}, nil
+}
+func (friendsRouteStore) LoadPublicProfile(context.Context, uuid.UUID) (*friends.PublicProfile, error) {
+	return nil, nil
+}
+
+func TestRouterFriendsRequiresRegisteredAuth(t *testing.T) {
+	cfg := testConfig()
+	router, _, _ := newFriendsRouter(t, cfg, noopRateLimiter{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/friends", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("GET friends unauth = %d, want 401", w.Code)
+	}
+
+	// Unsafe methods without CSRF cookies fail CSRF before auth (403).
+	// Guest with CSRF but no registered access token is rejected with 401.
+	router2, csrfManager, _ := newFriendsRouter(t, cfg, noopRateLimiter{})
+	csrf := generateCSRFToken(t, csrfManager)
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/requests", strings.NewReader(`{"user_id":"`+uuid.New().String()+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	router2.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("POST request guest/unauth = %d body=%s, want 401", w.Code, w.Body.String())
+	}
+}
+
+func TestRouterFriendsPOSTRequiresCSRF(t *testing.T) {
+	cfg := testConfig()
+	router, _, accessToken := newFriendsRouter(t, cfg, noopRateLimiter{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/friends/requests", strings.NewReader(`{"user_id":"`+uuid.New().String()+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("POST without CSRF = %d, want 403", w.Code)
+	}
+}
+
+func TestRouterFriendsRegisteredReadReachesHandler(t *testing.T) {
+	cfg := testConfig()
+	router, _, accessToken := newFriendsRouter(t, cfg, noopRateLimiter{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/friends", nil)
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET friends auth = %d body=%s, want 200", w.Code, w.Body.String())
+	}
+}
+
+func TestRouterFriendsRequestWithCSRFReachesHandler(t *testing.T) {
+	cfg := testConfig()
+	router, csrfManager, accessToken := newFriendsRouter(t, cfg, noopRateLimiter{})
+	csrf := generateCSRFToken(t, csrfManager)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/friends/requests", strings.NewReader(`{"user_id":"`+uuid.New().String()+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	// Target not found from stub store — proves auth+CSRF reached the handler.
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("POST friends request = %d body=%s, want 404 from handler", w.Code, w.Body.String())
+	}
+}
+
+func TestRouterFriendsRateLimit(t *testing.T) {
+	cfg := testConfig()
+	router, csrfManager, accessToken := newFriendsRouter(t, cfg, staticRateLimiter{allowed: false})
+	csrf := generateCSRFToken(t, csrfManager)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/friends/requests", strings.NewReader(`{"user_id":"`+uuid.New().String()+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrf)
+	req.AddCookie(&http.Cookie{Name: auth.CSRFTokenCookieName, Value: csrf})
+	req.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("rate limited request = %d, want 429", w.Code)
+	}
+}
+
+func TestRouterFriendsLeaderboardRequiresAuth(t *testing.T) {
+	cfg := testConfig()
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability: %v", err)
+	}
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/leaderboards/friends", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("friends leaderboard unauth = %d, want 401", w.Code)
 	}
 }
