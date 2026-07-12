@@ -1,18 +1,19 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { apiJson } from "@/lib/api/client";
 import { ApiError, mapApiErrorToMessageKey } from "@/lib/api/errors";
 import {
   forgotPasswordFormSchema,
+  authResponseSchema,
   loginFormSchema,
   registerRequestSchema,
   resetPasswordRequestSchema,
   zodFieldErrors,
 } from "@/features/auth/schemas";
-import type { AuthActionState, AuthResponse } from "@/features/auth/types";
+import type { AuthActionState } from "@/features/auth/types";
 import { routing, type AppLocale } from "@/lib/i18n/routing";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 function formString(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -44,72 +45,62 @@ export async function registerAction(
   _prev: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
-  try {
-    const locale = resolveLocale(formData);
-    const parsed = registerRequestSchema.safeParse({
-      email: formString(formData, "email"),
-      password: formString(formData, "password"),
-      display_name: formString(formData, "display_name"),
-      confirm_password: formString(formData, "confirm_password"),
-    });
+  const locale = resolveLocale(formData);
+  const parsed = registerRequestSchema.safeParse({
+    email: formString(formData, "email"),
+    password: formString(formData, "password"),
+    display_name: formString(formData, "display_name"),
+    confirm_password: formString(formData, "confirm_password"),
+  });
 
-    if (!parsed.success) {
-      return {
-        status: "error",
-        fieldErrors: zodFieldErrors(parsed.error),
-      };
-    }
-
-    try {
-      await apiJson<AuthResponse>("/auth/register", {
-        method: "POST",
-        body: parsed.data,
-        forwardCookies: true,
-      });
-    } catch (error) {
-      return fromApiError(error);
-    }
-
-    redirect(`/${locale}`);
-  } catch (error) {
-    if (isRedirectError(error)) throw error;
-    return { status: "error", formError: "generic" };
+  if (!parsed.success) {
+    return {
+      status: "error",
+      fieldErrors: zodFieldErrors(parsed.error),
+    };
   }
+
+  try {
+    await apiJson("/auth/register", authResponseSchema, {
+      method: "POST",
+      body: parsed.data,
+      forwardCookies: true,
+    });
+  } catch (error) {
+    return fromApiError(error);
+  }
+
+  redirect(`/${locale}`);
 }
 
 export async function loginAction(
   _prev: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
-  try {
-    const locale = resolveLocale(formData);
-    const parsed = loginFormSchema.safeParse({
-      email: formString(formData, "email"),
-      password: formString(formData, "password"),
-    });
+  const locale = resolveLocale(formData);
+  const parsed = loginFormSchema.safeParse({
+    email: formString(formData, "email"),
+    password: formString(formData, "password"),
+  });
 
-    if (!parsed.success) {
-      return {
-        status: "error",
-        fieldErrors: zodFieldErrors(parsed.error),
-      };
-    }
-
-    try {
-      await apiJson<AuthResponse>("/auth/login", {
-        method: "POST",
-        body: parsed.data,
-        forwardCookies: true,
-      });
-    } catch (error) {
-      return fromApiError(error);
-    }
-
-    redirect(`/${locale}`);
-  } catch (error) {
-    if (isRedirectError(error)) throw error;
-    return { status: "error", formError: "generic" };
+  if (!parsed.success) {
+    return {
+      status: "error",
+      fieldErrors: zodFieldErrors(parsed.error),
+    };
   }
+
+  try {
+    await apiJson("/auth/login", authResponseSchema, {
+      method: "POST",
+      body: parsed.data,
+      forwardCookies: true,
+    });
+  } catch (error) {
+    return fromApiError(error);
+  }
+
+  redirect(`/${locale}`);
 }
 
 export async function forgotPasswordAction(
@@ -129,7 +120,7 @@ export async function forgotPasswordAction(
     }
 
     try {
-      await apiJson<void>("/auth/forgot-password", {
+      await apiJson("/auth/forgot-password", z.undefined(), {
         method: "POST",
         body: parsed.data,
       });
@@ -166,7 +157,7 @@ export async function resetPasswordAction(
     }
 
     try {
-      await apiJson<void>("/auth/reset-password", {
+      await apiJson("/auth/reset-password", z.undefined(), {
         method: "POST",
         body: parsed.data,
       });

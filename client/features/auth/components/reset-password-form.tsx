@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import Link from "next/link";
 import { resetPasswordAction } from "@/features/auth/actions";
 import { firstFieldError } from "@/features/auth/error-messages";
-import { RESET_EMAIL_STORAGE_KEY } from "@/features/auth/constants";
 import { initialAuthActionState } from "@/features/auth/types";
 import {
   AuthField,
@@ -58,23 +57,6 @@ export function ResetPasswordForm({ labels, locale }: ResetPasswordFormProps) {
     resetPasswordAction,
     initialAuthActionState,
   );
-
-  useEffect(() => {
-    const stored = sessionStorage.getItem(RESET_EMAIL_STORAGE_KEY);
-    if (!stored) return;
-    const input = document.getElementById(
-      "reset-email",
-    ) as HTMLInputElement | null;
-    if (input && !input.value) {
-      input.value = stored;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (state.status === "success") {
-      sessionStorage.removeItem(RESET_EMAIL_STORAGE_KEY);
-    }
-  }, [state.status]);
 
   if (state.status === "success") {
     return (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { registerAction } from "@/features/auth/actions";
 import { firstFieldError } from "@/features/auth/error-messages";
 import { initialAuthActionState } from "@/features/auth/types";
+import type { AppLocale } from "@/lib/i18n/routing";
 import {
   AuthDivider,
   AuthField,
@@ -42,9 +43,7 @@ export type SignUpFormLabels = {
 
 type SignUpFormProps = {
   labels: SignUpFormLabels;
-  locale: string;
-  googleOAuthUrl: string;
-  discordOAuthUrl: string;
+  locale: AppLocale;
 };
 
 function tError(errors: Record<string, string>, key: string | undefined) {
@@ -52,12 +51,7 @@ function tError(errors: Record<string, string>, key: string | undefined) {
   return errors[key] ?? errors.generic;
 }
 
-export function SignUpForm({
-  labels,
-  locale,
-  googleOAuthUrl,
-  discordOAuthUrl,
-}: SignUpFormProps) {
+export function SignUpForm({ labels, locale }: SignUpFormProps) {
   const [state, formAction, isPending] = useActionState(
     registerAction,
     initialAuthActionState,
@@ -74,8 +68,7 @@ export function SignUpForm({
       <AuthSocialButtons
         googleLabel={labels.continueWithGoogle}
         discordLabel={labels.continueWithDiscord}
-        googleHref={googleOAuthUrl}
-        discordHref={discordOAuthUrl}
+        locale={locale}
       />
 
       <AuthDivider label={labels.or} />

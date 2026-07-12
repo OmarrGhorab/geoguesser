@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import Link from "next/link";
 import { forgotPasswordAction } from "@/features/auth/actions";
 import { firstFieldError } from "@/features/auth/error-messages";
-import { RESET_EMAIL_STORAGE_KEY } from "@/features/auth/constants";
 import { initialAuthActionState } from "@/features/auth/types";
 import {
   AuthField,
@@ -52,17 +51,6 @@ export function ForgotPasswordForm({
     forgotPasswordAction,
     initialAuthActionState,
   );
-
-  useEffect(() => {
-    if (state.status !== "success") return;
-    const emailInput = document.getElementById(
-      "forgot-email",
-    ) as HTMLInputElement | null;
-    const email = emailInput?.value?.trim();
-    if (email) {
-      sessionStorage.setItem(RESET_EMAIL_STORAGE_KEY, email);
-    }
-  }, [state.status]);
 
   if (state.status === "success") {
     return (

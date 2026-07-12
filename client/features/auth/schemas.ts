@@ -98,6 +98,15 @@ export const resetPasswordRequestSchema = resetPasswordFormSchema.transform(
   }),
 );
 
+export const authResponseSchema = z.object({
+  user: z.object({
+    id: z.string().uuid(),
+    email: emailSchema,
+    display_name: z.string(),
+    role: z.string(),
+  }),
+});
+
 export type RegisterFormInput = z.infer<typeof registerFormSchema>;
 export type LoginFormInput = z.infer<typeof loginFormSchema>;
 export type ForgotPasswordFormInput = z.infer<typeof forgotPasswordFormSchema>;

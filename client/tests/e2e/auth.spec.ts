@@ -64,9 +64,20 @@ test.describe("auth UI", () => {
     await page.goto("/en/login");
     await expect(
       page.getByRole("link", { name: "Continue with Google" }),
-    ).toHaveAttribute("href", /\/auth\/oauth\/google$/);
+    ).toHaveAttribute("href", "/api/auth/oauth/google?locale=en");
     await expect(
       page.getByRole("link", { name: "Continue with Discord" }),
-    ).toHaveAttribute("href", /\/auth\/oauth\/discord$/);
+    ).toHaveAttribute("href", "/api/auth/oauth/discord?locale=en");
+  });
+
+  test("oauth callback failures return to localized login", async ({
+    page,
+  }) => {
+    await page.goto("/en/login?oauth_error=1");
+    await expect(
+      page.getByRole("alert").filter({
+        hasText: /social sign-in could not be completed/i,
+      }),
+    ).toContainText(/social sign-in could not be completed/i);
   });
 });

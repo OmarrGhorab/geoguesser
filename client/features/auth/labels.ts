@@ -5,6 +5,7 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
 export function authErrorLabels(t: Translator): Record<string, string> {
   return {
     generic: t("generic"),
+    oauthFailed: t("oauthFailed"),
     emailRequired: t("emailRequired"),
     emailInvalid: t("emailInvalid"),
     passwordRequired: t("passwordRequired"),

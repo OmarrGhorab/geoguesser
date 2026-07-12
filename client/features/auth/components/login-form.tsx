@@ -4,7 +4,11 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { loginAction } from "@/features/auth/actions";
 import { firstFieldError } from "@/features/auth/error-messages";
-import { initialAuthActionState } from "@/features/auth/types";
+import {
+  initialAuthActionState,
+  type AuthActionState,
+} from "@/features/auth/types";
+import type { AppLocale } from "@/lib/i18n/routing";
 import {
   AuthDivider,
   AuthField,
@@ -39,9 +43,8 @@ export type LoginFormLabels = {
 
 type LoginFormProps = {
   labels: LoginFormLabels;
-  locale: string;
-  googleOAuthUrl: string;
-  discordOAuthUrl: string;
+  locale: AppLocale;
+  initialFormError?: string;
 };
 
 function tError(errors: Record<string, string>, key: string | undefined) {
@@ -52,12 +55,14 @@ function tError(errors: Record<string, string>, key: string | undefined) {
 export function LoginForm({
   labels,
   locale,
-  googleOAuthUrl,
-  discordOAuthUrl,
+  initialFormError,
 }: LoginFormProps) {
+  const initialState: AuthActionState = initialFormError
+    ? { status: "error", formError: initialFormError }
+    : initialAuthActionState;
   const [state, formAction, isPending] = useActionState(
     loginAction,
-    initialAuthActionState,
+    initialState,
   );
 
   return (
@@ -71,8 +76,7 @@ export function LoginForm({
       <AuthSocialButtons
         googleLabel={labels.continueWithGoogle}
         discordLabel={labels.continueWithDiscord}
-        googleHref={googleOAuthUrl}
-        discordHref={discordOAuthUrl}
+        locale={locale}
       />
 
       <AuthDivider label={labels.or} />

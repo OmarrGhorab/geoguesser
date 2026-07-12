@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { SignUpForm } from "@/features/auth/components/sign-up-form";
 import { authErrorLabels } from "@/features/auth/labels";
-import { getOAuthUrls } from "@/features/auth/oauth";
 import type { AppLocale } from "@/lib/i18n/routing";
 import { siteUrl } from "@/lib/site";
 
@@ -35,13 +34,9 @@ export default async function SignUpPage({ params }: SignUpPageProps) {
     getTranslations({ locale: appLocale, namespace: "Auth.SignUp" }),
     getTranslations({ locale: appLocale, namespace: "Auth.Errors" }),
   ]);
-  const oauth = getOAuthUrls();
-
   return (
     <SignUpForm
       locale={appLocale}
-      googleOAuthUrl={oauth.google}
-      discordOAuthUrl={oauth.discord}
       labels={{
         titleLine1: t("titleLine1"),
         titleLine2: t("titleLine2"),

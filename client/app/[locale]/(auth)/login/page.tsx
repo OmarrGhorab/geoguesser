@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { authErrorLabels } from "@/features/auth/labels";
-import { getOAuthUrls } from "@/features/auth/oauth";
 import type { AppLocale } from "@/lib/i18n/routing";
 import { siteUrl } from "@/lib/site";
 
 type LoginPageProps = Readonly<{
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ oauth_error?: string }>;
 }>;
 
 export async function generateMetadata({
@@ -26,8 +26,12 @@ export async function generateMetadata({
   };
 }
 
-export default async function LoginPage({ params }: LoginPageProps) {
+export default async function LoginPage({
+  params,
+  searchParams,
+}: LoginPageProps) {
   const { locale } = await params;
+  const { oauth_error: oauthError } = await searchParams;
   const appLocale = locale as AppLocale;
   setRequestLocale(appLocale);
 
@@ -35,13 +39,10 @@ export default async function LoginPage({ params }: LoginPageProps) {
     getTranslations({ locale: appLocale, namespace: "Auth.Login" }),
     getTranslations({ locale: appLocale, namespace: "Auth.Errors" }),
   ]);
-  const oauth = getOAuthUrls();
-
   return (
     <LoginForm
       locale={appLocale}
-      googleOAuthUrl={oauth.google}
-      discordOAuthUrl={oauth.discord}
+      initialFormError={oauthError ? "oauthFailed" : undefined}
       labels={{
         titleLine1: t("titleLine1"),
         titleLine2: t("titleLine2"),

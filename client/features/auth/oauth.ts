@@ -1,11 +1,12 @@
-import "server-only";
+import { z } from "zod";
+import type { AppLocale } from "@/lib/i18n/routing";
 
-import { getBackendApiUrl } from "@/lib/env";
+export const oauthProviderSchema = z.enum(["google", "discord"]);
+export type OAuthProvider = z.infer<typeof oauthProviderSchema>;
 
-export function getOAuthUrls() {
-  const base = getBackendApiUrl();
-  return {
-    google: `${base}/auth/oauth/google`,
-    discord: `${base}/auth/oauth/discord`,
-  } as const;
+export function oauthStartPath(
+  provider: OAuthProvider,
+  locale: AppLocale,
+): string {
+  return `/api/auth/oauth/${provider}?locale=${locale}`;
 }

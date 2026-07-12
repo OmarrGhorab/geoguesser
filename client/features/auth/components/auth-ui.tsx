@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import { DiscordIcon, GoogleIcon } from "@/features/auth/components/auth-icons";
-import { Link } from "@/lib/i18n/link";
+import { oauthStartPath } from "@/features/auth/oauth";
+import type { AppLocale } from "@/lib/i18n/routing";
 import { cn } from "@/lib/utils";
 
 export const authFieldClassName =
@@ -122,23 +123,27 @@ export function AuthTitle({
 type AuthSocialButtonsProps = {
   googleLabel: string;
   discordLabel: string;
-  googleHref: string;
-  discordHref: string;
+  locale: AppLocale;
 };
 
 export function AuthSocialButtons({
   googleLabel,
   discordLabel,
-  googleHref,
-  discordHref,
+  locale,
 }: AuthSocialButtonsProps) {
   return (
     <AuthItem className="mb-8 grid grid-cols-2 gap-4">
-      <a href={googleHref} className={authSocialButtonClassName}>
+      <a
+        href={oauthStartPath("google", locale)}
+        className={authSocialButtonClassName}
+      >
         <GoogleIcon className="text-[16px]" />
         {googleLabel}
       </a>
-      <a href={discordHref} className={authSocialButtonClassName}>
+      <a
+        href={oauthStartPath("discord", locale)}
+        className={authSocialButtonClassName}
+      >
         <DiscordIcon className="text-[16px] text-[#5865F2]" />
         {discordLabel}
       </a>
@@ -342,29 +347,6 @@ export function AuthFormError({ message }: { message?: string }) {
     </AuthItem>
   );
 }
-
-type AuthHref = React.ComponentProps<typeof Link>["href"];
-
-type AuthFooterProps = {
-  prompt: string;
-  href: AuthHref;
-  linkLabel: string;
-};
-
-export function AuthFooter({ prompt, href, linkLabel }: AuthFooterProps) {
-  return (
-    <AuthItem>
-      <p className="mt-6 text-[13px] text-neutral-400">
-        {prompt}{" "}
-        <Link href={href} className="font-bold text-white hover:underline">
-          {linkLabel}
-        </Link>
-      </p>
-    </AuthItem>
-  );
-}
-
-export type { AuthHref };
 
 export function AuthPrimaryButton({
   children,

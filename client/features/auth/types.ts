@@ -12,14 +12,3 @@ export type AuthActionState = {
 export const initialAuthActionState: AuthActionState = {
   status: "idle",
 };
-
-export type AuthUserDto = {
-  id: string;
-  email: string;
-  display_name: string;
-  role: string;
-};
-
-export type AuthResponse = {
-  user: AuthUserDto;
-};
