@@ -1,0 +1,8 @@
+.next
+node_modules
+playwright-report
+test-results
+*.json
+*.txt
+design
+public/brand/redesign

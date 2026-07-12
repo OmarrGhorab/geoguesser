@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages, setRequestLocale } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { getDirection } from "@/lib/i18n/direction";
 import { routing, type AppLocale } from "@/lib/i18n/routing";
+import { siteUrl } from "@/lib/site";
+import "../globals.css";
 
 type LocaleLayoutProps = Readonly<{
   children: React.ReactNode;
@@ -13,7 +16,47 @@ export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
-export default async function LocaleLayout({ children, params }: LocaleLayoutProps) {
+export async function generateMetadata({
+  params,
+}: Pick<LocaleLayoutProps, "params">): Promise<Metadata> {
+  const { locale } = await params;
+
+  if (!routing.locales.includes(locale as AppLocale)) {
+    notFound();
+  }
+
+  const appLocale = locale as AppLocale;
+  const t = await getTranslations({ locale: appLocale, namespace: "Metadata" });
+  const canonicalPath = `/${appLocale}`;
+
+  return {
+    metadataBase: siteUrl,
+    title: t("title"),
+    description: t("description"),
+    alternates: {
+      canonical: canonicalPath,
+      languages: Object.fromEntries(
+        routing.locales.map((supportedLocale) => [
+          supportedLocale,
+          `/${supportedLocale}`,
+        ]),
+      ),
+    },
+    openGraph: {
+      type: "website",
+      url: canonicalPath,
+      siteName: t("title"),
+      title: t("title"),
+      description: t("description"),
+      locale: appLocale === "ar" ? "ar_AR" : "en_US",
+    },
+  };
+}
+
+export default async function LocaleLayout({
+  children,
+  params,
+}: LocaleLayoutProps) {
   const { locale } = await params;
 
   if (!routing.locales.includes(locale as AppLocale)) {
@@ -23,11 +66,14 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const appLocale = locale as AppLocale;
   setRequestLocale(appLocale);
 
+  // Minimal client provider for next-intl navigation; no full message catalog.
   return (
-    <NextIntlClientProvider messages={await getMessages()}>
-      <div lang={appLocale} dir={getDirection(appLocale)}>
-        {children}
-      </div>
-    </NextIntlClientProvider>
+    <html lang={appLocale} dir={getDirection(appLocale)}>
+      <body>
+        <NextIntlClientProvider locale={appLocale} messages={{}}>
+          {children}
+        </NextIntlClientProvider>
+      </body>
+    </html>
   );
 }
