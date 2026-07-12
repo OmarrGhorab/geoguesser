@@ -1,10 +1,21 @@
 @import "tailwindcss";
 
+@theme {
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+  --color-surface: #0a0a0a;
+  --color-border: #262626;
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  --radius-panel: 1.5rem;
+  --spacing-page: clamp(1rem, 4vw, 3rem);
+}
+
 :root {
   color-scheme: dark;
-  background: #000;
-  color: #fff;
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
 }
 
 * {
@@ -18,14 +29,14 @@ body {
 }
 
 body {
-  background: #000;
+  background: var(--color-background);
 }
 
 main {
   display: grid;
   min-height: 100vh;
   place-items: center;
-  padding: 2rem;
+  padding: var(--spacing-page);
 }
 
 h1 {

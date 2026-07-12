@@ -1,4 +1,8 @@
 {
+  "Metadata": {
+    "title": "GeoGuess",
+    "description": "A geography guessing game."
+  },
   "Home": {
     "title": "GeoGuess"
   }
