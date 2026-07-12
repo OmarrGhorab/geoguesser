@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { getDirection } from "@/lib/i18n/direction";
@@ -65,9 +66,14 @@ export default async function LocaleLayout({
   const appLocale = locale as AppLocale;
   setRequestLocale(appLocale);
 
+  // Minimal client provider for next-intl navigation; no full message catalog.
   return (
     <html lang={appLocale} dir={getDirection(appLocale)}>
-      <body>{children}</body>
+      <body>
+        <NextIntlClientProvider locale={appLocale} messages={{}}>
+          {children}
+        </NextIntlClientProvider>
+      </body>
     </html>
   );
 }

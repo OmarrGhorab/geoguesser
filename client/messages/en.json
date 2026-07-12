@@ -12,6 +12,24 @@
     "Common": {
       "videoAriaLabel": "Atmospheric landscape video"
     },
+    "Errors": {
+      "generic": "Something went wrong. Please try again.",
+      "emailRequired": "Email is required.",
+      "emailInvalid": "Enter a valid email address.",
+      "passwordRequired": "Password is required.",
+      "passwordTooShort": "Password must be at least 12 characters.",
+      "passwordTooLong": "Password is too long.",
+      "passwordMismatch": "Passwords do not match.",
+      "confirmPasswordRequired": "Confirm your password.",
+      "displayNameLength": "Display name must be between 2 and 32 characters.",
+      "otpInvalid": "Enter the 6-digit code from your email.",
+      "emailAlreadyExists": "An account with this email already exists.",
+      "invalidCredentials": "Invalid email or password.",
+      "invalidOtp": "Invalid or expired reset code.",
+      "invalidPassword": "Password does not meet requirements.",
+      "validationFailed": "Please check the form and try again.",
+      "rateLimited": "Too many attempts. Please try again later."
+    },
     "SignUp": {
       "metaTitle": "Create account · GeoGuess",
       "metaDescription": "Create your GeoGuess account to start playing.",
@@ -30,11 +48,11 @@
       "confirmPassword": "Confirm password",
       "confirmPasswordPlaceholder": "Re-enter your password",
       "createAccount": "Create account",
+      "creatingAccount": "Creating account…",
       "alreadyHaveAccount": "Already have an account?",
       "logIn": "Log in",
       "showPassword": "Show password",
-      "hidePassword": "Hide password",
-      "passwordMismatch": "Passwords do not match"
+      "hidePassword": "Hide password"
     },
     "Login": {
       "metaTitle": "Log in · GeoGuess",
@@ -51,6 +69,7 @@
       "passwordPlaceholder": "Enter your password",
       "forgotPassword": "Forgot password?",
       "logIn": "Log in",
+      "loggingIn": "Logging in…",
       "noAccount": "Don't have an account?",
       "signUp": "Sign up",
       "showPassword": "Show password",
@@ -66,6 +85,7 @@
       "email": "Email",
       "emailPlaceholder": "Enter your email",
       "submit": "Send reset code",
+      "submitting": "Sending code…",
       "rememberPassword": "Remember your password?",
       "logIn": "Log in",
       "successTitle": "Check your email",
@@ -88,14 +108,14 @@
       "confirmPassword": "Confirm password",
       "confirmPasswordPlaceholder": "Re-enter your new password",
       "submit": "Reset password",
+      "submitting": "Resetting password…",
       "rememberPassword": "Remember your password?",
       "logIn": "Log in",
       "successTitle": "Password updated",
       "successDescription": "Your password has been reset. You can log in with your new credentials.",
       "backToLogin": "Continue to log in",
       "showPassword": "Show password",
-      "hidePassword": "Hide password",
-      "passwordMismatch": "Passwords do not match"
+      "hidePassword": "Hide password"
     }
   }
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { SignUpForm } from "@/features/auth/components/sign-up-form";
+import { authErrorLabels } from "@/features/auth/labels";
+import { getOAuthUrls } from "@/features/auth/oauth";
 import type { AppLocale } from "@/lib/i18n/routing";
 import { siteUrl } from "@/lib/site";
 
@@ -26,16 +28,20 @@ export async function generateMetadata({
 
 export default async function SignUpPage({ params }: SignUpPageProps) {
   const { locale } = await params;
-  setRequestLocale(locale as AppLocale);
+  const appLocale = locale as AppLocale;
+  setRequestLocale(appLocale);
 
-  const t = await getTranslations({
-    locale: locale as AppLocale,
-    namespace: "Auth.SignUp",
-  });
+  const [t, tErrors] = await Promise.all([
+    getTranslations({ locale: appLocale, namespace: "Auth.SignUp" }),
+    getTranslations({ locale: appLocale, namespace: "Auth.Errors" }),
+  ]);
+  const oauth = getOAuthUrls();
 
   return (
     <SignUpForm
-      loginHref={`/${locale}/login`}
+      locale={appLocale}
+      googleOAuthUrl={oauth.google}
+      discordOAuthUrl={oauth.discord}
       labels={{
         titleLine1: t("titleLine1"),
         titleLine2: t("titleLine2"),
@@ -52,11 +58,12 @@ export default async function SignUpPage({ params }: SignUpPageProps) {
         confirmPassword: t("confirmPassword"),
         confirmPasswordPlaceholder: t("confirmPasswordPlaceholder"),
         createAccount: t("createAccount"),
+        creatingAccount: t("creatingAccount"),
         alreadyHaveAccount: t("alreadyHaveAccount"),
         logIn: t("logIn"),
         showPassword: t("showPassword"),
         hidePassword: t("hidePassword"),
-        passwordMismatch: t("passwordMismatch"),
+        errors: authErrorLabels(tErrors),
       }}
     />
   );

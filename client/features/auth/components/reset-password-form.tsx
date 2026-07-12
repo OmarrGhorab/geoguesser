@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useEffect } from "react";
+import Link from "next/link";
+import { resetPasswordAction } from "@/features/auth/actions";
+import { firstFieldError } from "@/features/auth/error-messages";
+import { RESET_EMAIL_STORAGE_KEY } from "@/features/auth/constants";
+import { initialAuthActionState } from "@/features/auth/types";
 import {
   AuthField,
-  AuthFooter,
+  AuthFormError,
   AuthItem,
   AuthPanel,
   AuthPasswordField,
@@ -13,7 +18,6 @@ import {
 } from "@/features/auth/components/auth-ui";
 import { cn } from "@/lib/utils";
 
-/** Matches backend `auth.ResetPasswordRequest`: email, otp, new_password */
 export type ResetPasswordFormLabels = {
   titleLine1: string;
   titleLine2: string;
@@ -28,6 +32,7 @@ export type ResetPasswordFormLabels = {
   confirmPassword: string;
   confirmPasswordPlaceholder: string;
   submit: string;
+  submitting: string;
   rememberPassword: string;
   logIn: string;
   successTitle: string;
@@ -35,23 +40,43 @@ export type ResetPasswordFormLabels = {
   backToLogin: string;
   showPassword: string;
   hidePassword: string;
-  passwordMismatch: string;
+  errors: Record<string, string>;
 };
 
 type ResetPasswordFormProps = {
   labels: ResetPasswordFormLabels;
-  loginHref: string;
-  defaultEmail?: string;
+  locale: string;
 };
 
-export function ResetPasswordForm({
-  labels,
-  loginHref,
-  defaultEmail,
-}: ResetPasswordFormProps) {
-  const [submitted, setSubmitted] = useState(false);
+function tError(errors: Record<string, string>, key: string | undefined) {
+  if (!key) return undefined;
+  return errors[key] ?? errors.generic;
+}
 
-  if (submitted) {
+export function ResetPasswordForm({ labels, locale }: ResetPasswordFormProps) {
+  const [state, formAction, isPending] = useActionState(
+    resetPasswordAction,
+    initialAuthActionState,
+  );
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(RESET_EMAIL_STORAGE_KEY);
+    if (!stored) return;
+    const input = document.getElementById(
+      "reset-email",
+    ) as HTMLInputElement | null;
+    if (input && !input.value) {
+      input.value = stored;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.status === "success") {
+      sessionStorage.removeItem(RESET_EMAIL_STORAGE_KEY);
+    }
+  }, [state.status]);
+
+  if (state.status === "success") {
     return (
       <AuthPanel>
         <AuthTitle
@@ -59,12 +84,12 @@ export function ResetPasswordForm({
           description={labels.successDescription}
         />
         <AuthItem>
-          <a
-            href={loginHref}
+          <Link
+            href={`/${locale}/login`}
             className={cn(authPrimaryButtonClassName, "block text-center")}
           >
             {labels.backToLogin}
-          </a>
+          </Link>
         </AuthItem>
       </AuthPanel>
     );
@@ -79,32 +104,9 @@ export function ResetPasswordForm({
         description={labels.description}
       />
 
-      <form
-        className="flex flex-col gap-5"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          const form = event.currentTarget;
-          const formData = new FormData(form);
-          const password = String(formData.get("new_password") ?? "");
-          const confirmPassword = String(
-            formData.get("confirm_password") ?? "",
-          );
+      <form action={formAction} className="flex flex-col gap-5" noValidate>
+        <AuthFormError message={tError(labels.errors, state.formError)} />
 
-          const confirmInput = form.elements.namedItem(
-            "confirm_password",
-          ) as HTMLInputElement | null;
-
-          if (password !== confirmPassword) {
-            confirmInput?.setCustomValidity(labels.passwordMismatch);
-            confirmInput?.reportValidity();
-            return;
-          }
-
-          confirmInput?.setCustomValidity("");
-          setSubmitted(true);
-        }}
-      >
         <AuthField
           id="reset-email"
           name="email"
@@ -113,8 +115,12 @@ export function ResetPasswordForm({
           placeholder={labels.emailPlaceholder}
           autoComplete="email"
           maxLength={254}
-          defaultValue={defaultEmail}
           required
+          disabled={isPending}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "email"),
+          )}
         />
         <AuthField
           id="reset-otp"
@@ -129,6 +135,11 @@ export function ResetPasswordForm({
           maxLength={6}
           spellCheck={false}
           required
+          disabled={isPending}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "otp"),
+          )}
         />
         <AuthPasswordField
           id="reset-new-password"
@@ -139,8 +150,13 @@ export function ResetPasswordForm({
           minLength={12}
           maxLength={256}
           required
+          disabled={isPending}
           showPasswordLabel={labels.showPassword}
           hidePasswordLabel={labels.hidePassword}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "new_password"),
+          )}
         />
         <AuthPasswordField
           id="reset-confirm-password"
@@ -151,17 +167,31 @@ export function ResetPasswordForm({
           minLength={12}
           maxLength={256}
           required
+          disabled={isPending}
           showPasswordLabel={labels.showPassword}
           hidePasswordLabel={labels.hidePassword}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "confirm_password"),
+          )}
         />
-        <AuthPrimaryButton>{labels.submit}</AuthPrimaryButton>
+        <AuthPrimaryButton
+          isPending={isPending}
+          pendingLabel={labels.submitting}
+        >
+          {labels.submit}
+        </AuthPrimaryButton>
       </form>
 
-      <AuthFooter
-        prompt={labels.rememberPassword}
-        href={loginHref}
-        linkLabel={labels.logIn}
-      />
+      <p className="mt-6 text-[13px] text-neutral-400">
+        {labels.rememberPassword}{" "}
+        <Link
+          href={`/${locale}/login`}
+          className="font-bold text-white hover:underline"
+        >
+          {labels.logIn}
+        </Link>
+      </p>
     </AuthPanel>
   );
 }

@@ -4,19 +4,20 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import { DiscordIcon, GoogleIcon } from "@/features/auth/components/auth-icons";
+import { Link } from "@/lib/i18n/link";
 import { cn } from "@/lib/utils";
 
 export const authFieldClassName =
-  "w-full rounded-[14px] border border-white/10 bg-[#0A0A0A] px-4 py-3.5 text-sm text-white transition-colors placeholder:text-neutral-500 focus:border-neutral-500 focus:bg-[#111] focus:ring-1 focus:ring-neutral-500 focus:outline-none";
+  "w-full rounded-[14px] border border-border bg-surface px-4 py-3.5 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-1 focus:ring-ring focus:outline-none aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/40";
 
 export const authPasswordFieldClassName =
-  "w-full rounded-[14px] border border-white/10 bg-[#0A0A0A] py-3.5 ps-4 pe-12 text-sm text-white transition-colors placeholder:text-neutral-500 focus:border-neutral-500 focus:bg-[#111] focus:ring-1 focus:ring-neutral-500 focus:outline-none";
+  "w-full rounded-[14px] border border-border bg-surface py-3.5 ps-4 pe-12 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-1 focus:ring-ring focus:outline-none aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/40";
 
 export const authSocialButtonClassName =
-  "flex items-center justify-center gap-2 rounded-full border border-white/10 bg-[#141414] py-3 text-[13px] font-medium text-white transition-colors hover:bg-[#1f1f1f] active:scale-[0.96]";
+  "flex items-center justify-center gap-2 rounded-full border border-border bg-card py-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted active:scale-[0.96]";
 
 export const authPrimaryButtonClassName =
-  "w-full rounded-full bg-[#EAEAEA] py-3.5 text-sm font-medium text-black shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-colors hover:bg-white active:scale-[0.96] disabled:pointer-events-none disabled:opacity-60";
+  "w-full rounded-full bg-primary py-3.5 text-sm font-medium text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-colors hover:bg-primary/90 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-60";
 
 export const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -82,7 +83,12 @@ type AuthTitleProps = {
   description?: string;
 };
 
-export function AuthTitle({ line1, line2, accent, description }: AuthTitleProps) {
+export function AuthTitle({
+  line1,
+  line2,
+  accent,
+  description,
+}: AuthTitleProps) {
   const hasSecondLine = Boolean(line2?.trim() || accent?.trim());
 
   return (
@@ -116,22 +122,26 @@ export function AuthTitle({ line1, line2, accent, description }: AuthTitleProps)
 type AuthSocialButtonsProps = {
   googleLabel: string;
   discordLabel: string;
+  googleHref: string;
+  discordHref: string;
 };
 
 export function AuthSocialButtons({
   googleLabel,
   discordLabel,
+  googleHref,
+  discordHref,
 }: AuthSocialButtonsProps) {
   return (
     <AuthItem className="mb-8 grid grid-cols-2 gap-4">
-      <button type="button" className={authSocialButtonClassName}>
+      <a href={googleHref} className={authSocialButtonClassName}>
         <GoogleIcon className="text-[16px]" />
         {googleLabel}
-      </button>
-      <button type="button" className={authSocialButtonClassName}>
+      </a>
+      <a href={discordHref} className={authSocialButtonClassName}>
         <DiscordIcon className="text-[16px] text-[#5865F2]" />
         {discordLabel}
-      </button>
+      </a>
     </AuthItem>
   );
 }
@@ -162,6 +172,8 @@ type AuthFieldProps = {
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   spellCheck?: boolean;
   defaultValue?: string;
+  error?: string;
+  disabled?: boolean;
 };
 
 export function AuthField({
@@ -178,6 +190,8 @@ export function AuthField({
   inputMode,
   spellCheck,
   defaultValue,
+  error,
+  disabled,
 }: AuthFieldProps) {
   if (type === "password") {
     return (
@@ -191,13 +205,17 @@ export function AuthField({
         minLength={minLength}
         maxLength={maxLength}
         defaultValue={defaultValue}
+        error={error}
+        disabled={disabled}
       />
     );
   }
 
+  const errorId = error ? `${id}-error` : undefined;
+
   return (
     <AuthItem className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-medium text-neutral-200">
+      <label htmlFor={id} className="text-foreground text-sm font-medium">
         {label}
       </label>
       <input
@@ -213,8 +231,16 @@ export function AuthField({
         inputMode={inputMode}
         spellCheck={spellCheck}
         defaultValue={defaultValue}
+        disabled={disabled}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={errorId}
         className={authFieldClassName}
       />
+      {error ? (
+        <p id={errorId} role="alert" className="text-destructive text-xs">
+          {error}
+        </p>
+      ) : null}
     </AuthItem>
   );
 }
@@ -232,6 +258,8 @@ type AuthPasswordFieldProps = {
   labelEnd?: React.ReactNode;
   showPasswordLabel?: string;
   hidePasswordLabel?: string;
+  error?: string;
+  disabled?: boolean;
 };
 
 export function AuthPasswordField({
@@ -247,13 +275,16 @@ export function AuthPasswordField({
   labelEnd,
   showPasswordLabel = "Show password",
   hidePasswordLabel = "Hide password",
+  error,
+  disabled,
 }: AuthPasswordFieldProps) {
   const [visible, setVisible] = useState(false);
+  const errorId = error ? `${id}-error` : undefined;
 
   return (
     <AuthItem className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-neutral-200">
+        <label htmlFor={id} className="text-foreground text-sm font-medium">
           {label}
         </label>
         {labelEnd}
@@ -269,12 +300,16 @@ export function AuthPasswordField({
           minLength={minLength}
           maxLength={maxLength}
           defaultValue={defaultValue}
+          disabled={disabled}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={errorId}
           className={authPasswordFieldClassName}
         />
         <button
           type="button"
           onClick={() => setVisible((current) => !current)}
-          className="absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-neutral-400 transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-neutral-500 focus-visible:outline-none"
+          disabled={disabled}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
           aria-label={visible ? hidePasswordLabel : showPasswordLabel}
           aria-pressed={visible}
         >
@@ -285,13 +320,34 @@ export function AuthPasswordField({
           )}
         </button>
       </div>
+      {error ? (
+        <p id={errorId} role="alert" className="text-destructive text-xs">
+          {error}
+        </p>
+      ) : null}
     </AuthItem>
   );
 }
 
+export function AuthFormError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <AuthItem>
+      <p
+        role="alert"
+        className="border-destructive/40 bg-destructive/10 text-destructive rounded-[14px] border px-4 py-3 text-sm"
+      >
+        {message}
+      </p>
+    </AuthItem>
+  );
+}
+
+type AuthHref = React.ComponentProps<typeof Link>["href"];
+
 type AuthFooterProps = {
   prompt: string;
-  href: string;
+  href: AuthHref;
   linkLabel: string;
 };
 
@@ -300,25 +356,38 @@ export function AuthFooter({ prompt, href, linkLabel }: AuthFooterProps) {
     <AuthItem>
       <p className="mt-6 text-[13px] text-neutral-400">
         {prompt}{" "}
-        <a href={href} className="font-bold text-white hover:underline">
+        <Link href={href} className="font-bold text-white hover:underline">
           {linkLabel}
-        </a>
+        </Link>
       </p>
     </AuthItem>
   );
 }
 
+export type { AuthHref };
+
 export function AuthPrimaryButton({
   children,
   type = "submit",
+  disabled,
+  pendingLabel,
+  isPending,
 }: {
   children: React.ReactNode;
   type?: "button" | "submit" | "reset";
+  disabled?: boolean;
+  pendingLabel?: string;
+  isPending?: boolean;
 }) {
   return (
     <AuthItem className="mt-4">
-      <button type={type} className={authPrimaryButtonClassName}>
-        {children}
+      <button
+        type={type}
+        disabled={disabled || isPending}
+        aria-busy={isPending || undefined}
+        className={authPrimaryButtonClassName}
+      >
+        {isPending && pendingLabel ? pendingLabel : children}
       </button>
     </AuthItem>
   );

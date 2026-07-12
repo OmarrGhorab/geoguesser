@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useEffect } from "react";
+import Link from "next/link";
+import { forgotPasswordAction } from "@/features/auth/actions";
+import { firstFieldError } from "@/features/auth/error-messages";
+import { RESET_EMAIL_STORAGE_KEY } from "@/features/auth/constants";
+import { initialAuthActionState } from "@/features/auth/types";
 import {
   AuthField,
-  AuthFooter,
+  AuthFormError,
   AuthItem,
   AuthPanel,
   AuthPrimaryButton,
@@ -12,7 +17,6 @@ import {
 } from "@/features/auth/components/auth-ui";
 import { cn } from "@/lib/utils";
 
-/** Matches backend `auth.ForgotPasswordRequest`: email */
 export type ForgotPasswordFormLabels = {
   titleLine1: string;
   titleLine2: string;
@@ -21,29 +25,46 @@ export type ForgotPasswordFormLabels = {
   email: string;
   emailPlaceholder: string;
   submit: string;
+  submitting: string;
   rememberPassword: string;
   logIn: string;
   successTitle: string;
   successDescription: string;
   continueToReset: string;
+  errors: Record<string, string>;
 };
 
 type ForgotPasswordFormProps = {
   labels: ForgotPasswordFormLabels;
-  loginHref: string;
-  resetPasswordHref: string;
+  locale: string;
 };
+
+function tError(errors: Record<string, string>, key: string | undefined) {
+  if (!key) return undefined;
+  return errors[key] ?? errors.generic;
+}
 
 export function ForgotPasswordForm({
   labels,
-  loginHref,
-  resetPasswordHref,
+  locale,
 }: ForgotPasswordFormProps) {
-  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const [state, formAction, isPending] = useActionState(
+    forgotPasswordAction,
+    initialAuthActionState,
+  );
 
-  if (submittedEmail) {
-    const resetHref = `${resetPasswordHref}?email=${encodeURIComponent(submittedEmail)}`;
+  useEffect(() => {
+    if (state.status !== "success") return;
+    const emailInput = document.getElementById(
+      "forgot-email",
+    ) as HTMLInputElement | null;
+    const email = emailInput?.value?.trim();
+    if (email) {
+      sessionStorage.setItem(RESET_EMAIL_STORAGE_KEY, email);
+    }
+  }, [state.status]);
 
+  if (state.status === "success") {
     return (
       <AuthPanel>
         <AuthTitle
@@ -51,18 +72,22 @@ export function ForgotPasswordForm({
           description={labels.successDescription}
         />
         <AuthItem>
-          <a
-            href={resetHref}
+          <Link
+            href={`/${locale}/reset-password`}
             className={cn(authPrimaryButtonClassName, "block text-center")}
           >
             {labels.continueToReset}
-          </a>
+          </Link>
         </AuthItem>
-        <AuthFooter
-          prompt={labels.rememberPassword}
-          href={loginHref}
-          linkLabel={labels.logIn}
-        />
+        <p className="mt-6 text-[13px] text-neutral-400">
+          {labels.rememberPassword}{" "}
+          <Link
+            href={`/${locale}/login`}
+            className="font-bold text-white hover:underline"
+          >
+            {labels.logIn}
+          </Link>
+        </p>
       </AuthPanel>
     );
   }
@@ -76,16 +101,9 @@ export function ForgotPasswordForm({
         description={labels.description}
       />
 
-      <form
-        className="flex flex-col gap-5"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          const formData = new FormData(event.currentTarget);
-          const email = String(formData.get("email") ?? "").trim();
-          setSubmittedEmail(email);
-        }}
-      >
+      <form action={formAction} className="flex flex-col gap-5" noValidate>
+        <AuthFormError message={tError(labels.errors, state.formError)} />
+
         <AuthField
           id="forgot-email"
           name="email"
@@ -95,15 +113,29 @@ export function ForgotPasswordForm({
           autoComplete="email"
           maxLength={254}
           required
+          disabled={isPending}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "email"),
+          )}
         />
-        <AuthPrimaryButton>{labels.submit}</AuthPrimaryButton>
+        <AuthPrimaryButton
+          isPending={isPending}
+          pendingLabel={labels.submitting}
+        >
+          {labels.submit}
+        </AuthPrimaryButton>
       </form>
 
-      <AuthFooter
-        prompt={labels.rememberPassword}
-        href={loginHref}
-        linkLabel={labels.logIn}
-      />
+      <p className="mt-6 text-[13px] text-neutral-400">
+        {labels.rememberPassword}{" "}
+        <Link
+          href={`/${locale}/login`}
+          className="font-bold text-white hover:underline"
+        >
+          {labels.logIn}
+        </Link>
+      </p>
     </AuthPanel>
   );
 }

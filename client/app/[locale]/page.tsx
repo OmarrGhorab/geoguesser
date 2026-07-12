@@ -1,4 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { Link } from "@/lib/i18n/navigation";
 import type { AppLocale } from "@/lib/i18n/routing";
 
 type HomePageProps = Readonly<{
@@ -17,18 +18,18 @@ export default async function HomePage({ params }: HomePageProps) {
           {t("title")}
         </h1>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <a
-            href={`/${locale}/sign-up`}
+          <Link
+            href="/sign-up"
             className="rounded-full bg-white px-6 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
           >
             {t("signUpCta")}
-          </a>
-          <a
-            href={`/${locale}/login`}
+          </Link>
+          <Link
+            href="/login"
             className="rounded-full border border-white/15 bg-transparent px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
           >
             {t("logInCta")}
-          </a>
+          </Link>
         </div>
       </div>
     </main>

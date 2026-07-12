@@ -1,9 +1,14 @@
 "use client";
 
+import { useActionState } from "react";
+import Link from "next/link";
+import { loginAction } from "@/features/auth/actions";
+import { firstFieldError } from "@/features/auth/error-messages";
+import { initialAuthActionState } from "@/features/auth/types";
 import {
   AuthDivider,
   AuthField,
-  AuthFooter,
+  AuthFormError,
   AuthPanel,
   AuthPasswordField,
   AuthPrimaryButton,
@@ -11,7 +16,6 @@ import {
   AuthTitle,
 } from "@/features/auth/components/auth-ui";
 
-/** Matches backend `auth.LoginRequest`: email, password */
 export type LoginFormLabels = {
   titleLine1: string;
   titleLine2: string;
@@ -25,23 +29,37 @@ export type LoginFormLabels = {
   passwordPlaceholder: string;
   forgotPassword: string;
   logIn: string;
+  loggingIn: string;
   noAccount: string;
   signUp: string;
   showPassword: string;
   hidePassword: string;
+  errors: Record<string, string>;
 };
 
 type LoginFormProps = {
   labels: LoginFormLabels;
-  signUpHref: string;
-  forgotPasswordHref: string;
+  locale: string;
+  googleOAuthUrl: string;
+  discordOAuthUrl: string;
 };
+
+function tError(errors: Record<string, string>, key: string | undefined) {
+  if (!key) return undefined;
+  return errors[key] ?? errors.generic;
+}
 
 export function LoginForm({
   labels,
-  signUpHref,
-  forgotPasswordHref,
+  locale,
+  googleOAuthUrl,
+  discordOAuthUrl,
 }: LoginFormProps) {
+  const [state, formAction, isPending] = useActionState(
+    loginAction,
+    initialAuthActionState,
+  );
+
   return (
     <AuthPanel>
       <AuthTitle
@@ -53,17 +71,17 @@ export function LoginForm({
       <AuthSocialButtons
         googleLabel={labels.continueWithGoogle}
         discordLabel={labels.continueWithDiscord}
+        googleHref={googleOAuthUrl}
+        discordHref={discordOAuthUrl}
       />
 
       <AuthDivider label={labels.or} />
 
-      <form
-        className="flex flex-col gap-5"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-        }}
-      >
+      <form action={formAction} className="flex flex-col gap-5" noValidate>
+        <input type="hidden" name="locale" value={locale} />
+
+        <AuthFormError message={tError(labels.errors, state.formError)} />
+
         <AuthField
           id="login-email"
           name="email"
@@ -73,6 +91,11 @@ export function LoginForm({
           autoComplete="email"
           maxLength={254}
           required
+          disabled={isPending}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "email"),
+          )}
         />
 
         <AuthPasswordField
@@ -83,26 +106,40 @@ export function LoginForm({
           autoComplete="current-password"
           maxLength={256}
           required
+          disabled={isPending}
           showPasswordLabel={labels.showPassword}
           hidePasswordLabel={labels.hidePassword}
+          error={tError(
+            labels.errors,
+            firstFieldError(state.fieldErrors, "password"),
+          )}
           labelEnd={
-            <a
-              href={forgotPasswordHref}
-              className="text-[12px] font-medium text-neutral-400 transition-colors hover:text-white"
+            <Link
+              href={`/${locale}/forgot-password`}
+              className="text-muted-foreground hover:text-foreground text-[12px] font-medium transition-colors"
             >
               {labels.forgotPassword}
-            </a>
+            </Link>
           }
         />
 
-        <AuthPrimaryButton>{labels.logIn}</AuthPrimaryButton>
+        <AuthPrimaryButton
+          isPending={isPending}
+          pendingLabel={labels.loggingIn}
+        >
+          {labels.logIn}
+        </AuthPrimaryButton>
       </form>
 
-      <AuthFooter
-        prompt={labels.noAccount}
-        href={signUpHref}
-        linkLabel={labels.signUp}
-      />
+      <p className="mt-6 text-[13px] text-neutral-400">
+        {labels.noAccount}{" "}
+        <Link
+          href={`/${locale}/sign-up`}
+          className="font-bold text-white hover:underline"
+        >
+          {labels.signUp}
+        </Link>
+      </p>
     </AuthPanel>
   );
 }

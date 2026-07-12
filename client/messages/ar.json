@@ -12,6 +12,24 @@
     "Common": {
       "videoAriaLabel": "فيديو منظر طبيعي جوي"
     },
+    "Errors": {
+      "generic": "حدث خطأ ما. حاول مرة أخرى.",
+      "emailRequired": "البريد الإلكتروني مطلوب.",
+      "emailInvalid": "أدخل بريداً إلكترونياً صالحاً.",
+      "passwordRequired": "كلمة المرور مطلوبة.",
+      "passwordTooShort": "يجب أن تكون كلمة المرور 12 حرفاً على الأقل.",
+      "passwordTooLong": "كلمة المرور طويلة جداً.",
+      "passwordMismatch": "كلمتا المرور غير متطابقتين.",
+      "confirmPasswordRequired": "أكد كلمة المرور.",
+      "displayNameLength": "يجب أن يكون اسم العرض بين 2 و 32 حرفاً.",
+      "otpInvalid": "أدخل الرمز المكوّن من 6 أرقام من بريدك.",
+      "emailAlreadyExists": "يوجد حساب بهذا البريد الإلكتروني بالفعل.",
+      "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+      "invalidOtp": "رمز إعادة التعيين غير صالح أو منتهٍ.",
+      "invalidPassword": "كلمة المرور لا تستوفي المتطلبات.",
+      "validationFailed": "تحقق من النموذج وحاول مرة أخرى.",
+      "rateLimited": "محاولات كثيرة جداً. حاول لاحقاً."
+    },
     "SignUp": {
       "metaTitle": "إنشاء حساب · جيوجيس",
       "metaDescription": "أنشئ حسابك في جيوجيس وابدأ اللعب.",
@@ -30,11 +48,11 @@
       "confirmPassword": "تأكيد كلمة المرور",
       "confirmPasswordPlaceholder": "أعد إدخال كلمة المرور",
       "createAccount": "إنشاء حساب",
+      "creatingAccount": "جارٍ إنشاء الحساب…",
       "alreadyHaveAccount": "لديك حساب بالفعل؟",
       "logIn": "تسجيل الدخول",
       "showPassword": "إظهار كلمة المرور",
-      "hidePassword": "إخفاء كلمة المرور",
-      "passwordMismatch": "كلمتا المرور غير متطابقتين"
+      "hidePassword": "إخفاء كلمة المرور"
     },
     "Login": {
       "metaTitle": "تسجيل الدخول · جيوجيس",
@@ -51,6 +69,7 @@
       "passwordPlaceholder": "أدخل كلمة المرور",
       "forgotPassword": "نسيت كلمة المرور؟",
       "logIn": "تسجيل الدخول",
+      "loggingIn": "جارٍ تسجيل الدخول…",
       "noAccount": "ليس لديك حساب؟",
       "signUp": "إنشاء حساب",
       "showPassword": "إظهار كلمة المرور",
@@ -66,6 +85,7 @@
       "email": "البريد الإلكتروني",
       "emailPlaceholder": "أدخل بريدك الإلكتروني",
       "submit": "إرسال رمز إعادة التعيين",
+      "submitting": "جارٍ إرسال الرمز…",
       "rememberPassword": "تتذكر كلمة المرور؟",
       "logIn": "تسجيل الدخول",
       "successTitle": "تحقق من بريدك",
@@ -88,14 +108,14 @@
       "confirmPassword": "تأكيد كلمة المرور",
       "confirmPasswordPlaceholder": "أعد إدخال كلمة المرور الجديدة",
       "submit": "إعادة تعيين كلمة المرور",
+      "submitting": "جارٍ إعادة التعيين…",
       "rememberPassword": "تتذكر كلمة المرور؟",
       "logIn": "تسجيل الدخول",
       "successTitle": "تم تحديث كلمة المرور",
       "successDescription": "تمت إعادة تعيين كلمة المرور. يمكنك تسجيل الدخول ببياناتك الجديدة.",
       "backToLogin": "المتابعة لتسجيل الدخول",
       "showPassword": "إظهار كلمة المرور",
-      "hidePassword": "إخفاء كلمة المرور",
-      "passwordMismatch": "كلمتا المرور غير متطابقتين"
+      "hidePassword": "إخفاء كلمة المرور"
     }
   }
 }
