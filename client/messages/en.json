@@ -6,7 +6,33 @@
   "Home": {
     "title": "GeoGuess",
     "signUpCta": "Create account",
-    "logInCta": "Log in"
+    "logInCta": "Log in",
+    "nav": {
+      "explore": "Explore",
+      "multiplayer": "Multiplayer",
+      "leaderboards": "Leaderboards",
+      "pricing": "Pricing",
+      "login": "Login",
+      "playFree": "Play Free"
+    },
+    "sections": {
+      "explore": {
+        "title": "Explore the world",
+        "description": "Drop anywhere. Read the clues. Make your best guess."
+      },
+      "discover": {
+        "title": "Explore the world",
+        "description": "Get dropped anywhere from the busy streets of New York to the beautiful beaches of Bali."
+      },
+      "friends": {
+        "title": "Play with Friends",
+        "description": "Put your skills to the test against your friends and family. Create your own private party and play together."
+      },
+      "compete": {
+        "title": "Compete against others",
+        "description": "Climb the leaderboard and prove your geography skills."
+      }
+    }
   },
   "Auth": {
     "Common": {

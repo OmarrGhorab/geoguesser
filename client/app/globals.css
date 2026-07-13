@@ -7,11 +7,18 @@
 @theme {
   --font-sans: Arial, Helvetica, sans-serif;
   --font-serif: Georgia, "Times New Roman", serif;
-  --font-display: Georgia, "Times New Roman", serif;
+  --font-display: "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
   --radius-panel: 1.5rem;
   --spacing-page: clamp(1rem, 4vw, 3rem);
   --color-surface: oklch(0.08 0 0);
-  --color-auth-bg: oklch(0.05 0 0);
+  /* Auth form panel — deep navy + journey blue from auth-2-design.png */
+  --color-auth-bg: #020625;
+  --color-auth-surface: #060a2b;
+  --color-auth-accent: #5865f2;
+  --color-auth-accent-foreground: #ffffff;
+  --color-auth-link: #5865f2;
+  --color-auth-field-border: #373b64;
+  --color-auth-field-border-focus: #5d7ff0;
 }
 
 :root {
@@ -52,7 +59,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: var(--font-sans);
+  --font-sans: Arial, Helvetica, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -101,6 +108,7 @@ html,
 body {
   min-height: 100%;
   margin: 0;
+  overflow-x: clip;
 }
 
 @layer base {
@@ -112,5 +120,84 @@ body {
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Shared auth canvas beneath the inset video and the extracted form artwork. */
+.auth-page-atmosphere {
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: #020522;
+}
+
+.auth-form-atmosphere {
+  background-color: #020625;
+  background-image: url("/authentication/auth-panel-background-wide.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.font-auth-display {
+  font-family: Impact, "Arial Narrow", sans-serif !important;
+  font-stretch: condensed;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 25%);
+}
+
+.auth-brand-logo {
+  display: block;
+  width: 270px;
+  height: 74px;
+  max-width: 100%;
+  background-image: url("/logo.png");
+  /* logo.png has a large transparent canvas; offset it so the visible mark
+     aligns with the heading instead of the image canvas. */
+  background-position: -66px -88px;
+  background-repeat: no-repeat;
+  background-size: 374px auto;
+}
+
+.auth-form-topo {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='260' viewBox='0 0 320 260' fill='none'%3E%3Cg stroke='%237c5cff' stroke-opacity='.2' stroke-width='1'%3E%3Cpath d='M-20 38C35 3 66 73 130 35s90 7 155-19 72 16 90 28'/%3E%3Cpath d='M-15 75c48-30 86 31 142 3s85 16 142-9 78 0 94 16'/%3E%3Cpath d='M-20 121c52-35 89 28 147-5s91 19 150-12 73 2 95 25'/%3E%3Cpath d='M-12 168c51-29 83 25 142-7s88 22 146-8 71 5 98 22'/%3E%3Cpath d='M-22 216c48-34 93 28 151-4s88 21 148-11 72 6 99 25'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 320px 260px;
+  opacity: 0.72;
+}
+
+.auth-form-network {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='200' viewBox='0 0 320 200' fill='none'%3E%3Ccircle cx='260' cy='160' r='90' stroke='%23ff2d8b' stroke-opacity='0.18' stroke-width='1'/%3E%3Ccircle cx='260' cy='160' r='55' stroke='%23ff2d8b' stroke-opacity='0.12' stroke-width='1'/%3E%3Cpath d='M170 110l40 20m20 10l35 25m-10-40l45 5' stroke='%23a78bfa' stroke-opacity='0.2' stroke-width='1'/%3E%3Ccircle cx='170' cy='110' r='2.5' fill='%23ff2d8b' fill-opacity='0.55'/%3E%3Ccircle cx='230' cy='140' r='2' fill='%232ee6ff' fill-opacity='0.5'/%3E%3Ccircle cx='280' cy='165' r='2.5' fill='%23ff2d8b' fill-opacity='0.45'/%3E%3C/svg%3E");
+  background-position: right bottom;
+  background-repeat: no-repeat;
+  background-size: min(70%, 420px) auto;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.landing-page {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.landing-nav-link {
+  color: rgb(255 255 255 / 90%);
+  text-shadow: 0 2px 10px rgb(0 0 0 / 60%);
+  transition:
+    color 160ms ease,
+    text-shadow 160ms ease;
+}
+
+.landing-nav-link:hover {
+  color: white;
+  text-shadow: 0 0 18px rgb(88 101 242 / 70%);
+}
+
+.landing-nav-link:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid #5865f2;
+  outline-offset: 0.35rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }

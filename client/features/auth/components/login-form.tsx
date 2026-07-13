@@ -18,6 +18,8 @@ import {
   AuthPrimaryButton,
   AuthSocialButtons,
   AuthTitle,
+  authLinkClassName,
+  authMutedLinkClassName,
 } from "@/features/auth/components/auth-ui";
 
 export type LoginFormLabels = {
@@ -120,7 +122,7 @@ export function LoginForm({
           labelEnd={
             <Link
               href={`/${locale}/forgot-password`}
-              className="text-muted-foreground hover:text-foreground text-[12px] font-medium transition-colors"
+              className={authMutedLinkClassName}
             >
               {labels.forgotPassword}
             </Link>
@@ -135,12 +137,9 @@ export function LoginForm({
         </AuthPrimaryButton>
       </form>
 
-      <p className="mt-6 text-[13px] text-neutral-400">
+      <p className="mt-6 text-center text-[13px] text-neutral-400">
         {labels.noAccount}{" "}
-        <Link
-          href={`/${locale}/sign-up`}
-          className="font-bold text-white hover:underline"
-        >
+        <Link href={`/${locale}/sign-up`} className={authLinkClassName}>
           {labels.signUp}
         </Link>
       </p>

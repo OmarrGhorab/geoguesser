@@ -1,24 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useLocale } from "next-intl";
 import { Eye, EyeOff } from "lucide-react";
 import { motion, type Variants } from "motion/react";
+import { AUTH_CONCEPT } from "@/features/auth/auth-concept";
 import { DiscordIcon, GoogleIcon } from "@/features/auth/components/auth-icons";
 import { oauthStartPath } from "@/features/auth/oauth";
 import type { AppLocale } from "@/lib/i18n/routing";
 import { cn } from "@/lib/utils";
 
-export const authFieldClassName =
-  "w-full rounded-[14px] border border-border bg-surface px-4 py-3.5 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-1 focus:ring-ring focus:outline-none aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/40";
+export { AUTH_CONCEPT };
 
-export const authPasswordFieldClassName =
-  "w-full rounded-[14px] border border-border bg-surface py-3.5 ps-4 pe-12 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-1 focus:ring-ring focus:outline-none aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/40";
-
-export const authSocialButtonClassName =
-  "flex items-center justify-center gap-2 rounded-full border border-border bg-card py-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted active:scale-[0.96]";
-
-export const authPrimaryButtonClassName =
-  "w-full rounded-full bg-primary py-3.5 text-sm font-medium text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-colors hover:bg-primary/90 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-60";
+export const authFieldClassName = AUTH_CONCEPT.fieldClass;
+export const authPasswordFieldClassName = AUTH_CONCEPT.passwordFieldClass;
+export const authSocialButtonClassName = AUTH_CONCEPT.socialButtonClass;
+export const authPrimaryButtonClassName = AUTH_CONCEPT.primaryButtonClass;
+export const authLinkClassName = AUTH_CONCEPT.linkClass;
+export const authMutedLinkClassName = AUTH_CONCEPT.mutedLinkClass;
 
 export const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -49,6 +49,20 @@ type AuthPanelProps = {
   className?: string;
 };
 
+export function AuthBrandMark({ className }: { className?: string }) {
+  const locale = useLocale();
+
+  return (
+    <AuthItem className={cn("mb-10 flex justify-start", className)}>
+      <Link
+        href={`/${locale}`}
+        className="auth-brand-logo focus-visible:ring-auth-accent/70 focus-visible:ring-offset-auth-bg rounded-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+        aria-label={`Go to ${AUTH_CONCEPT.logoAlt} home`}
+      />
+    </AuthItem>
+  );
+}
+
 export function AuthPanel({ children, className }: AuthPanelProps) {
   return (
     <motion.div
@@ -56,8 +70,9 @@ export function AuthPanel({ children, className }: AuthPanelProps) {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className={cn("w-full max-w-[400px]", className)}
+      className={cn("relative z-10 w-full max-w-[490px]", className)}
     >
+      <AuthBrandMark />
       {children}
     </motion.div>
   );
@@ -93,8 +108,8 @@ export function AuthTitle({
   const hasSecondLine = Boolean(line2?.trim() || accent?.trim());
 
   return (
-    <AuthItem className="mb-10 text-center">
-      <h1 className="text-3xl leading-tight font-medium tracking-tight text-balance text-white md:text-[40px]">
+    <AuthItem className="mb-7 text-start">
+      <h1 className="font-auth-display text-[2.6rem] leading-[1.06] font-black tracking-[0.01em] text-balance text-white uppercase italic sm:text-[3rem]">
         {line1}
         {hasSecondLine ? (
           <>
@@ -106,13 +121,13 @@ export function AuthTitle({
               </>
             ) : null}
             {accent?.trim() ? (
-              <span className="font-serif font-light italic">{accent}</span>
+              <span className={AUTH_CONCEPT.accentTextClass}>{accent}</span>
             ) : null}
           </>
         ) : null}
       </h1>
       {description ? (
-        <p className="mt-3 text-sm leading-relaxed text-balance text-neutral-400">
+        <p className="mt-3 text-sm leading-relaxed text-balance text-neutral-400 normal-case">
           {description}
         </p>
       ) : null}
@@ -132,19 +147,25 @@ export function AuthSocialButtons({
   locale,
 }: AuthSocialButtonsProps) {
   return (
-    <AuthItem className="mb-8 grid grid-cols-2 gap-4">
+    <AuthItem className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-4">
       <a
         href={oauthStartPath("google", locale)}
-        className={authSocialButtonClassName}
+        className={cn(
+          authSocialButtonClassName,
+          "border-white bg-white text-[#080b20] shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:brightness-95",
+        )}
       >
         <GoogleIcon className="text-[16px]" />
         {googleLabel}
       </a>
       <a
         href={oauthStartPath("discord", locale)}
-        className={authSocialButtonClassName}
+        className={cn(
+          authSocialButtonClassName,
+          "border-[#7280ff] bg-[#5865F2] text-white shadow-[0_8px_24px_rgba(88,101,242,0.3)] hover:brightness-110",
+        )}
       >
-        <DiscordIcon className="text-[16px] text-[#5865F2]" />
+        <DiscordIcon className="text-[16px] text-white" />
         {discordLabel}
       </a>
     </AuthItem>
@@ -153,9 +174,9 @@ export function AuthSocialButtons({
 
 export function AuthDivider({ label }: { label: string }) {
   return (
-    <AuthItem className="relative mb-8 flex items-center">
+    <AuthItem className="relative mb-5 flex items-center">
       <div className="grow border-t border-white/10" />
-      <span className="px-4 text-[11px] font-medium tracking-wider text-neutral-500 uppercase">
+      <span className="px-4 text-xs font-medium text-neutral-300 uppercase">
         {label}
       </span>
       <div className="grow border-t border-white/10" />
@@ -220,7 +241,7 @@ export function AuthField({
 
   return (
     <AuthItem className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-foreground text-sm font-medium">
+      <label htmlFor={id} className="text-sm font-medium text-neutral-200">
         {label}
       </label>
       <input
@@ -289,7 +310,7 @@ export function AuthPasswordField({
   return (
     <AuthItem className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-foreground text-sm font-medium">
+        <label htmlFor={id} className="text-sm font-medium text-neutral-200">
           {label}
         </label>
         {labelEnd}
@@ -314,7 +335,7 @@ export function AuthPasswordField({
           type="button"
           onClick={() => setVisible((current) => !current)}
           disabled={disabled}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-auth-accent/50 absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
           aria-label={visible ? hidePasswordLabel : showPasswordLabel}
           aria-pressed={visible}
         >
@@ -340,7 +361,7 @@ export function AuthFormError({ message }: { message?: string }) {
     <AuthItem>
       <p
         role="alert"
-        className="border-destructive/40 bg-destructive/10 text-destructive rounded-[14px] border px-4 py-3 text-sm"
+        className="border-destructive/40 bg-destructive/10 text-destructive rounded-2xl border px-4 py-3 text-sm"
       >
         {message}
       </p>

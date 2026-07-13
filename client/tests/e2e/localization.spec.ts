@@ -5,7 +5,7 @@ test("redirects the root route to the default locale", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/en$/);
   await expect(
-    page.getByRole("heading", { level: 1, name: "GeoGuess" }),
+    page.getByRole("heading", { level: 2, name: "Explore the world" }),
   ).toBeVisible();
 });
 
@@ -22,7 +22,7 @@ test("sets Arabic document language and direction", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("lang", "ar");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(
-    page.getByRole("heading", { level: 1, name: "جيوجيس" }),
+    page.getByRole("heading", { level: 2, name: "استكشف العالم" }),
   ).toBeVisible();
 });
 

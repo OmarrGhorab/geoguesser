@@ -1,6 +1,32 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("auth UI", () => {
+  test("login form panel matches concept chrome (linked logo, blue CTA, video left)", async ({
+    page,
+  }) => {
+    await page.goto("/en/login");
+
+    const logo = page.getByRole("link", {
+      name: "Go to WorldGuesser home",
+    });
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute("href", "/en");
+    const logoBackground = await logo.evaluate(
+      (element) => getComputedStyle(element).backgroundImage,
+    );
+    expect(logoBackground).toContain("/logo.png");
+
+    const cta = page.getByRole("button", { name: "Log in" });
+    await expect(cta).toBeVisible();
+    const bg = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);
+    // Discord blue (#5865f2), shared with the landing/auth visual system.
+    expect(bg).toMatch(/rgba?\(\s*88\s*,\s*101\s*,\s*242/i);
+
+    await expect(
+      page.locator("video[src='/authentication/auth-video.mp4']"),
+    ).toHaveCount(1);
+  });
+
   test("sign-up page renders backend-aligned fields and password toggles", async ({
     page,
   }) => {

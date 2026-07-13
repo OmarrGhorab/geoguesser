@@ -12,6 +12,7 @@ import {
   AuthPanel,
   AuthPrimaryButton,
   AuthTitle,
+  authLinkClassName,
   authPrimaryButtonClassName,
 } from "@/features/auth/components/auth-ui";
 import { cn } from "@/lib/utils";
@@ -67,12 +68,9 @@ export function ForgotPasswordForm({
             {labels.continueToReset}
           </Link>
         </AuthItem>
-        <p className="mt-6 text-[13px] text-neutral-400">
+        <p className="mt-6 text-center text-[13px] text-neutral-400">
           {labels.rememberPassword}{" "}
-          <Link
-            href={`/${locale}/login`}
-            className="font-bold text-white hover:underline"
-          >
+          <Link href={`/${locale}/login`} className={authLinkClassName}>
             {labels.logIn}
           </Link>
         </p>
@@ -115,12 +113,9 @@ export function ForgotPasswordForm({
         </AuthPrimaryButton>
       </form>
 
-      <p className="mt-6 text-[13px] text-neutral-400">
+      <p className="mt-6 text-center text-[13px] text-neutral-400">
         {labels.rememberPassword}{" "}
-        <Link
-          href={`/${locale}/login`}
-          className="font-bold text-white hover:underline"
-        >
+        <Link href={`/${locale}/login`} className={authLinkClassName}>
           {labels.logIn}
         </Link>
       </p>

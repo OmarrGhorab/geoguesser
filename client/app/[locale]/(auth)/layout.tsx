@@ -20,10 +20,10 @@ export default async function AuthLayout({
   });
 
   return (
-    <div className="bg-auth-bg text-foreground flex min-h-dvh w-full flex-col font-sans antialiased selection:bg-white/20 selection:text-white lg:flex-row">
-      {/* Shared left media panel — persists across auth routes */}
-      <div className="relative hidden w-full flex-col justify-end p-4 lg:flex lg:min-h-dvh lg:w-1/2">
-        <div className="border-border relative h-full min-h-[calc(100dvh-2rem)] w-full overflow-hidden rounded-[32px] border shadow-2xl">
+    <div className="auth-page-atmosphere text-foreground selection:bg-auth-accent/30 relative flex min-h-dvh w-full flex-col overflow-hidden font-sans antialiased selection:text-white lg:flex-row">
+      {/* Shared left media panel — persists across auth routes (unchanged video) */}
+      <div className="relative z-10 hidden w-full flex-col justify-end p-3 lg:flex lg:min-h-dvh lg:w-1/2">
+        <div className="relative h-full min-h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[28px] border border-white/15 shadow-2xl">
           <video
             className="absolute inset-0 h-full w-full object-cover"
             src="/authentication/auth-video.mp4"
@@ -39,9 +39,11 @@ export default async function AuthLayout({
         </div>
       </div>
 
-      {/* Right form panel — page content changes here */}
-      <div className="flex w-full flex-col items-center justify-center p-6 sm:p-12 lg:w-1/2">
-        {children}
+      {/* Right form panel — extracted reference artwork + live form chrome */}
+      <div className="auth-form-atmosphere relative z-10 flex min-h-dvh w-full flex-col items-center overflow-x-hidden overflow-y-auto p-6 sm:p-10 lg:min-h-dvh lg:w-1/2">
+        <div className="relative z-10 my-auto flex w-full flex-col items-center justify-center py-8 lg:py-12">
+          {children}
+        </div>
       </div>
     </div>
   );

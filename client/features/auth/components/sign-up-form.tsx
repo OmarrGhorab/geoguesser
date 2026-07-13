@@ -15,6 +15,7 @@ import {
   AuthPrimaryButton,
   AuthSocialButtons,
   AuthTitle,
+  authLinkClassName,
 } from "@/features/auth/components/auth-ui";
 
 export type SignUpFormLabels = {
@@ -151,12 +152,9 @@ export function SignUpForm({ labels, locale }: SignUpFormProps) {
         </AuthPrimaryButton>
       </form>
 
-      <p className="mt-6 text-[13px] text-neutral-400">
+      <p className="mt-6 text-center text-[13px] text-neutral-400">
         {labels.alreadyHaveAccount}{" "}
-        <Link
-          href={`/${locale}/login`}
-          className="font-bold text-white hover:underline"
-        >
+        <Link href={`/${locale}/login`} className={authLinkClassName}>
           {labels.logIn}
         </Link>
       </p>

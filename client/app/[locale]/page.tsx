@@ -1,4 +1,9 @@
+import { cookies } from "next/headers";
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import {
+  PublicLanding,
+  type LandingCopy,
+} from "@/features/landing/components/public-landing";
 import { Link } from "@/lib/i18n/navigation";
 import type { AppLocale } from "@/lib/i18n/routing";
 
@@ -8,8 +13,47 @@ type HomePageProps = Readonly<{
 
 export default async function HomePage({ params }: HomePageProps) {
   const { locale } = await params;
-  setRequestLocale(locale as AppLocale);
+  const appLocale = locale as AppLocale;
+  setRequestLocale(appLocale);
   const t = await getTranslations("Home");
+  const cookieStore = await cookies();
+  const isAuthenticated = Boolean(
+    cookieStore.get("access_token")?.value ||
+    cookieStore.get("refresh_token")?.value,
+  );
+
+  if (!isAuthenticated) {
+    const copy: LandingCopy = {
+      nav: {
+        explore: t("nav.explore"),
+        multiplayer: t("nav.multiplayer"),
+        leaderboards: t("nav.leaderboards"),
+        pricing: t("nav.pricing"),
+        login: t("nav.login"),
+        playFree: t("nav.playFree"),
+      },
+      sections: {
+        explore: {
+          title: t("sections.explore.title"),
+          description: t("sections.explore.description"),
+        },
+        discover: {
+          title: t("sections.discover.title"),
+          description: t("sections.discover.description"),
+        },
+        friends: {
+          title: t("sections.friends.title"),
+          description: t("sections.friends.description"),
+        },
+        compete: {
+          title: t("sections.compete.title"),
+          description: t("sections.compete.description"),
+        },
+      },
+    };
+
+    return <PublicLanding copy={copy} locale={appLocale} />;
+  }
 
   return (
     <main className="grid min-h-dvh place-items-center p-[var(--spacing-page)]">
