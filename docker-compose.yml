@@ -1,3 +1,15 @@
+# Local stack
+#
+# Typical OAuth/ngrok setup (frontend on host, API in Docker):
+#   1. docker compose up api --build
+#   2. cd client && pnpm dev          # Next.js on :3000
+#   3. ngrok http 3000                # public HTTPS → frontend
+#   4. Open the ngrok URL (not localhost) for OAuth
+#
+# Full stack in Docker (optional):
+#   docker compose up --build
+#   still tunnel with: ngrok http 3000
+
 services:
   api:
     build:
@@ -20,8 +32,12 @@ services:
     working_dir: /app
     command: sh -c "npm install -g pnpm@10.24.0 && pnpm install --store-dir /root/.pnpm-store && pnpm dev --hostname 0.0.0.0"
     environment:
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # Override these per environment; localhost is safe for local development.
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      # Inside Compose, reach the API by service name (not localhost, not ngrok).
       BACKEND_API_URL: http://api:8080/api/v1
+      # Browser talks to the host-mapped API port.
+      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-ws://localhost:8080/realtime}
       PNPM_STORE_DIR: /root/.pnpm-store
       CI: "true"
     ports:

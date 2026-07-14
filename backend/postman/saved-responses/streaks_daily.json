@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/streaks/daily",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"current_count\":0,\"best_count\":0,\"status\":\"inactive\",\"protection_state\":\"none\",\"guest_limited\":true}"
+}

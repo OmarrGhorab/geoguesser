@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/challenges/shared",
+  "method": "POST",
+  "status": 422,
+  "body": "{\"error\":{\"code\":\"unprocessable_entity\",\"message\":\"The request cannot be processed in the current state.\",\"request_id\":\"3064d208d479/AsznE3Z2xq-000056\"}}"
+}

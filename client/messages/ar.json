@@ -1,19 +1,39 @@
 {
   "Metadata": {
-    "title": "جيوجيس",
-    "description": "لعبة لتخمين المواقع الجغرافية."
+    "title": "WorldGuess",
+    "description": "استكشف العالم في WorldGuess — لعبة لتخمين المواقع الجغرافية. انطلق إلى مناظر الشوارع، العب مع الأصدقاء، واصعد في لوحات الصدارة."
   },
   "Home": {
-    "title": "جيوجيس",
+    "title": "WorldGuess",
     "signUpCta": "إنشاء حساب",
     "logInCta": "تسجيل الدخول",
     "nav": {
       "explore": "استكشف",
       "multiplayer": "متعدد اللاعبين",
       "leaderboards": "لوحات الصدارة",
-      "pricing": "الأسعار",
       "login": "تسجيل الدخول",
       "playFree": "العب مجاناً"
+    },
+    "aria": {
+      "home": "الصفحة الرئيسية لـ WorldGuess",
+      "landingNavigation": "التنقل في الصفحة الرئيسية",
+      "switchLanguage": "تبديل اللغة إلى {locale}",
+      "footerNavigation": "التنقل في التذييل"
+    },
+    "media": {
+      "heroLogo": "WorldGuess",
+      "discoverBackground": "خريطة عالمية تربط الوجهات حول العالم",
+      "discoverCharacter": "مسافر يحمل خريطة متوهجة",
+      "friendsCharacter": "صديقان يتبادلان التحية بقبضتيهما",
+      "competeBackground": "شعار ذهبي لمنافسة WorldGuess وساحة لوحة الصدارة",
+      "competeCharacter": "متنافسان يواجه أحدهما الآخر في تحدٍ ودي"
+    },
+    "footer": {
+      "tagline": "استكشف العالم بتخمين واحد في كل مرة.\nالعب منفرداً، وتحدَّ أصدقاءك، وارتقِ في لوحات الصدارة.",
+      "play": "اللعب",
+      "account": "الحساب",
+      "game": "اللعبة",
+      "copyright": "© {year} WorldGuess. جميع الحقوق محفوظة."
     },
     "sections": {
       "explore": {
@@ -21,7 +41,7 @@
         "description": "انطلق إلى أي مكان. اقرأ الدلائل. وقدّم أفضل تخمين لديك."
       },
       "discover": {
-        "title": "استكشف العالم",
+        "title": "اكتشف أماكن جديدة",
         "description": "انطلق إلى أي مكان من شوارع نيويورك المزدحمة إلى شواطئ بالي الجميلة."
       },
       "friends": {
@@ -58,8 +78,8 @@
       "rateLimited": "محاولات كثيرة جداً. حاول لاحقاً."
     },
     "SignUp": {
-      "metaTitle": "إنشاء حساب · جيوجيس",
-      "metaDescription": "أنشئ حسابك في جيوجيس وابدأ اللعب.",
+      "metaTitle": "إنشاء حساب",
+      "metaDescription": "أنشئ حسابك في WorldGuess وابدأ اللعب.",
       "titleLine1": "استكشف العالم",
       "titleLine2": "تخميناً",
       "titleAccent": "تلو الآخر.",
@@ -82,8 +102,8 @@
       "hidePassword": "إخفاء كلمة المرور"
     },
     "Login": {
-      "metaTitle": "تسجيل الدخول · جيوجيس",
-      "metaDescription": "سجّل الدخول إلى حساب جيوجيس.",
+      "metaTitle": "تسجيل الدخول",
+      "metaDescription": "سجّل الدخول إلى حساب WorldGuess.",
       "titleLine1": "مرحباً بعودتك.",
       "titleLine2": "تابع",
       "titleAccent": "رحلتك.",
@@ -103,8 +123,8 @@
       "hidePassword": "إخفاء كلمة المرور"
     },
     "ForgotPassword": {
-      "metaTitle": "نسيت كلمة المرور · جيوجيس",
-      "metaDescription": "أعد تعيين كلمة مرور حساب جيوجيس.",
+      "metaTitle": "نسيت كلمة المرور",
+      "metaDescription": "أعد تعيين كلمة مرور حساب WorldGuess.",
       "titleLine1": "نسيت",
       "titleLine2": "كلمة المرور؟",
       "titleAccent": "",
@@ -120,8 +140,8 @@
       "continueToReset": "إدخال رمز إعادة التعيين"
     },
     "ResetPassword": {
-      "metaTitle": "إعادة تعيين كلمة المرور · جيوجيس",
-      "metaDescription": "اختر كلمة مرور جديدة لحساب جيوجيس.",
+      "metaTitle": "إعادة تعيين كلمة المرور",
+      "metaDescription": "اختر كلمة مرور جديدة لحساب WorldGuess.",
       "titleLine1": "عيّن كلمة",
       "titleLine2": "مرور",
       "titleAccent": "جديدة.",

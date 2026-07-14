@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/rooms",
+  "method": "POST",
+  "status": 201,
+  "body": "{\"room\":{\"id\":\"89e712d6-cda0-46cb-a37f-caf4712f1e55\",\"code\":\"T5V8BK\",\"visibility\":\"private\",\"status\":\"lobby\",\"game_id\":\"efc6155f-8923-49df-b63e-f2dfb46e9c65\",\"host_player_id\":\"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\"current_player_id\":null,\"version\":1,\"max_players\":8,\"round_count\":5,\"timer_seconds\":null,\"expires_at\":\"2026-07-14T15:26:20.679951854Z\",\"players\":[{\"id\":\"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\"user_id\":\"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\"display_name\":\"PostmanHost\",\"role\":\"host\",\"membership_status\":\"joined\",\"presence_status\":\"connected\",\"is_ready\":false,\"total_score\":0,\"joined_at\":\"2026-07-13T15:26:22.657048Z\",\"left_at\":null}],\"ready_player_ids\":[]}}"
+}

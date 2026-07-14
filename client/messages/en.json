@@ -1,19 +1,39 @@
 {
   "Metadata": {
-    "title": "GeoGuess",
-    "description": "A geography guessing game."
+    "title": "WorldGuess",
+    "description": "Explore the world in WorldGuess — a geography guessing game. Drop into street views, play with friends, and climb the leaderboards."
   },
   "Home": {
-    "title": "GeoGuess",
+    "title": "WorldGuess",
     "signUpCta": "Create account",
     "logInCta": "Log in",
     "nav": {
       "explore": "Explore",
       "multiplayer": "Multiplayer",
       "leaderboards": "Leaderboards",
-      "pricing": "Pricing",
       "login": "Login",
       "playFree": "Play Free"
+    },
+    "aria": {
+      "home": "WorldGuess home",
+      "landingNavigation": "Landing page",
+      "switchLanguage": "Switch language to {locale}",
+      "footerNavigation": "Footer navigation"
+    },
+    "media": {
+      "heroLogo": "WorldGuess",
+      "discoverBackground": "A world map connecting destinations across the globe",
+      "discoverCharacter": "A traveler holding a glowing map",
+      "friendsCharacter": "Two friends fist-bumping",
+      "competeBackground": "A golden WorldGuess competition crest and leaderboard arena",
+      "competeCharacter": "Two competitors facing off in a friendly challenge"
+    },
+    "footer": {
+      "tagline": "Explore the world one guess at a time.\nPlay solo, challenge friends, and climb the boards.",
+      "play": "Play",
+      "account": "Account",
+      "game": "Game",
+      "copyright": "© {year} WorldGuess. All rights reserved."
     },
     "sections": {
       "explore": {
@@ -21,7 +41,7 @@
         "description": "Drop anywhere. Read the clues. Make your best guess."
       },
       "discover": {
-        "title": "Explore the world",
+        "title": "Discover new places",
         "description": "Get dropped anywhere from the busy streets of New York to the beautiful beaches of Bali."
       },
       "friends": {
@@ -58,8 +78,8 @@
       "rateLimited": "Too many attempts. Please try again later."
     },
     "SignUp": {
-      "metaTitle": "Create account · GeoGuess",
-      "metaDescription": "Create your GeoGuess account to start playing.",
+      "metaTitle": "Create account",
+      "metaDescription": "Create your WorldGuess account to start playing.",
       "titleLine1": "Explore the world",
       "titleLine2": "one guess",
       "titleAccent": "at a time.",
@@ -82,8 +102,8 @@
       "hidePassword": "Hide password"
     },
     "Login": {
-      "metaTitle": "Log in · GeoGuess",
-      "metaDescription": "Log in to your GeoGuess account.",
+      "metaTitle": "Log in",
+      "metaDescription": "Log in to your WorldGuess account.",
       "titleLine1": "Welcome back.",
       "titleLine2": "Continue your",
       "titleAccent": "journey.",
@@ -103,8 +123,8 @@
       "hidePassword": "Hide password"
     },
     "ForgotPassword": {
-      "metaTitle": "Forgot password · GeoGuess",
-      "metaDescription": "Reset your GeoGuess account password.",
+      "metaTitle": "Forgot password",
+      "metaDescription": "Reset your WorldGuess account password.",
       "titleLine1": "Forgot your",
       "titleLine2": "password?",
       "titleAccent": "",
@@ -120,8 +140,8 @@
       "continueToReset": "Enter reset code"
     },
     "ResetPassword": {
-      "metaTitle": "Reset password · GeoGuess",
-      "metaDescription": "Choose a new password for your GeoGuess account.",
+      "metaTitle": "Reset password",
+      "metaDescription": "Choose a new password for your WorldGuess account.",
       "titleLine1": "Set a new",
       "titleLine2": "password",
       "titleAccent": "securely.",

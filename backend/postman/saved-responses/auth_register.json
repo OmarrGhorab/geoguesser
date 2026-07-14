@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/auth/register",
+  "method": "POST",
+  "status": 201,
+  "body": "{\"user\":{\"id\":\"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\"email\":\"postman.probe.1060715391.example@example.com\",\"display_name\":\"PostmanProbe\",\"role\":\"user\"}}"
+}

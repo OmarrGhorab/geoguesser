@@ -28,9 +28,31 @@ export default async function HomePage({ params }: HomePageProps) {
         explore: t("nav.explore"),
         multiplayer: t("nav.multiplayer"),
         leaderboards: t("nav.leaderboards"),
-        pricing: t("nav.pricing"),
         login: t("nav.login"),
         playFree: t("nav.playFree"),
+      },
+      aria: {
+        home: t("aria.home"),
+        landingNavigation: t("aria.landingNavigation"),
+        switchLanguage: t("aria.switchLanguage", {
+          locale: appLocale === "en" ? "AR" : "EN",
+        }),
+        footerNavigation: t("aria.footerNavigation"),
+      },
+      media: {
+        heroLogo: t("media.heroLogo"),
+        discoverBackground: t("media.discoverBackground"),
+        discoverCharacter: t("media.discoverCharacter"),
+        friendsCharacter: t("media.friendsCharacter"),
+        competeBackground: t("media.competeBackground"),
+        competeCharacter: t("media.competeCharacter"),
+      },
+      footer: {
+        tagline: t("footer.tagline"),
+        play: t("footer.play"),
+        account: t("footer.account"),
+        game: t("footer.game"),
+        copyright: t("footer.copyright", { year: new Date().getFullYear() }),
       },
       sections: {
         explore: {

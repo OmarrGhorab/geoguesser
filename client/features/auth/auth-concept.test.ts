@@ -8,7 +8,7 @@ import { AUTH_CONCEPT } from "@/features/auth/auth-concept";
  */
 describe("AUTH_CONCEPT presentational tokens", () => {
   it("uses the current WorldGuesser logo on the form side", () => {
-    expect(AUTH_CONCEPT.logoSrc).toBe("/logo.png");
+    expect(AUTH_CONCEPT.logoSrc).toBe("/logo-3.png");
     expect(AUTH_CONCEPT.logoAlt).toBe("WorldGuesser");
   });
 

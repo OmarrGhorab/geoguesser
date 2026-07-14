@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/metrics",
+  "method": "GET",
+  "status": 401,
+  "body": ""
+}

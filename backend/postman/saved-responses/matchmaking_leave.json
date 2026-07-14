@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/matchmaking/queue",
+  "method": "DELETE",
+  "status": 204,
+  "body": ""
+}

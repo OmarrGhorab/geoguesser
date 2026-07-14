@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/maps/039106ee-88e5-4fdd-b2d5-61760f5833f5",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"map\":{\"id\":\"039106ee-88e5-4fdd-b2d5-61760f5833f5\",\"slug\":\"solo-game-8e9cb615-e253-442d-bfb6-677db529f522\",\"name\":\"Solo Game 8e9cb615-e253-442d-bfb6-677db529f522\",\"visibility\":\"public\",\"access_tier\":\"free\",\"difficulty\":\"mixed\",\"status\":\"active\",\"created_at\":\"2026-07-11T12:21:02.373115Z\",\"updated_at\":\"2026-07-11T12:21:02.373115Z\"}}"
+}
