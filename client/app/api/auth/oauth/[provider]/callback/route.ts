@@ -4,6 +4,7 @@ import { authResponseSchema } from "@/features/auth/schemas";
 import { authCookieOptions, authCookiesFromResponse } from "@/lib/api/cookies";
 import { getBackendApiUrl } from "@/lib/env";
 import { routing, type AppLocale } from "@/lib/i18n/routing";
+import { publicAppUrl } from "@/lib/public-origin";
 
 type OAuthCallbackContext = {
   params: Promise<{ provider: string }>;
@@ -18,7 +19,7 @@ function resolveLocale(request: NextRequest): AppLocale {
 
 function loginErrorRedirect(request: NextRequest, locale: AppLocale) {
   const response = NextResponse.redirect(
-    new URL(`/${locale}/login?oauth_error=1`, request.url),
+    publicAppUrl(request, `/${locale}/login?oauth_error=1`),
   );
   response.cookies.delete("oauth_locale");
   return response;
@@ -55,7 +56,10 @@ export async function GET(request: NextRequest, context: OAuthCallbackContext) {
     return loginErrorRedirect(request, locale);
   }
 
-  const response = NextResponse.redirect(new URL(`/${locale}`, request.url));
+  // Use the configured public app origin, not untrusted forwarded headers.
+  const response = NextResponse.redirect(
+    publicAppUrl(request, `/${locale}`),
+  );
   response.cookies.delete("oauth_locale");
 
   for (const cookie of authCookiesFromResponse(upstream)) {

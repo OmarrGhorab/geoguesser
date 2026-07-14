@@ -3,7 +3,7 @@
  * Pure data — safe for unit tests without React/DOM.
  */
 export const AUTH_CONCEPT = {
-  logoSrc: "/logo.png",
+  logoSrc: "/logo-3.png",
   logoAlt: "WorldGuesser",
   /** Electric-blue journey CTA from the auth-2 reference. */
   primaryButtonClass:

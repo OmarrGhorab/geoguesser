@@ -1,38 +1,36 @@
-"use client";
-
-import { motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
+import type { SectionRevealDirection } from "@/features/landing/motion";
 
 type LandingRevealProps = {
   id: string;
   labelledBy: string;
   className: string;
   children: ReactNode;
+  /** Skip GSAP scroll reveal (hero). */
+  skipMotion?: boolean;
+  /** Alternate entrance direction for post-hero sections. */
+  direction?: SectionRevealDirection;
 };
 
+/** Semantic section shell — motion attributes only, no layout changes. */
 export function LandingReveal({
   id,
   labelledBy,
   className,
   children,
+  skipMotion = false,
+  direction = "up",
 }: LandingRevealProps) {
-  const shouldReduceMotion = useReducedMotion();
-
   return (
-    <motion.section
+    <section
       id={id}
       aria-labelledby={labelledBy}
       className={className}
-      initial={shouldReduceMotion ? false : { opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.18, margin: "0px 0px -40px 0px" }}
-      transition={
-        shouldReduceMotion
-          ? { duration: 0 }
-          : { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
-      }
+      data-landing-section=""
+      data-landing-direction={direction}
+      {...(skipMotion ? { "data-landing-skip": "" } : {})}
     >
       {children}
-    </motion.section>
+    </section>
   );
 }

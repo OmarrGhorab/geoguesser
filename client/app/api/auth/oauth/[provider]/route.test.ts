@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "./route";
 
@@ -8,6 +8,9 @@ vi.mock("@/lib/env", () => ({
 
 describe("OAuth initiation route", () => {
   beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+  });
 
   it("proxies the internal backend redirect and preserves locale", async () => {
     const fetchMock = vi.fn().mockResolvedValue(

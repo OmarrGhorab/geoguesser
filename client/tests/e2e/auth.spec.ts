@@ -14,7 +14,7 @@ test.describe("auth UI", () => {
     const logoBackground = await logo.evaluate(
       (element) => getComputedStyle(element).backgroundImage,
     );
-    expect(logoBackground).toContain("/logo.png");
+    expect(logoBackground).toContain("/logo-3.png");
 
     const cta = page.getByRole("button", { name: "Log in" });
     await expect(cta).toBeVisible();

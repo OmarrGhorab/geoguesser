@@ -53,10 +53,11 @@ export function AuthBrandMark({ className }: { className?: string }) {
   const locale = useLocale();
 
   return (
-    <AuthItem className={cn("mb-10 flex justify-start", className)}>
+    <AuthItem className={cn("mb-2 flex justify-center", className)}>
       <Link
         href={`/${locale}`}
         className="auth-brand-logo focus-visible:ring-auth-accent/70 focus-visible:ring-offset-auth-bg rounded-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+        style={{ backgroundImage: `url(${AUTH_CONCEPT.logoSrc})` }}
         aria-label={`Go to ${AUTH_CONCEPT.logoAlt} home`}
       />
     </AuthItem>

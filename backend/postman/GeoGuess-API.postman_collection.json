@@ -1,0 +1,5521 @@
+{
+  "info": {
+    "_postman_id": "513282ee-ed4e-412a-ad5e-64d77fbe396b",
+    "name": "GeoGuess API",
+    "description": "Organized Postman collection for the GeoGuess Go backend (`/api/v1`).\n\n## Setup\n1. Import **GeoGuess-API.postman_collection.json** and **GeoGuess-Local.postman_environment.json**.\n2. Select the **GeoGuess Local** environment.\n3. Run **01 Auth → Get current session (bootstrap cookies)** first.\n4. Ensure `csrfToken` is filled (test script copies the `csrf_token` cookie when possible).\n5. **Register** or **Login** for protected routes (friends, matchmaking, profile mutations).\n\n## Auth model\n- Cookie-based sessions (`access_token`, `refresh_token`, optional `guest_session`)\n- Mutations require header `X-CSRF-Token` matching the `csrf_token` cookie\n- Enable **Postman → Settings → Automatically follow redirects** / cookie jar\n\n## Saved responses\nMany examples were captured live from `http://localhost:8080` on 2026-07-13.\nDomain errors (e.g. daily challenge not seeded → 422) are preserved as real samples.\nRaw capture files also live in `backend/postman/saved-responses/`.\n\nSources: `backend/openapi/openapi.yaml`, `backend/internal/app/routes.go`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    },
+    {
+      "key": "mapId",
+      "value": "039106ee-88e5-4fdd-b2d5-61760f5833f5"
+    },
+    {
+      "key": "gameId",
+      "value": ""
+    },
+    {
+      "key": "roomCode",
+      "value": "T5V8BK"
+    },
+    {
+      "key": "userId",
+      "value": "019f5c16-055e-72ed-a0ba-ec7be0a318d1"
+    },
+    {
+      "key": "requestId",
+      "value": ""
+    },
+    {
+      "key": "challengeId",
+      "value": ""
+    },
+    {
+      "key": "roundId",
+      "value": ""
+    },
+    {
+      "key": "missionId",
+      "value": "b2053a37-731a-4421-8bb0-17e6738b1c65"
+    },
+    {
+      "key": "fileId",
+      "value": ""
+    },
+    {
+      "key": "locationId",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": "player@example.com"
+    },
+    {
+      "key": "password",
+      "value": "correct horse battery staple"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Health",
+      "description": "Liveness, readiness, metrics",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness probe."
+          },
+          "response": [
+            {
+              "id": "f9475e3f-10f6-468e-8115-540a9bbaf808",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"ok\",\n  \"version\": \"0.1.0\"\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/health",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "health"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ready",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "description": "Readiness (postgres + redis)."
+          },
+          "response": [
+            {
+              "id": "9b6983d1-1ece-4a7d-a8b4-2a10ce447d4c",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"ready\",\n  \"checks\": {\n    \"postgres\": \"ok\",\n    \"redis\": \"ok\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/ready",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "ready"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Metrics (requires metrics token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Prometheus metrics. Protected by MetricsAuthToken."
+          },
+          "response": [
+            {
+              "id": "afe38bcd-b530-4082-a062-e6c71e579a83",
+              "name": "401 Error",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/metrics",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "metrics"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 Auth",
+      "description": "Cookie session auth, CSRF mutations, OAuth",
+      "item": [
+        {
+          "name": "Get current session (bootstrap cookies)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns guest/user/anonymous session. Bootstraps csrf_token + guest cookies."
+          },
+          "response": [
+            {
+              "id": "4689db35-7454-4bbc-9635-276d830ead2f",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"kind\": \"guest\",\n  \"authenticated\": false,\n  \"guest\": {\n    \"id\": \"991b59078610fa065b41fa1f3fd7c25cb236817f4024aef68dde3dbc694fadea\",\n    \"display_name\": \"Guest\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "me"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "e19ce157-4779-4f2a-b984-e3e486d04430",
+              "name": "200 User session",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"kind\": \"user\",\n  \"authenticated\": true,\n  \"user\": {\n    \"id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n    \"email\": \"postman.probe.1060715391.example@example.com\",\n    \"display_name\": \"PostmanProbe\",\n    \"role\": \"user\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "me"
+                  ]
+                }
+              }
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sc = pm.response.headers.get('Set-Cookie') || '';",
+                  "const m = /csrf_token=([^;]+)/.exec(sc);",
+                  "if (m) { pm.collectionVariables.set('csrfToken', decodeURIComponent(m[1])); }",
+                  "try {",
+                  "  const jar = pm.cookies.jar();",
+                  "  const base = pm.collectionVariables.get('baseUrl') || pm.environment.get('baseUrl');",
+                  "  jar.get(base, 'csrf_token', function (err, value) {",
+                  "    if (!err && value) { pm.collectionVariables.set('csrfToken', value); }",
+                  "  });",
+                  "} catch (e) {}",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.user && json.user.id) pm.collectionVariables.set('userId', json.user.id);",
+                  "  if (json.kind === 'user' && json.user) pm.collectionVariables.set('userId', json.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Create account + set auth cookies. Requires X-CSRF-Token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"display_name\": \"PostmanProbe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "756d7458-b18f-437b-9e26-c48ce6072a8b",
+              "name": "201 Created",
+              "status": "201",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"user\": {\n    \"id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n    \"email\": \"postman.probe.1060715391.example@example.com\",\n    \"display_name\": \"PostmanProbe\",\n    \"role\": \"user\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "register"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"display_name\": \"PostmanProbe\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.user && json.user.id) pm.collectionVariables.set('userId', json.user.id);",
+                  "  if (json.user && json.user.email) pm.collectionVariables.set('email', json.user.email);",
+                  "}",
+                  "const sc = pm.response.headers.get('Set-Cookie') || '';",
+                  "const m = /csrf_token=([^;]+)/.exec(sc);",
+                  "if (m) pm.collectionVariables.set('csrfToken', decodeURIComponent(m[1]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "6f410986-0cb9-4a29-bd6d-6569ce93967d",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"user\": {\n    \"id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n    \"email\": \"postman.probe.1060715391.example@example.com\",\n    \"display_name\": \"PostmanProbe\",\n    \"role\": \"user\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.user && json.user.id) pm.collectionVariables.set('userId', json.user.id);",
+                  "  if (json.user && json.user.email) pm.collectionVariables.set('email', json.user.email);",
+                  "}",
+                  "const sc = pm.response.headers.get('Set-Cookie') || '';",
+                  "const m = /csrf_token=([^;]+)/.exec(sc);",
+                  "if (m) pm.collectionVariables.set('csrfToken', decodeURIComponent(m[1]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "ee91a351-c9cb-4d35-a0af-baa1e782229b",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"user\": {\n    \"id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n    \"email\": \"postman.probe.1060715391.example@example.com\",\n    \"display_name\": \"PostmanProbe\",\n    \"role\": \"user\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/refresh",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "9c8069ee-5b99-4a79-9f9d-047e1de22b66",
+              "name": "204 No Content",
+              "status": "204",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/logout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forgot password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "9a6434e9-1c6c-4164-aedb-0d0bf3e8af33",
+              "name": "500 internal_error",
+              "status": "500",
+              "code": 500,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"internal_error\",\n    \"message\": \"An unexpected error occurred.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000041\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/forgot-password",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "forgot-password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"123456\",\n  \"new_password\": \"{{password}}\",\n  \"confirm_password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "f6e9eeaf-8919-4014-ad21-3e87a5051676",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"ok\": true\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/reset-password",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "reset-password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"123456\",\n  \"new_password\": \"{{password}}\",\n  \"confirm_password\": \"{{password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "d7c6bf30-c996-41e9-b1fb-34ac7bca7dfc",
+              "name": "400 Invalid OTP (example)",
+              "status": "400",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"invalid_otp\",\n    \"message\": \"Invalid or expired code.\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/reset-password",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "reset-password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"123456\",\n  \"new_password\": \"{{password}}\",\n  \"confirm_password\": \"{{password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "OAuth initiate (google)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/oauth/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "oauth",
+                "google"
+              ]
+            },
+            "description": "302 redirect to provider."
+          },
+          "response": [
+            {
+              "id": "03672795-3ff9-4ceb-a08a-4ef1c712cbf6",
+              "name": "302 Redirect (example)",
+              "status": "302",
+              "code": 302,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/oauth/google",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "oauth",
+                    "google"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "OAuth callback (google)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/oauth/google/callback?code=oauth-code&state=oauth-state",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "oauth",
+                "google",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "oauth-code"
+                },
+                {
+                  "key": "state",
+                  "value": "oauth-state"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "b6780502-e5fb-48a9-8fb2-0b76bdf36c2e",
+              "name": "302 Redirect with cookies (example)",
+              "status": "302",
+              "code": 302,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/oauth/google/callback?code=oauth-code&state=oauth-state",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "oauth",
+                    "google",
+                    "callback"
+                  ],
+                  "query": [
+                    {
+                      "key": "code",
+                      "value": "oauth-code"
+                    },
+                    {
+                      "key": "state",
+                      "value": "oauth-state"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Profile",
+      "description": "",
+      "item": [
+        {
+          "name": "Get current profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "profile"
+              ]
+            },
+            "description": "Registered user profile + stats."
+          },
+          "response": [
+            {
+              "id": "6e158716-3f4e-43e5-a984-3ea65c43bd92",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"profile\": {\n    \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n    \"email\": \"postman.probe.1060715391.example@example.com\",\n    \"display_name\": \"PostmanProbe\",\n    \"locale\": \"en\",\n    \"created_at\": \"2026-07-13T15:26:14.823962Z\",\n    \"updated_at\": \"2026-07-13T15:26:14.823962Z\"\n  },\n  \"stats\": {\n    \"games_played\": 0,\n    \"total_score\": 0,\n    \"average_score\": 0,\n    \"best_score\": 0\n  },\n  \"progress\": {\n    \"recent_games\": [],\n    \"page\": {\n      \"limit\": 20\n    }\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "profile"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "22abbfcc-ce9a-4941-a675-bd82c1bdafca",
+              "name": "401 unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000034\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "profile"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "profile"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"display_name\": \"PostmanProbe\",\n  \"locale\": \"en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "c78e80f3-b289-4467-81e4-093231ae0e42",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"profile\": {\n    \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n    \"email\": \"postman.probe.1060715391.example@example.com\",\n    \"display_name\": \"PostmanProbe\",\n    \"locale\": \"en\",\n    \"created_at\": \"2026-07-13T15:26:14.823962Z\",\n    \"updated_at\": \"2026-07-13T15:26:14.823962Z\"\n  },\n  \"stats\": {\n    \"games_played\": 0,\n    \"total_score\": 0,\n    \"average_score\": 0,\n    \"best_score\": 0\n  },\n  \"progress\": {\n    \"recent_games\": [],\n    \"page\": {\n      \"limit\": 20\n    }\n  }\n}",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"display_name\": \"PostmanProbe\",\n  \"locale\": \"en\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get public user stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "stats"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "f62fcb10-7a21-41a0-b48a-45f093bc2dc7",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"profile\": {\n    \"user_id\": \"{{userId}}\",\n    \"display_name\": \"PostmanProbe\"\n  },\n  \"stats\": {\n    \"games_played\": 0,\n    \"total_score\": 0,\n    \"average_score\": 0,\n    \"best_score\": 0\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{userId}}/stats",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    "{{userId}}",
+                    "stats"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get user game history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/games?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "games"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "fee401a1-6759-4006-bf67-d1ceedc4930c",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": [],\n  \"page\": {\n    \"limit\": 20\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{userId}}/games?limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    "{{userId}}",
+                    "games"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Uploads & Files",
+      "description": "",
+      "item": [
+        {
+          "name": "Create upload (presign)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uploads"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"avatar\",\n  \"content_type\": \"image/png\",\n  \"byte_size\": 1024,\n  \"filename\": \"avatar.png\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "bfa8a082-95aa-4879-92f3-52356d762969",
+              "name": "201 Created (example)",
+              "status": "201",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"upload\": {\n    \"id\": \"file-id\",\n    \"upload_url\": \"https://r2.example/presigned\",\n    \"headers\": {}\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/uploads",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "uploads"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"purpose\": \"avatar\",\n  \"content_type\": \"image/png\",\n  \"byte_size\": 1024,\n  \"filename\": \"avatar.png\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/uploads/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uploads",
+                "complete"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"file_id\": \"{{fileId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "b6122a61-4ab8-4652-ad08-cc2835688677",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"file\": {\n    \"id\": \"{{fileId}}\",\n    \"status\": \"ready\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/uploads/complete",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "uploads",
+                    "complete"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"file_id\": \"{{fileId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get signed file URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/files/{{fileId}}/signed-url",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "files",
+                "{{fileId}}",
+                "signed-url"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "4cb2004d-2fbf-4f20-9042-5bd6f743154d",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"url\": \"https://r2.example/signed\",\n  \"expires_at\": \"2026-07-13T16:00:00Z\"\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/files/{{fileId}}/signed-url",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "files",
+                    "{{fileId}}",
+                    "signed-url"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Maps",
+      "description": "",
+      "item": [
+        {
+          "name": "List maps",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/maps?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "maps"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "6b7c9394-f9d5-4818-bb5b-7288137d539e",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"039106ee-88e5-4fdd-b2d5-61760f5833f5\",\n      \"slug\": \"solo-game-8e9cb615-e253-442d-bfb6-677db529f522\",\n      \"name\": \"Solo Game 8e9cb615-e253-442d-bfb6-677db529f522\",\n      \"visibility\": \"public\",\n      \"access_tier\": \"free\",\n      \"difficulty\": \"mixed\",\n      \"status\": \"active\",\n      \"created_at\": \"2026-07-11T12:21:02.373115Z\",\n      \"updated_at\": \"2026-07-11T12:21:02.373115Z\"\n    },\n    {\n      \"id\": \"0e5bf33a-3edd-4755-9645-65a640f58c1a\",\n      \"slug\": \"solo-game-6157ff97-0f90-4f58-aa2d-f09b521c3d12\",\n      \"name\": \"Solo Game 6157ff97-0f90-4f58-aa2d-f09b521c3d12\",\n      \"visibility\": \"public\",\n      \"access_tier\": \"free\",\n      \"difficulty\": \"mixed\",\n      \"status\": \"active\",\n      \"created_at\": \"2026-07-11T12:20:56.629683Z\",\n      \"updated_at\": \"2026-07-11T12:20:56.629683Z\"\n    },\n    {\n      \"id\": \"bb33a2ca-5dae-4809-b3ee-650d3f2cd834\",\n      \"slug\": \"solo-game-a6ba0288-c04b-4fa4-8c2f-8eeffc340e51\",\n      \"name\": \"Solo Game a6ba0288-c04b-4fa4-8c2f-8eeffc340e51\",\n      \"visibility\": \"public\",\n      \"access_tier\": \"free\",\n      \"difficulty\": \"mixed\",\n      \"status\": \"active\",\n      \"created_at\": \"2026-07-11T12:20:51.296918Z\",\n      \"updated_at\": \"2026-07-11T12:20:51.296918Z\"\n    },\n    {\n      \"id\": \"e185a643-1788-4034-8cbc-ca74a3510294\",\n      \"slug\": \"solo-game-2d93dfd4-6ccb-491c-85aa-bdcbedc7f969\",\n      \"name\": \"Solo Game 2d93dfd4-6ccb-491c-85aa-bdcbedc7f969\",\n      \"visibility\": \"public\",\n      \"access_tier\": \"free\",\n      \"difficulty\": \"mixed\",\n      \"status\": \"active\",\n      \"created_at\": \"2026-07-11T12:20:47.153125Z\",\n      \"updated_at\": \"2026-07-11T12:20:47.153125Z\"\n    },\n    {\n      \"id\": \"3d988531-8243-49da-8425-f5472bb4e954\",\n      \"slug\": \"ranked-test-3d988531\",\n      \"name\": \"Ranked Test Map\",\n      \"visibility\": \"public\",\n      \"access_tier\": \"free\",\n      \"difficulty\": \"mixed\",\n      \"status\": \"active\",\n      \"created_at\": \"2026-07-11T12:20:44.557501Z\",\n      \"updated_at\": \"2026-07-11T12:20:44.557501Z\"\n    }\n  ],\n  \"page\": {\n    \"limit\": 5,\n    \"next_cursor\": \"eyJjcmVhdGVkX2F0IjoiMjAyNi0wNy0xMVQxMjoyMDo0NC41NTc1MDFaIiwiaWQiOiIzZDk4ODUzMS04MjQzLTQ5ZGEtODQyNS1mNTQ3MmJiNGU5NTQifQ==\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/maps?limit=5",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "maps"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "5"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.data && json.data[0] && json.data[0].id) pm.collectionVariables.set('mapId', json.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get map",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/maps/{{mapId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "maps",
+                "{{mapId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "57e2251c-b129-4936-a436-ad4d9398707a",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"map\": {\n    \"id\": \"039106ee-88e5-4fdd-b2d5-61760f5833f5\",\n    \"slug\": \"solo-game-8e9cb615-e253-442d-bfb6-677db529f522\",\n    \"name\": \"Solo Game 8e9cb615-e253-442d-bfb6-677db529f522\",\n    \"visibility\": \"public\",\n    \"access_tier\": \"free\",\n    \"difficulty\": \"mixed\",\n    \"status\": \"active\",\n    \"created_at\": \"2026-07-11T12:21:02.373115Z\",\n    \"updated_at\": \"2026-07-11T12:21:02.373115Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/maps/{{mapId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "maps",
+                    "{{mapId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Locations",
+      "description": "",
+      "item": [
+        {
+          "name": "Get location media",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/locations/{{locationId}}/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "{{locationId}}",
+                "media"
+              ]
+            },
+            "description": "Media metadata for a location (no exact coords pre-guess)."
+          },
+          "response": [
+            {
+              "id": "fddffa52-ff7a-47d7-a735-42fe08764533",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"media\": {\n    \"type\": \"street_view\",\n    \"url\": \"https://example.com/pano.jpg\",\n    \"attribution\": null\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/locations/{{locationId}}/media",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "locations",
+                    "{{locationId}}",
+                    "media"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "3509ffd8-f575-4db2-9e2e-dd4f6c27bd89",
+              "name": "404 Not found (example)",
+              "status": "404",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"The requested resource was not found.\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/locations/{{locationId}}/media",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "locations",
+                    "{{locationId}}",
+                    "media"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Games (Solo)",
+      "description": "",
+      "item": [
+        {
+          "name": "Create game",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games"
+              ]
+            },
+            "description": "Create solo game. Live capture may be 422 if map lacks playable locations.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"solo\",\n  \"map_id\": \"{{mapId}}\",\n  \"round_count\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "bb1e92eb-49fe-4bde-ae6e-7ca372ec5473",
+              "name": "422 unprocessable_entity",
+              "status": "422",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unprocessable_entity\",\n    \"message\": \"The request cannot be processed in the current state.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000045\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mode\": \"solo\",\n  \"map_id\": \"{{mapId}}\",\n  \"round_count\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "2f404021-1e14-4064-bfa0-2a5b5e4c148e",
+              "name": "201 Created (example)",
+              "status": "201",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"game\": {\n    \"id\": \"game-uuid\",\n    \"mode\": \"solo\",\n    \"status\": \"ready\",\n    \"map_id\": \"{{mapId}}\",\n    \"round_count\": 5,\n    \"scoring_version\": 1,\n    \"total_score\": 0\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mode\": \"solo\",\n  \"map_id\": \"{{mapId}}\",\n  \"round_count\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get game",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "f3e28291-a6b4-4628-805d-38ebe9f8c80d",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"game\": {\n    \"id\": \"{{gameId}}\",\n    \"mode\": \"solo\",\n    \"status\": \"in_progress\",\n    \"map_id\": \"{{mapId}}\",\n    \"round_count\": 5,\n    \"scoring_version\": 1,\n    \"current_round_number\": 1,\n    \"total_score\": 0\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games/{{gameId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games",
+                    "{{gameId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Start game",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "start"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "907d501e-0c23-4c5b-84f6-4e8ed26e16ad",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"game\": {\n    \"id\": \"{{gameId}}\",\n    \"status\": \"in_progress\",\n    \"current_round_number\": 1\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games/{{gameId}}/start",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games",
+                    "{{gameId}}",
+                    "start"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current round",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/rounds/current",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "rounds",
+                "current"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "001f9f05-e36f-493a-a654-727a89c0e082",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"round\": {\n    \"id\": \"{{roundId}}\",\n    \"round_number\": 1,\n    \"status\": \"active\",\n    \"media\": {\n      \"type\": \"street_view\",\n      \"url\": \"https://example.com/pano.jpg\",\n      \"attribution\": null\n    }\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games/{{gameId}}/rounds/current",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games",
+                    "{{gameId}}",
+                    "rounds",
+                    "current"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit guess",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/guesses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "rounds",
+                "{{roundId}}",
+                "guesses"
+              ]
+            },
+            "description": "Optional header Idempotency-Key recommended.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "8ec18bfd-21a8-41a1-8797-4b672ec6b2a0",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"guess\": {\n    \"score\": 4200,\n    \"distance_meters\": 1200\n  },\n  \"actual_location\": {\n    \"latitude\": 40.71,\n    \"longitude\": -74\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/guesses",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games",
+                    "{{gameId}}",
+                    "rounds",
+                    "{{roundId}}",
+                    "guesses"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get game results",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "results"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "54639e2b-6153-498b-a64c-c5f5465578c0",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"game\": {\n    \"id\": \"{{gameId}}\",\n    \"status\": \"completed\",\n    \"total_score\": 12000\n  },\n  \"players\": [],\n  \"rounds\": []\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games/{{gameId}}/results",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games",
+                    "{{gameId}}",
+                    "results"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 Challenges",
+      "description": "",
+      "item": [
+        {
+          "name": "Get daily challenge",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "daily"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "487d8479-358c-4901-88f7-26b234aee374",
+              "name": "422 unprocessable_entity",
+              "status": "422",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unprocessable_entity\",\n    \"message\": \"The request cannot be processed in the current state.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000029\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/daily",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "daily"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Start daily attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/daily/attempts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "daily",
+                "attempts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "e247d1be-7603-4890-b87c-39b91d4d4fa2",
+              "name": "422 unprocessable_entity",
+              "status": "422",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unprocessable_entity\",\n    \"message\": \"The request cannot be processed in the current state.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000055\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/daily/attempts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "daily",
+                    "attempts"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create shared challenge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/shared",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "shared"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"map_id\": \"{{mapId}}\",\n  \"round_count\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "37570d44-4250-4e25-b4a4-675a8501a16e",
+              "name": "422 unprocessable_entity",
+              "status": "422",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unprocessable_entity\",\n    \"message\": \"The request cannot be processed in the current state.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000056\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/shared",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "shared"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"map_id\": \"{{mapId}}\",\n  \"round_count\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get shared challenge by code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/shared/ABCDEF",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "shared",
+                "ABCDEF"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "bc253535-4754-481b-b291-288535a59133",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"challenge\": {\n    \"id\": \"{{challengeId}}\",\n    \"kind\": \"shared\",\n    \"code\": \"ABCDEF\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/shared/ABCDEF",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "shared",
+                    "ABCDEF"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Start challenge attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/{{challengeId}}/attempts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "{{challengeId}}",
+                "attempts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "bf0691eb-2cb8-4d01-bebe-fc483004d448",
+              "name": "201 Created (example)",
+              "status": "201",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"attempt\": {\n    \"id\": \"attempt-id\",\n    \"challenge_id\": \"{{challengeId}}\",\n    \"game_id\": \"{{gameId}}\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/{{challengeId}}/attempts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "{{challengeId}}",
+                    "attempts"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get challenge results",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/{{challengeId}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "{{challengeId}}",
+                "results"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "d3913f6e-6e9c-48fd-96f6-b36e49162876",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"challenge\": {},\n  \"attempt\": {},\n  \"visible\": true,\n  \"total_score\": 10000,\n  \"round_results\": []\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/{{challengeId}}/results",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "{{challengeId}}",
+                    "results"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get challenge leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/challenges/{{challengeId}}/leaderboard?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "challenges",
+                "{{challengeId}}",
+                "leaderboard"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "72c18563-0c1c-43e3-bca4-415453b0c242",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"challenge\": {},\n  \"entries\": [],\n  \"page\": {\n    \"limit\": 20\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/challenges/{{challengeId}}/leaderboard?limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "challenges",
+                    "{{challengeId}}",
+                    "leaderboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 Missions & Streaks",
+      "description": "",
+      "item": [
+        {
+          "name": "List missions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/missions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "missions"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "d098fefa-9779-48db-ac41-e3d719e3621f",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"missions\": [\n    {\n      \"id\": \"b2053a37-731a-4421-8bb0-17e6738b1c65\",\n      \"code\": \"daily_completion\",\n      \"title_key\": \"Challenges.missions.dailyCompletion.title\",\n      \"description_key\": \"Challenges.missions.dailyCompletion.description\",\n      \"mission_type\": \"daily_completion\",\n      \"current_value\": 0,\n      \"target_value\": 1,\n      \"status\": \"not_started\",\n      \"active_ends_at\": \"2026-07-14T15:25:37.064549Z\"\n    },\n    {\n      \"id\": \"a9e07023-4c48-492e-8fe6-283ec82c79f0\",\n      \"code\": \"shared_participation\",\n      \"title_key\": \"Challenges.missions.sharedParticipation.title\",\n      \"description_key\": \"Challenges.missions.sharedParticipation.description\",\n      \"mission_type\": \"shared_participation\",\n      \"current_value\": 0,\n      \"target_value\": 1,\n      \"status\": \"not_started\",\n      \"active_ends_at\": \"2026-07-14T15:25:37.064549Z\"\n    },\n    {\n      \"id\": \"4f4aad4e-f964-4898-9274-efa69cb87a5c\",\n      \"code\": \"score_threshold\",\n      \"title_key\": \"Challenges.missions.scoreThreshold.title\",\n      \"description_key\": \"Challenges.missions.scoreThreshold.description\",\n      \"mission_type\": \"score_threshold\",\n      \"current_value\": 0,\n      \"target_value\": 15000,\n      \"status\": \"not_started\",\n      \"active_ends_at\": \"2026-07-14T15:25:37.064549Z\"\n    },\n    {\n      \"id\": \"2e01240c-2783-49f4-973d-1d660aeeaffc\",\n      \"code\": \"leaderboard_milestone\",\n      \"title_key\": \"Challenges.missions.leaderboardMilestone.title\",\n      \"description_key\": \"Challenges.missions.leaderboardMilestone.description\",\n      \"mission_type\": \"leaderboard_milestone\",\n      \"current_value\": 0,\n      \"target_value\": 10,\n      \"status\": \"not_started\",\n      \"active_ends_at\": \"2026-07-14T15:25:37.064549Z\"\n    },\n    {\n      \"id\": \"a4481642-40ba-4cd1-83f0-a7751143edd0\",\n      \"code\": \"streak_milestone\",\n      \"title_key\": \"Challenges.missions.streakMilestone.title\",\n      \"description_key\": \"Challenges.missions.streakMilestone.description\",\n      \"mission_type\": \"streak_milestone\",\n      \"current_value\": 0,\n      \"target_value\": 3,\n      \"status\": \"not_started\",\n      \"active_ends_at\": \"2026-07-14T15:25:37.064549Z\"\n    },\n    {\n      \"id\": \"7cfe4f78-1e77-4cf4-a590-2aac31dab30c\",\n      \"code\": \"round_accuracy\",\n      \"title_key\": \"Challenges.missions.roundAccuracy.title\",\n      \"description_key\": \"Challenges.missions.roundAccuracy.description\",\n      \"mission_type\": \"round_accuracy\",\n      \"current_value\": 0,\n      \"target_value\": 1,\n      \"status\": \"not_started\",\n      \"active_ends_at\": \"2026-07-14T15:25:37.064549Z\"\n    }\n  ]\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/missions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "missions"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Claim mission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/missions/{{missionId}}/claim",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "missions",
+                "{{missionId}}",
+                "claim"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "18cb44e6-d9d5-4807-9beb-4dca88bf7302",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"mission\": {\n    \"id\": \"{{missionId}}\",\n    \"status\": \"claimed\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/missions/{{missionId}}/claim",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "missions",
+                    "{{missionId}}",
+                    "claim"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "c135b853-7b32-4ab9-8639-17db54697ca1",
+              "name": "422 Not claimable (example)",
+              "status": "422",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unprocessable_entity\",\n    \"message\": \"The request cannot be processed in the current state.\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/missions/{{missionId}}/claim",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "missions",
+                    "{{missionId}}",
+                    "claim"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get daily streak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/streaks/daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "streaks",
+                "daily"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "f727baeb-3874-49cf-9e0f-e3711092ea77",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"current_count\": 0,\n  \"best_count\": 0,\n  \"status\": \"inactive\",\n  \"protection_state\": \"none\",\n  \"guest_limited\": true\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/streaks/daily",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "streaks",
+                    "daily"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 Rooms",
+      "description": "",
+      "item": [
+        {
+          "name": "Create room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"map_id\": \"{{mapId}}\",\n  \"visibility\": \"private\",\n  \"round_count\": 5,\n  \"max_players\": 8,\n  \"display_name\": \"PostmanHost\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "0378ba31-98c1-48ca-b839-5329dc6f58e8",
+              "name": "201 Created",
+              "status": "201",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"room\": {\n    \"id\": \"89e712d6-cda0-46cb-a37f-caf4712f1e55\",\n    \"code\": \"T5V8BK\",\n    \"visibility\": \"private\",\n    \"status\": \"lobby\",\n    \"game_id\": \"efc6155f-8923-49df-b63e-f2dfb46e9c65\",\n    \"host_player_id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n    \"current_player_id\": null,\n    \"version\": 1,\n    \"max_players\": 8,\n    \"round_count\": 5,\n    \"timer_seconds\": null,\n    \"expires_at\": \"2026-07-14T15:26:20.679951854Z\",\n    \"players\": [\n      {\n        \"id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n        \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n        \"display_name\": \"PostmanHost\",\n        \"role\": \"host\",\n        \"membership_status\": \"joined\",\n        \"presence_status\": \"connected\",\n        \"is_ready\": false,\n        \"total_score\": 0,\n        \"joined_at\": \"2026-07-13T15:26:22.657048Z\",\n        \"left_at\": null\n      }\n    ],\n    \"ready_player_ids\": []\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"map_id\": \"{{mapId}}\",\n  \"visibility\": \"private\",\n  \"round_count\": 5,\n  \"max_players\": 8,\n  \"display_name\": \"PostmanHost\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.room && json.room.code) pm.collectionVariables.set('roomCode', json.room.code);",
+                  "  if (json.room && json.room.game_id) pm.collectionVariables.set('gameId', json.room.game_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Join room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/join",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "join"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{roomCode}}\",\n  \"display_name\": \"GuestPlayer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "92c50aab-82d4-4f90-afc0-0507c68b60ca",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"room\": {\n    \"id\": \"89e712d6-cda0-46cb-a37f-caf4712f1e55\",\n    \"code\": \"T5V8BK\",\n    \"visibility\": \"private\",\n    \"status\": \"lobby\",\n    \"game_id\": \"efc6155f-8923-49df-b63e-f2dfb46e9c65\",\n    \"host_player_id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n    \"current_player_id\": null,\n    \"version\": 1,\n    \"max_players\": 8,\n    \"round_count\": 5,\n    \"timer_seconds\": null,\n    \"expires_at\": \"2026-07-14T15:26:20.679951854Z\",\n    \"players\": [\n      {\n        \"id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n        \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n        \"display_name\": \"PostmanHost\",\n        \"role\": \"host\",\n        \"membership_status\": \"joined\",\n        \"presence_status\": \"connected\",\n        \"is_ready\": false,\n        \"total_score\": 0,\n        \"joined_at\": \"2026-07-13T15:26:22.657048Z\",\n        \"left_at\": null\n      }\n    ],\n    \"ready_player_ids\": []\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms/join",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms",
+                    "join"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"{{roomCode}}\",\n  \"display_name\": \"GuestPlayer\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get room",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "10c1be79-b377-4cec-a94a-7cfc92b02396",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"room\": {\n    \"id\": \"89e712d6-cda0-46cb-a37f-caf4712f1e55\",\n    \"code\": \"T5V8BK\",\n    \"visibility\": \"private\",\n    \"status\": \"lobby\",\n    \"game_id\": \"efc6155f-8923-49df-b63e-f2dfb46e9c65\",\n    \"host_player_id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n    \"current_player_id\": null,\n    \"version\": 1,\n    \"max_players\": 8,\n    \"round_count\": 5,\n    \"timer_seconds\": null,\n    \"expires_at\": \"2026-07-14T15:26:20.679951854Z\",\n    \"players\": [\n      {\n        \"id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n        \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n        \"display_name\": \"PostmanHost\",\n        \"role\": \"host\",\n        \"membership_status\": \"joined\",\n        \"presence_status\": \"connected\",\n        \"is_ready\": false,\n        \"total_score\": 0,\n        \"joined_at\": \"2026-07-13T15:26:22.657048Z\",\n        \"left_at\": null\n      }\n    ],\n    \"ready_player_ids\": []\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms/{{roomCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms",
+                    "{{roomCode}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update room settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}",
+                "settings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"round_count\": 5,\n  \"max_players\": 8\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "21f8195d-6e47-4c24-959f-b5ce86e370bf",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"room\": {\n    \"id\": \"89e712d6-cda0-46cb-a37f-caf4712f1e55\",\n    \"code\": \"T5V8BK\",\n    \"visibility\": \"private\",\n    \"status\": \"lobby\",\n    \"game_id\": \"efc6155f-8923-49df-b63e-f2dfb46e9c65\",\n    \"host_player_id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n    \"current_player_id\": null,\n    \"version\": 1,\n    \"max_players\": 8,\n    \"round_count\": 5,\n    \"timer_seconds\": null,\n    \"expires_at\": \"2026-07-14T15:26:20.679951854Z\",\n    \"players\": [\n      {\n        \"id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n        \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n        \"display_name\": \"PostmanHost\",\n        \"role\": \"host\",\n        \"membership_status\": \"joined\",\n        \"presence_status\": \"connected\",\n        \"is_ready\": false,\n        \"total_score\": 0,\n        \"joined_at\": \"2026-07-13T15:26:22.657048Z\",\n        \"left_at\": null\n      }\n    ],\n    \"ready_player_ids\": []\n  }\n}",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms/{{roomCode}}/settings",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms",
+                    "{{roomCode}}",
+                    "settings"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"round_count\": 5,\n  \"max_players\": 8\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Start room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}",
+                "start"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "260db1ae-836f-4e3c-b342-14b09c1e8a5c",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"room\": {\n    \"code\": \"{{roomCode}}\",\n    \"status\": \"in_progress\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms/{{roomCode}}/start",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms",
+                    "{{roomCode}}",
+                    "start"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set ready",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}",
+                "ready"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ready\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "5a7220c7-05ae-468f-9730-d2718c221be6",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"room\": {\n    \"id\": \"89e712d6-cda0-46cb-a37f-caf4712f1e55\",\n    \"code\": \"T5V8BK\",\n    \"visibility\": \"private\",\n    \"status\": \"lobby\",\n    \"game_id\": \"efc6155f-8923-49df-b63e-f2dfb46e9c65\",\n    \"host_player_id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n    \"current_player_id\": null,\n    \"version\": 1,\n    \"max_players\": 8,\n    \"round_count\": 5,\n    \"timer_seconds\": null,\n    \"expires_at\": \"2026-07-14T15:26:20.679951854Z\",\n    \"players\": [\n      {\n        \"id\": \"c150a6b7-a67f-4d38-acc6-2b06addbc16e\",\n        \"user_id\": \"019f5c16-055e-72ed-a0ba-ec7be0a318d1\",\n        \"display_name\": \"PostmanHost\",\n        \"role\": \"host\",\n        \"membership_status\": \"joined\",\n        \"presence_status\": \"connected\",\n        \"is_ready\": false,\n        \"total_score\": 0,\n        \"joined_at\": \"2026-07-13T15:26:22.657048Z\",\n        \"left_at\": null\n      }\n    ],\n    \"ready_player_ids\": []\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms/{{roomCode}}/ready",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms",
+                    "{{roomCode}}",
+                    "ready"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ready\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove player",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}/players/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}",
+                "players",
+                "{{userId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "c004b56d-96da-470c-af4b-67a6708eba49",
+              "name": "204 No Content (example)",
+              "status": "204",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rooms/{{roomCode}}/players/{{userId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rooms",
+                    "{{roomCode}}",
+                    "players",
+                    "{{userId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 Matchmaking",
+      "description": "",
+      "item": [
+        {
+          "name": "Join queue",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matchmaking/queue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matchmaking",
+                "queue"
+              ]
+            },
+            "description": "Registered users only. Confirm request body against OpenAPI / matchmaking DTO.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"map_id\": \"{{mapId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "b6aa4bfb-8b7d-4789-8c18-1a6e5d61528e",
+              "name": "400 invalid_json",
+              "status": "400",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"invalid_json\",\n    \"message\": \"The request body is not valid JSON.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000052\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"map_id\": \"{{mapId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "286a2044-2d49-4c1e-886e-a2bdca84f5ab",
+              "name": "200 Queued (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"queued\",\n  \"queue\": {\n    \"map_id\": \"{{mapId}}\",\n    \"joined_at\": \"2026-07-13T15:00:00Z\"\n  },\n  \"match\": null\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"map_id\": \"{{mapId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leave queue",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matchmaking/queue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matchmaking",
+                "queue"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "16907699-fb1b-4db8-a384-e12059fa6d96",
+              "name": "204 No Content",
+              "status": "204",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matchmaking/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matchmaking",
+                "status"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "d888cc1b-7483-4fa8-86be-5ed73639423e",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"not_queued\",\n  \"queue\": null,\n  \"match\": null\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "status"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11 Friends",
+      "description": "All friends routes require registered auth",
+      "item": [
+        {
+          "name": "Send friend request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "requests"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{userId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "e83d065d-df44-42f8-97f3-f18bef0a47d1",
+              "name": "201 Created (example)",
+              "status": "201",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"request\": {\n    \"id\": \"{{requestId}}\",\n    \"status\": \"pending\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/requests",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "requests"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"{{userId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "b6014ee0-e721-4139-baaf-e85c9a4fbfc8",
+              "name": "401 Unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/requests",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "requests"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"{{userId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "List incoming requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/requests/incoming",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "requests",
+                "incoming"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "285c4391-ee23-4a31-bbe8-0b603b2ca6a4",
+              "name": "401 unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000047\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/requests/incoming",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "requests",
+                    "incoming"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "List outgoing requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/requests/outgoing",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "requests",
+                "outgoing"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "1952fd18-2237-4475-a746-276797cc821f",
+              "name": "401 unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000048\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/requests/outgoing",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "requests",
+                    "outgoing"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Accept request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/requests/{{requestId}}/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "requests",
+                "{{requestId}}",
+                "accept"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "772ce1f0-083b-4f9b-9741-9594edbcaece",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"request\": {\n    \"id\": \"{{requestId}}\",\n    \"status\": \"accepted\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/requests/{{requestId}}/accept",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "requests",
+                    "{{requestId}}",
+                    "accept"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Decline request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/requests/{{requestId}}/decline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "requests",
+                "{{requestId}}",
+                "decline"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "e7f788eb-e928-45df-9d1b-775924a6764d",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"request\": {\n    \"id\": \"{{requestId}}\",\n    \"status\": \"declined\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/requests/{{requestId}}/decline",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "requests",
+                    "{{requestId}}",
+                    "decline"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "List friends",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "da031adb-86ad-44a8-941d-dd83efd747a8",
+              "name": "401 unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000046\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove friend",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "{{userId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "f00012c3-591e-461c-88e4-0705897bca90",
+              "name": "204 No Content (example)",
+              "status": "204",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/{{userId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "{{userId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Block user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/{{userId}}/block",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "{{userId}}",
+                "block"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "dfb07dc6-43c1-403f-a3b5-685c23cfbd64",
+              "name": "200 OK (example)",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"blocked\": true\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/{{userId}}/block",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "{{userId}}",
+                    "block"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unblock user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/{{userId}}/block",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "{{userId}}",
+                "block"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "ed3c56f9-4b26-46ee-8f0b-f217f21bcde6",
+              "name": "204 No Content (example)",
+              "status": "204",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/{{userId}}/block",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "{{userId}}",
+                    "block"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "List blocked users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/friends/blocked",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "friends",
+                "blocked"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "73a9a56c-e4c4-4f7e-b846-0f3850d3b4e6",
+              "name": "401 unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000049\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/friends/blocked",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "friends",
+                    "blocked"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12 Leaderboards",
+      "description": "",
+      "item": [
+        {
+          "name": "Global leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboards/global?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboards",
+                "global"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "7ec69218-1d7e-4655-99d1-f8d12afd98e4",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"rank\": 1,\n      \"user_id\": \"019f511f-57f4-72af-a608-458308550ab0\",\n      \"display_name\": \"Third a25f178d\",\n      \"score\": 3000,\n      \"games_played\": 1\n    },\n    {\n      \"rank\": 2,\n      \"user_id\": \"019f511f-383f-72a6-aebb-b645d3ec8d4a\",\n      \"display_name\": \"First 42060359\",\n      \"score\": 2000,\n      \"games_played\": 2\n    },\n    {\n      \"rank\": 3,\n      \"user_id\": \"019f511f-3d6c-73f7-a8e4-fbcc273928bf\",\n      \"display_name\": \"Second 98a34edb\",\n      \"score\": 1500,\n      \"games_played\": 1\n    }\n  ],\n  \"page\": {\n    \"limit\": 20\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/leaderboards/global?limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "leaderboards",
+                    "global"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Daily leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboards/daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboards",
+                "daily"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "b6bd7a8f-a3ae-4854-a262-69f01651289c",
+              "name": "404 not_found",
+              "status": "404",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"The requested resource was not found.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000033\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/leaderboards/daily",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "leaderboards",
+                    "daily"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Map leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboards/maps/{{mapId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboards",
+                "maps",
+                "{{mapId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "5cddd8e7-18d7-47a9-8a42-0c0ffa2d54a0",
+              "name": "200 OK",
+              "status": "200",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": [],\n  \"page\": {\n    \"limit\": 20\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/leaderboards/maps/{{mapId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "leaderboards",
+                    "maps",
+                    "{{mapId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Friends leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboards/friends",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboards",
+                "friends"
+              ]
+            },
+            "description": ""
+          },
+          "response": [
+            {
+              "id": "3fb170a4-a2bc-4ce5-b8d6-9c5ff8e030cb",
+              "name": "401 unauthorized",
+              "status": "401",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"unauthorized\",\n    \"message\": \"Authentication is required.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000050\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/leaderboards/friends",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "leaderboards",
+                    "friends"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13 Realtime",
+      "description": "",
+      "item": [
+        {
+          "name": "Room WebSocket URL (reference)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/realtime/rooms/{{roomCode}}",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "realtime",
+                "rooms",
+                "{{roomCode}}"
+              ]
+            },
+            "description": "WebSocket endpoint (NOT under /api/v1).\n\nConnect with: `ws://localhost:8080/realtime/rooms/{{roomCode}}`\nSend session cookies from auth (Postman WebSocket or wscat)."
+          },
+          "response": [
+            {
+              "id": "8a9a3d59-2c75-458e-86d9-39017e6babdc",
+              "name": "101 Switching Protocols (example)",
+              "status": "101",
+              "code": 101,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/realtime/rooms/{{roomCode}}",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "realtime",
+                    "rooms",
+                    "{{roomCode}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

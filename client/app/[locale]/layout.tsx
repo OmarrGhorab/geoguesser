@@ -29,10 +29,37 @@ export async function generateMetadata({
   const t = await getTranslations({ locale: appLocale, namespace: "Metadata" });
   const canonicalPath = `/${appLocale}`;
 
+  const title = t("title");
+  const description = t("description");
+  const brandIcon = {
+    url: "/logo-3.png",
+    type: "image/png",
+  } as const;
+
   return {
     metadataBase: siteUrl,
-    title: t("title"),
-    description: t("description"),
+    title: {
+      default: title,
+      template: `%s · ${title}`,
+    },
+    description,
+    applicationName: title,
+    authors: [{ name: title }],
+    creator: title,
+    publisher: title,
+    keywords: [
+      "WorldGuess",
+      "geography game",
+      "guess the location",
+      "street view quiz",
+      "multiplayer geography",
+      "world explorer",
+    ],
+    icons: {
+      icon: brandIcon,
+      shortcut: brandIcon,
+      apple: brandIcon,
+    },
     alternates: {
       canonical: canonicalPath,
       languages: Object.fromEntries(
@@ -45,10 +72,26 @@ export async function generateMetadata({
     openGraph: {
       type: "website",
       url: canonicalPath,
-      siteName: t("title"),
-      title: t("title"),
-      description: t("description"),
+      siteName: title,
+      title,
+      description,
       locale: appLocale === "ar" ? "ar_AR" : "en_US",
+      images: [
+        {
+          url: "/logo-3.png",
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+      images: ["/logo-3.png"],
+    },
+    robots: {
+      index: true,
+      follow: true,
     },
   };
 }

@@ -3,6 +3,7 @@ import { oauthProviderSchema } from "@/features/auth/oauth";
 import { authCookieOptions, authCookiesFromResponse } from "@/lib/api/cookies";
 import { getBackendApiUrl } from "@/lib/env";
 import { routing, type AppLocale } from "@/lib/i18n/routing";
+import { getPublicAppOrigin, publicAppUrl } from "@/lib/public-origin";
 
 type OAuthStartContext = {
   params: Promise<{ provider: string }>;
@@ -10,7 +11,7 @@ type OAuthStartContext = {
 
 function loginErrorRedirect(request: NextRequest, locale: AppLocale) {
   return NextResponse.redirect(
-    new URL(`/${locale}/login?oauth_error=1`, request.url),
+    publicAppUrl(request, `/${locale}/login?oauth_error=1`),
   );
 }
 
@@ -44,11 +45,12 @@ export async function GET(request: NextRequest, context: OAuthStartContext) {
     return loginErrorRedirect(request, locale);
   }
 
+  const publicOrigin = getPublicAppOrigin(request);
   const response = NextResponse.redirect(providerUrl);
   response.cookies.set("oauth_locale", locale, {
     httpOnly: true,
     secure:
-      request.nextUrl.protocol === "https:" ||
+      publicOrigin.startsWith("https:") ||
       process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/api/auth/oauth",
