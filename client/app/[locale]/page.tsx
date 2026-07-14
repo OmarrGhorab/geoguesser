@@ -34,7 +34,9 @@ export default async function HomePage({ params }: HomePageProps) {
       aria: {
         home: t("aria.home"),
         landingNavigation: t("aria.landingNavigation"),
-        switchLanguage: t("aria.switchLanguage"),
+        switchLanguage: t("aria.switchLanguage", {
+          locale: appLocale === "en" ? "AR" : "EN",
+        }),
         footerNavigation: t("aria.footerNavigation"),
       },
       media: {

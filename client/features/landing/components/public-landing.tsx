@@ -334,10 +334,7 @@ export function PublicLanding({
                 href="/"
                 locale={otherLocale}
                 className="landing-nav-link rounded-sm px-2 py-1 text-xs font-bold tracking-wide sm:text-sm"
-                aria-label={copy.aria.switchLanguage.replace(
-                  "{locale}",
-                  otherLocale.toUpperCase(),
-                )}
+                aria-label={copy.aria.switchLanguage}
               >
                 {localeLabel}
               </Link>
