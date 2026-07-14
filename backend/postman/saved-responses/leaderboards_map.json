@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/leaderboards/maps/039106ee-88e5-4fdd-b2d5-61760f5833f5",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"data\":[],\"page\":{\"limit\":20}}"
+}

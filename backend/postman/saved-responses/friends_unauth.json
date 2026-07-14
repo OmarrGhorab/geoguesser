@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/friends",
+  "method": "GET",
+  "status": 401,
+  "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication is required.\",\"request_id\":\"3064d208d479/AsznE3Z2xq-000059\"}}"
+}

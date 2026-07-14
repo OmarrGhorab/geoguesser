@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/auth/me",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"kind\":\"guest\",\"authenticated\":false,\"guest\":{\"id\":\"991b59078610fa065b41fa1f3fd7c25cb236817f4024aef68dde3dbc694fadea\",\"display_name\":\"Guest\"}}"
+}

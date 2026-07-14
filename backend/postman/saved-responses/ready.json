@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/ready",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"status\":\"ready\",\"checks\":{\"postgres\":\"ok\",\"redis\":\"ok\"}}"
+}

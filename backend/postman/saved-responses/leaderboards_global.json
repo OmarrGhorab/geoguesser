@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/leaderboards/global",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"data\":[{\"rank\":1,\"user_id\":\"019f511f-57f4-72af-a608-458308550ab0\",\"display_name\":\"Third a25f178d\",\"score\":3000,\"games_played\":1},{\"rank\":2,\"user_id\":\"019f511f-383f-72a6-aebb-b645d3ec8d4a\",\"display_name\":\"First 42060359\",\"score\":2000,\"games_played\":2},{\"rank\":3,\"user_id\":\"019f511f-3d6c-73f7-a8e4-fbcc273928bf\",\"display_name\":\"Second 98a34edb\",\"score\":1500,\"games_played\":1}],\"page\":{\"limit\":20}}"
+}
