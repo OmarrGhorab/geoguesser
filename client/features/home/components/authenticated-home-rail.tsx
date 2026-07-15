@@ -1,12 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Route } from "next";
 import { TrendingUp, Zap } from "lucide-react";
 import type { AuthenticatedHomeCopy } from "@/features/home/types";
+import type { AppLocale } from "@/lib/i18n/routing";
 import {
   DAILY_TODAY,
   DAILY_WEEK_DAYS,
 } from "@/features/home/layout-contract";
-import { AUTHENTICATED_ASSETS, PlayCta, RAIL_CARD } from "./shared";
+import {
+  AUTHENTICATED_ASSETS,
+  PLAY_CTA_SHADOW,
+  PLAY_GRADIENT,
+  PlayCta,
+  RAIL_CARD,
+} from "./shared";
 
 const avatarFocus = [
   "18% 45%",
@@ -46,11 +54,16 @@ function AvatarFace({
 }
 
 type AuthenticatedHomeRailProps = Readonly<{
+  locale: AppLocale;
   copy: AuthenticatedHomeCopy;
 }>;
 
 /** Right rail densified to fit the viewport without Y-scroll. */
-export function AuthenticatedHomeRail({ copy }: AuthenticatedHomeRailProps) {
+export function AuthenticatedHomeRail({
+  locale,
+  copy,
+}: AuthenticatedHomeRailProps) {
+  const dailyMissionHref = `/${locale}/daily-mission` as Route;
   return (
     <div
       data-testid="auth-home-rail"
@@ -147,12 +160,13 @@ export function AuthenticatedHomeRail({ copy }: AuthenticatedHomeRailProps) {
               13:23:44
             </p>
           </div>
-          <PlayCta
-            href="#play"
-            className="min-w-[4.5rem] shrink-0 px-4 py-1.5 text-[0.6rem]"
+          <Link
+            href={dailyMissionHref}
+            data-testid="daily-challenge-play"
+            className={`${PLAY_GRADIENT} ${PLAY_CTA_SHADOW} inline-flex min-w-[4.5rem] shrink-0 items-center justify-center rounded-full px-4 py-1.5 text-center text-[0.6rem] font-black tracking-[0.07em] text-white uppercase transition hover:brightness-110`}
           >
             {copy.daily.cta}
-          </PlayCta>
+          </Link>
         </div>
       </section>
 

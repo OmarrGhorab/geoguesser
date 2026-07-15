@@ -20,7 +20,7 @@ export function AuthenticatedHome({ locale, copy }: AuthenticatedHomeProps) {
         locale={locale}
         copy={copy}
         activeSidebarItem="home"
-        rightRail={<AuthenticatedHomeRail copy={copy} />}
+        rightRail={<AuthenticatedHomeRail locale={locale} copy={copy} />}
       >
         <AuthenticatedHomeMain copy={copy} />
       </AuthenticatedShell>

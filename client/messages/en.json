@@ -154,6 +154,24 @@
     },
     "profile": { "name": "RadiantVale123", "level": "Level 42", "credits": "2,450" }
   },
+  "DailyMission": {
+    "back": "Back",
+    "today": "TODAY",
+    "prevDay": "Previous day",
+    "nextDay": "Next day",
+    "play": "PLAY",
+    "playedToday": "122,690 have played today",
+    "cards": {
+      "locations": "Play 5 fresh locations each day",
+      "compare": "Compare your score with other players",
+      "daily": "Come back daily to keep improving"
+    },
+    "aria": {
+      "screen": "Daily mission",
+      "back": "Back to home",
+      "dayPicker": "Select mission day"
+    }
+  },
   "Auth": {
     "Common": {
       "videoAriaLabel": "Atmospheric landscape video"

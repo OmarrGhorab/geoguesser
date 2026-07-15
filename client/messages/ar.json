@@ -154,6 +154,24 @@
     },
     "profile": { "name": "RadiantVale123", "level": "المستوى 42", "credits": "2,450" }
   },
+  "DailyMission": {
+    "back": "رجوع",
+    "today": "اليوم",
+    "prevDay": "اليوم السابق",
+    "nextDay": "اليوم التالي",
+    "play": "العب",
+    "playedToday": "122,690 لعبوا اليوم",
+    "cards": {
+      "locations": "العب 5 مواقع جديدة كل يوم",
+      "compare": "قارن نتيجتك مع لاعبين آخرين",
+      "daily": "عُد يومياً لتحافظ على تقدّمك"
+    },
+    "aria": {
+      "screen": "المهمة اليومية",
+      "back": "العودة إلى الصفحة الرئيسية",
+      "dayPicker": "اختيار يوم المهمة"
+    }
+  },
   "Auth": {
     "Common": {
       "videoAriaLabel": "فيديو منظر طبيعي جوي"

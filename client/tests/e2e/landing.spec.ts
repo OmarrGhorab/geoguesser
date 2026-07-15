@@ -177,4 +177,53 @@ test.describe("public landing page", () => {
       page.getByRole("heading", { name: "التحدي اليومي" }),
     ).toBeVisible();
   });
+
+  test("daily challenge PLAY opens daily-mission screen", async ({
+    context,
+    page,
+  }) => {
+    await context.addCookies([
+      {
+        name: "access_token",
+        value: "test-session",
+        domain: "127.0.0.1",
+        path: "/",
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+
+    await page.goto("/en");
+    await page.getByTestId("daily-challenge-play").click();
+    await expect(page).toHaveURL(/\/en\/daily-mission\/?$/);
+
+    await expect(page.getByTestId("daily-mission-screen")).toBeVisible();
+    await expect(page.getByTestId("mission-today-control")).toBeVisible();
+    await expect(page.getByTestId("mission-today-control")).toContainText(
+      "TODAY",
+    );
+    await expect(page.getByTestId("mission-feature-cards")).toBeVisible();
+    await expect(page.locator("[data-mission-card]")).toHaveCount(3);
+    await expect(page.getByTestId("mission-played-today")).toContainText(
+      "have played today",
+    );
+    await expect(page.getByTestId("mission-play-cta")).toBeVisible();
+    await expect(page.getByTestId("mission-play-cta")).toHaveText(/PLAY/i);
+
+    // Design A badge must not appear
+    await expect(page.getByTestId("mission-a-badge")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /^A$/, exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /^A$/, exact: true }),
+    ).toHaveCount(0);
+
+    // Mission public assets are used (Next/Image rewrites to /_next/image?url=%2Fmission%2F…)
+    await expect(page.locator("img[src*='mission']")).toHaveCount(4);
+
+    // Back returns home
+    await page.getByRole("link", { name: "Back to home" }).click();
+    await expect(page).toHaveURL(/\/en\/?$/);
+  });
 });
