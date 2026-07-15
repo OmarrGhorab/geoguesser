@@ -101,7 +101,7 @@ test.describe("public landing page", () => {
     );
   });
 
-  test("authenticated sessions keep the signed-in home", async ({
+  test("authenticated sessions see the signed-in dashboard", async ({
     context,
     page,
   }) => {
@@ -119,8 +119,62 @@ test.describe("public landing page", () => {
     await page.goto("/en");
 
     await expect(page.getByTestId("public-landing")).toHaveCount(0);
+    await expect(page.getByTestId("auth-home-main")).toBeVisible();
+    await expect(page.getByTestId("auth-home-rail")).toBeVisible();
+
+    // Main column landmarks (home-loggedin.png)
     await expect(
-      page.getByRole("heading", { name: "WorldGuess" }),
+      page.getByRole("heading", { name: "Welcome back, Radiant!" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("img", { name: "WorldGuess home" }),
+    ).toBeVisible();
+    for (const title of [
+      "Singleplayer",
+      "Multiplayer",
+      "Party",
+      "Quiz",
+    ]) {
+      await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    }
+    await expect(
+      page.getByRole("heading", {
+        name: "Subscribe to play without limits!",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Recommended for you" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Game Modes" }),
+    ).toBeVisible();
+    await expect(page.locator("[data-play-mode]")).toHaveCount(4);
+    await expect(page.locator("[data-game-mode]")).toHaveCount(3);
+
+    // Right rail landmarks
+    await expect(
+      page.getByRole("heading", { name: "Daily Challenge" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Your Stats" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Friends Online" }),
+    ).toBeVisible();
+    await expect(page.getByTestId("daily-week")).toBeVisible();
+    await expect(page.locator('[data-today="true"]')).toHaveCount(1);
+    await expect(page.locator("[data-online-marker]")).toHaveCount(4);
+
+    await expect(page.locator("img[src*='authenticated-home']")).toHaveCount(
+      12,
+    );
+
+    await page.goto("/ar");
+    await expect(
+      page.getByRole("heading", { name: "مرحباً بعودتك، راديانت!" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "التحدي اليومي" }),
     ).toBeVisible();
   });
 });

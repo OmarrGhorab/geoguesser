@@ -4,7 +4,10 @@ import {
   PublicLanding,
   type LandingCopy,
 } from "@/features/landing/components/public-landing";
-import { Link } from "@/lib/i18n/navigation";
+import {
+  AuthenticatedHome,
+  type AuthenticatedHomeCopy,
+} from "@/features/home/components/authenticated-home";
 import type { AppLocale } from "@/lib/i18n/routing";
 
 type HomePageProps = Readonly<{
@@ -77,27 +80,109 @@ export default async function HomePage({ params }: HomePageProps) {
     return <PublicLanding copy={copy} locale={appLocale} />;
   }
 
-  return (
-    <main className="grid min-h-dvh place-items-center p-[var(--spacing-page)]">
-      <div className="flex flex-col items-center gap-6 text-center">
-        <h1 className="m-0 text-[clamp(2rem,6vw,4rem)] font-medium tracking-tight">
-          {t("title")}
-        </h1>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/sign-up"
-            className="rounded-full bg-white px-6 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
-          >
-            {t("signUpCta")}
-          </Link>
-          <Link
-            href="/login"
-            className="rounded-full border border-white/15 bg-transparent px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-          >
-            {t("logInCta")}
-          </Link>
-        </div>
-      </div>
-    </main>
-  );
+  const dashboard = await getTranslations("AuthenticatedHome");
+  const dashboardCopy: AuthenticatedHomeCopy = {
+    brand: dashboard("brand"),
+    welcome: dashboard("welcome"),
+    question: dashboard("question"),
+    nav: {
+      singleplayer: dashboard("nav.singleplayer"),
+      multiplayer: dashboard("nav.multiplayer"),
+      party: dashboard("nav.party"),
+      challenges: dashboard("nav.challenges"),
+      maps: dashboard("nav.maps"),
+      leaderboards: dashboard("nav.leaderboards"),
+      friends: dashboard("nav.friends"),
+      home: dashboard("nav.home"),
+      profile: dashboard("nav.profile"),
+      stats: dashboard("nav.stats"),
+      missions: dashboard("nav.missions"),
+      settings: dashboard("nav.settings"),
+    },
+    play: Object.fromEntries(
+      ["singleplayer", "multiplayer", "party", "quiz"].map((key) => [
+        key,
+        {
+          title: dashboard(`play.${key}.title`),
+          description: dashboard(`play.${key}.description`),
+          cta: dashboard("play.cta"),
+        },
+      ]),
+    ) as AuthenticatedHomeCopy["play"],
+    premium: {
+      title: dashboard("premium.title"),
+      body: dashboard("premium.body"),
+      sidebarTitle: dashboard("premium.sidebarTitle"),
+      sidebarBody: dashboard("premium.sidebarBody"),
+      benefits: ["adFree", "maps", "platforms"].map((key) =>
+        dashboard(`premium.benefits.${key}`),
+      ),
+      price: dashboard("premium.price"),
+      cta: dashboard("premium.cta"),
+    },
+    recommended: dashboard("recommended"),
+    seeAll: dashboard("seeAll"),
+    maps: ["world", "famous", "usa", "europe"].map((key) => ({
+      title: dashboard(`maps.${key}.title`),
+      difficulty: dashboard(`maps.${key}.difficulty`),
+      players: dashboard(`maps.${key}.players`),
+    })),
+    modes: dashboard("modes.title"),
+    modeRows: ["battle", "duels", "team"].map((key) => ({
+      title: dashboard(`modes.${key}.title`),
+      description: dashboard(`modes.${key}.description`),
+      players: dashboard(`modes.${key}.players`),
+    })),
+    daily: {
+      title: dashboard("daily.title"),
+      streak: dashboard("daily.streak"),
+      month: dashboard("daily.month"),
+      days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((day) =>
+        dashboard(`daily.days.${day}`),
+      ),
+      ends: dashboard("daily.ends"),
+      cta: dashboard("play.cta"),
+      playersToday: dashboard("daily.playersToday"),
+    },
+    stats: {
+      title: dashboard("stats.title"),
+      played: dashboard("stats.played"),
+      streak: dashboard("stats.streak"),
+      best: dashboard("stats.best"),
+      cta: dashboard("stats.cta"),
+    },
+    friendsOnline: dashboard("friends.title"),
+    friends: [
+      {
+        name: dashboard("friends.mapMaster"),
+        status: dashboard("friends.online"),
+      },
+      {
+        name: dashboard("friends.geoWizard"),
+        status: dashboard("friends.online"),
+      },
+      {
+        name: dashboard("friends.explorer"),
+        status: dashboard("friends.inGame"),
+      },
+      {
+        name: dashboard("friends.worldWalker"),
+        status: dashboard("friends.online"),
+      },
+    ],
+    profile: {
+      name: dashboard("profile.name"),
+      level: dashboard("profile.level"),
+      credits: dashboard("profile.credits"),
+    },
+    languageLabel: dashboard("languageLabel"),
+    aria: {
+      primary: dashboard("aria.primary"),
+      dashboard: dashboard("aria.dashboard"),
+      search: dashboard("aria.search"),
+      menu: dashboard("aria.menu"),
+    },
+  };
+
+  return <AuthenticatedHome locale={appLocale} copy={dashboardCopy} />;
 }

@@ -54,6 +54,106 @@
       }
     }
   },
+  "AuthenticatedHome": {
+    "brand": "الصفحة الرئيسية لـ WorldGuess",
+    "welcome": "مرحباً بعودتك، راديانت!",
+    "question": "ماذا تريد أن تلعب اليوم؟",
+    "languageLabel": "تبديل اللغة",
+    "aria": { "primary": "التنقل الرئيسي", "dashboard": "تنقل لوحة التحكم", "search": "بحث", "menu": "فتح القائمة" },
+    "nav": {
+      "singleplayer": "فردي",
+      "multiplayer": "متعدد اللاعبين",
+      "party": "حفلة",
+      "challenges": "التحديات",
+      "maps": "الخرائط",
+      "leaderboards": "لوحات الصدارة",
+      "friends": "الأصدقاء",
+      "home": "الرئيسية",
+      "profile": "الملف الشخصي",
+      "stats": "الإحصائيات",
+      "missions": "المهام",
+      "settings": "الإعدادات"
+    },
+    "play": {
+      "singleplayer": { "title": "فردي", "description": "استكشف العالم بالوتيرة التي تناسبك" },
+      "multiplayer": { "title": "متعدد اللاعبين", "description": "نافس لاعبين آخرين" },
+      "party": { "title": "حفلة", "description": "ادعُ أصدقاءك وابدأ حفلة" },
+      "quiz": { "title": "اختبار", "description": "تحدَّ نفسك بالاختبارات" },
+      "cta": "العب"
+    },
+    "premium": {
+      "title": "اشترك والعب بلا حدود!",
+      "body": "لعب غير محدود وبدون إعلانات",
+      "sidebarTitle": "اشترك في بريميوم",
+      "sidebarBody": "افتح اللعب غير المحدود والتجربة بدون إعلانات والخرائط الحصرية والمزيد.",
+      "benefits": {
+        "adFree": "لعب غير محدود وبدون إعلانات",
+        "maps": "آلاف الخرائط",
+        "platforms": "العب على الويب والتطبيقات وSteam"
+      },
+      "price": "ابتداءً من 1.99 دولار شهرياً",
+      "cta": "عرض الخطط"
+    },
+    "recommended": "موصى به لك",
+    "seeAll": "عرض الكل",
+    "maps": {
+      "world": { "title": "العالم", "difficulty": "سهل", "players": "12,456 يلعبون" },
+      "famous": { "title": "أماكن مشهورة", "difficulty": "متوسط", "players": "4,211 يلعبون" },
+      "usa": { "title": "الولايات المتحدة", "difficulty": "سهل", "players": "7,291 يلعبون" },
+      "europe": { "title": "أوروبا", "difficulty": "متوسط", "players": "4,210 يلعبون" }
+    },
+    "modes": {
+      "title": "أوضاع اللعب",
+      "battle": {
+        "title": "باتل رويال للدول",
+        "description": "ابقَ الأخير على الخريطة!",
+        "players": "3,450 يلعبون"
+      },
+      "duels": {
+        "title": "المبارزات",
+        "description": "تحدَّ الخصوم في معارك فردية!",
+        "players": "3,450 يلعبون"
+      },
+      "team": {
+        "title": "مبارزات الفرق",
+        "description": "كوّن فريقاً مع صديق وابحث عن زميل!",
+        "players": "1,876 يلعبون"
+      }
+    },
+    "daily": {
+      "title": "التحدي اليومي",
+      "streak": "السلسلة الحالية",
+      "month": "يوليو 2026",
+      "days": {
+        "mon": "الإثنين",
+        "tue": "الثلاثاء",
+        "wed": "الأربعاء",
+        "thu": "الخميس",
+        "fri": "الجمعة",
+        "sat": "السبت",
+        "sun": "الأحد"
+      },
+      "ends": "ينتهي خلال",
+      "playersToday": "أكثر من 80 ألف لاعب لعبوا اليوم"
+    },
+    "stats": {
+      "title": "إحصائياتك",
+      "played": "الألعاب",
+      "streak": "سلسلة الفوز",
+      "best": "أفضل نتيجة",
+      "cta": "عرض الإحصائيات"
+    },
+    "friends": {
+      "title": "الأصدقاء المتصلون",
+      "online": "متصل",
+      "inGame": "في اللعبة",
+      "mapMaster": "MapMaster",
+      "geoWizard": "GeoWizard",
+      "explorer": "ExplorerX",
+      "worldWalker": "WorldWalker"
+    },
+    "profile": { "name": "RadiantVale123", "level": "المستوى 42", "credits": "2,450" }
+  },
   "Auth": {
     "Common": {
       "videoAriaLabel": "فيديو منظر طبيعي جوي"
