@@ -1,5 +1,16 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const isCI = Boolean(process.env.CI);
+const e2eBackendURL = "http://127.0.0.1:8081/api/v1";
+
+const nextWebServer = {
+  command: isCI ? "pnpm build && pnpm start" : "pnpm dev",
+  url: "http://127.0.0.1:3000",
+  reuseExistingServer: !isCI,
+  timeout: 120_000,
+  ...(isCI ? { env: { BACKEND_API_URL: e2eBackendURL } } : {}),
+};
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -19,10 +30,15 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: process.env.CI ? "pnpm build && pnpm start" : "pnpm dev",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: isCI
+    ? [
+        {
+          command: "node tests/e2e/mock-backend.mjs",
+          url: "http://127.0.0.1:8081/health",
+          reuseExistingServer: false,
+          timeout: 30_000,
+        },
+        nextWebServer,
+      ]
+    : nextWebServer,
 });
