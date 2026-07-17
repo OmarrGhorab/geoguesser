@@ -1,5 +1,4 @@
 export type AuthenticatedNavCopy = {
-  /** Top bar — backend-backed */
   singleplayer: string;
   multiplayer: string;
   party: string;
@@ -7,18 +6,11 @@ export type AuthenticatedNavCopy = {
   maps: string;
   leaderboards: string;
   friends: string;
-  /** Left sidebar */
   home: string;
   profile: string;
   stats: string;
   missions: string;
   settings: string;
-};
-
-export type AuthenticatedProfileCopy = {
-  name: string;
-  level: string;
-  credits: string;
 };
 
 export type AuthenticatedPremiumCopy = {
@@ -27,7 +19,6 @@ export type AuthenticatedPremiumCopy = {
   benefits: string[];
   price: string;
   cta: string;
-  /** Compact sidebar promo */
   sidebarTitle: string;
   sidebarBody: string;
 };
@@ -39,7 +30,39 @@ export type AuthenticatedAriaCopy = {
   menu: string;
 };
 
-/** Shared chrome props used by navbar + sidebar shell. */
+/** Localized chrome + labels only — no usernames, scores, or map entities. */
+export type AuthenticatedHomeCopy = {
+  brand: string;
+  /** Template with {name}, e.g. "Welcome back, {name}!" */
+  welcome: string;
+  question: string;
+  languageLabel: string;
+  nav: AuthenticatedNavCopy;
+  premium: AuthenticatedPremiumCopy;
+  recommended: string;
+  seeAll: string;
+  play: Record<string, { title: string; description: string; cta: string }>;
+  modes: string;
+  modeRows: Array<{ title: string; description: string }>;
+  daily: {
+    title: string;
+    streak: string;
+    ends: string;
+    cta: string;
+    /** Template with {count} */
+    playersToday: string;
+    days: string[];
+  };
+  stats: {
+    title: string;
+    played: string;
+    average: string;
+    best: string;
+    cta: string;
+  };
+  aria: AuthenticatedAriaCopy;
+};
+
 export type AuthenticatedChromeCopy = {
   brand: string;
   nav: AuthenticatedNavCopy;
@@ -47,39 +70,11 @@ export type AuthenticatedChromeCopy = {
     AuthenticatedPremiumCopy,
     "title" | "body" | "cta" | "sidebarTitle" | "sidebarBody"
   >;
-  profile: AuthenticatedProfileCopy;
   languageLabel: string;
   aria: AuthenticatedAriaCopy;
-};
-
-export type AuthenticatedHomeCopy = AuthenticatedChromeCopy & {
-  welcome: string;
-  question: string;
-  play: Record<string, { title: string; description: string; cta: string }>;
-  premium: AuthenticatedPremiumCopy;
-  recommended: string;
-  seeAll: string;
-  maps: Array<{ title: string; difficulty: string; players: string }>;
-  modes: string;
-  modeRows: Array<{ title: string; description: string; players: string }>;
-  daily: {
-    title: string;
-    streak: string;
-    month: string;
-    days: string[];
-    ends: string;
-    cta: string;
-    playersToday: string;
-  };
-  stats: {
-    title: string;
-    played: string;
-    streak: string;
-    best: string;
-    cta: string;
-  };
-  friendsOnline: string;
-  friends: Array<{ name: string; status: string }>;
+  /** Display name for navbar (from viewer data, not i18n). */
+  viewerName: string;
+  viewerAvatarUrl: string | null;
 };
 
 export type AuthenticatedSidebarItem =
@@ -89,3 +84,5 @@ export type AuthenticatedSidebarItem =
   | "friends"
   | "missions"
   | "settings";
+
+export type { AuthenticatedHomeData } from "@/features/home/schemas";

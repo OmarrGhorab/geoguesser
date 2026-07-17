@@ -5,6 +5,9 @@ export const MISSION_ASSETS = {
   trophy: "/mission/tournement.png",
   fiveK: "/mission/5k.png",
   players: "/mission/players-today.png",
+  afterMission: "/mission/after-mission.png",
+  prizeWorld: "/mission/prize-world.png",
+  summaryTrophy: "/mission/trophy.png",
 } as const;
 
 export const MISSION_ASSET_PATHS = Object.values(MISSION_ASSETS);

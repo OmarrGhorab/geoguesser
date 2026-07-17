@@ -57,7 +57,8 @@ export const AUTHENTICATED_TOP_NAV = [
   },
 ] as const;
 
-export type AuthenticatedTopNavId = (typeof AUTHENTICATED_TOP_NAV)[number]["id"];
+export type AuthenticatedTopNavId =
+  (typeof AUTHENTICATED_TOP_NAV)[number]["id"];
 
 /** Left sidebar items mapped to backend profile/social surfaces. */
 export const AUTHENTICATED_SIDE_NAV = [
@@ -66,7 +67,7 @@ export const AUTHENTICATED_SIDE_NAV = [
   { id: "stats", href: "/profile", backend: "profiles" },
   { id: "friends", href: "/friends", backend: "friends" },
   /** Missions claim under challenges — closest to “badges” */
-  { id: "missions", href: "/challenges", backend: "challenges" },
+  { id: "missions", href: "/missions", backend: "challenges" },
   { id: "settings", href: "/profile", backend: "profiles" },
 ] as const;
 

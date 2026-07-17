@@ -56,7 +56,7 @@
   },
   "AuthenticatedHome": {
     "brand": "الصفحة الرئيسية لـ WorldGuess",
-    "welcome": "مرحباً بعودتك، راديانت!",
+    "welcome": "مرحباً بعودتك، {name}!",
     "question": "ماذا تريد أن تلعب اليوم؟",
     "languageLabel": "تبديل اللغة",
     "aria": { "primary": "التنقل الرئيسي", "dashboard": "تنقل لوحة التحكم", "search": "بحث", "menu": "فتح القائمة" },
@@ -123,7 +123,6 @@
     "daily": {
       "title": "التحدي اليومي",
       "streak": "السلسلة الحالية",
-      "month": "يوليو 2026",
       "days": {
         "mon": "الإثنين",
         "tue": "الثلاثاء",
@@ -134,25 +133,63 @@
         "sun": "الأحد"
       },
       "ends": "ينتهي خلال",
-      "playersToday": "أكثر من 80 ألف لاعب لعبوا اليوم"
+      "playersToday": "{count} لعبوا اليوم"
     },
     "stats": {
       "title": "إحصائياتك",
       "played": "الألعاب",
-      "streak": "سلسلة الفوز",
+      "average": "متوسط النقاط",
       "best": "أفضل نتيجة",
       "cta": "عرض الإحصائيات"
     },
-    "friends": {
-      "title": "الأصدقاء المتصلون",
-      "online": "متصل",
-      "inGame": "في اللعبة",
-      "mapMaster": "MapMaster",
-      "geoWizard": "GeoWizard",
-      "explorer": "ExplorerX",
-      "worldWalker": "WorldWalker"
-    },
-    "profile": { "name": "RadiantVale123", "level": "المستوى 42", "credits": "2,450" }
+    "errors": {
+      "unavailableTitle": "الصفحة الرئيسية غير متاحة مؤقتاً",
+      "unavailableBody": "تعذر تحميل لوحة التحكم. حاول مرة أخرى بعد لحظات.",
+      "retry": "إعادة المحاولة"
+    }
+  },
+  "MissionBoard": {
+    "title": "المهام",
+    "subtitle": "ارتقِ بمستوى حسابك",
+    "metaTitle": "المهام | WorldGuessr",
+    "metaDescription": "أكمل المهام اليومية والأسبوعية لكسب نقاط خبرة الحساب.",
+    "daily": "المهام اليومية",
+    "weekly": "المهام الأسبوعية",
+    "claim": "استلام المكافأة",
+    "claiming": "جارٍ الاستلام…",
+    "claimed": "تم الاستلام",
+    "claimSuccess": "تم استلام المكافأة.",
+    "claimError": "تعذر استلام المكافأة. حاول مرة أخرى.",
+    "complete": "قيد التقدم",
+    "empty": "لا توجد مهام متاحة لهذه الفترة.",
+    "progress": "اكتمل {current, number} من {target, number}",
+    "reward": "+{xp, number} نقطة خبرة",
+    "loading": "جارٍ تحميل المهام…",
+    "errorTitle": "المهام غير متاحة",
+    "errorBody": "تعذر تحميل مهامك الآن.",
+    "retry": "حاول مرة أخرى",
+    "items": {
+      "daily_completion": {
+        "title": "مستكشف اليوم",
+        "description": "أكمل تحدي اليوم."
+      },
+      "score_threshold": {
+        "title": "هداف محترف",
+        "description": "احصل على 15,000 نقطة على الأقل في تحدٍ يومي."
+      },
+      "round_accuracy": {
+        "title": "جولة دقيقة",
+        "description": "احصل على نتيجة شبه مثالية في جولة يومية واحدة."
+      },
+      "shared_participation": {
+        "title": "رفيق التحدي",
+        "description": "أكمل ثلاثة تحديات مشتركة هذا الأسبوع."
+      },
+      "streak_milestone": {
+        "title": "سلسلة ثلاثة أيام",
+        "description": "أكمل التحدي اليومي في ثلاثة أيام مختلفة هذا الأسبوع."
+      }
+    }
   },
   "DailyMission": {
     "back": "رجوع",
@@ -160,16 +197,155 @@
     "prevDay": "اليوم السابق",
     "nextDay": "اليوم التالي",
     "play": "العب",
-    "playedToday": "122,690 لعبوا اليوم",
+    "resume": "متابعة",
+    "viewResults": "عرض النتيجة",
+    "todayOnly": "يمكن لعب مهمة اليوم فقط",
+    "playedToday": "لعب {count, number} اليوم",
+    "gamesProgress": "ألعاب اليوم: {completed}/{total}",
+    "weekdays": {
+      "mon": "الإثنين",
+      "tue": "الثلاثاء",
+      "wed": "الأربعاء",
+      "thu": "الخميس",
+      "fri": "الجمعة",
+      "sat": "السبت",
+      "sun": "الأحد"
+    },
+    "months": {
+      "jan": "يناير",
+      "feb": "فبراير",
+      "mar": "مارس",
+      "apr": "أبريل",
+      "may": "مايو",
+      "jun": "يونيو",
+      "jul": "يوليو",
+      "aug": "أغسطس",
+      "sep": "سبتمبر",
+      "oct": "أكتوبر",
+      "nov": "نوفمبر",
+      "dec": "ديسمبر"
+    },
     "cards": {
       "locations": "العب 5 مواقع جديدة كل يوم",
       "compare": "قارن نتيجتك مع لاعبين آخرين",
       "daily": "عُد يومياً لتحافظ على تقدّمك"
     },
+    "past": {
+      "eyebrow": "تحدٍ سابق",
+      "title": "انتهت هذه المهمة اليومية",
+      "noRounds": "لم تلعب أي جولة في هذا التاريخ.",
+      "incomplete": "انتهت هذه المهمة قبل إكمال الجولات الخمس.",
+      "statusNoRounds": "لا توجد جولات مسجلة",
+      "statusIncomplete": "لم تكتمل المهمة",
+      "todayHint": "مواقع اليوم الخمسة الجديدة جاهزة.",
+      "todayCta": "الانتقال إلى مهمة اليوم"
+    },
+    "played": {
+      "completedTitle": "اكتملت مهمة اليوم",
+      "mapSummary": "مسار جولاتك الخمس",
+      "score": "نتيجتك",
+      "round": "الجولة",
+      "rounds": "الجولات المكتملة",
+      "bestRound": "أفضل جولة",
+      "totalDistance": "المسافة الإجمالية",
+      "premiumTitle": "واصل الاستكشاف بلا حدود!",
+      "premiumBody": "افتح اللعب غير المحدود وواصل تطوير مهاراتك الجغرافية عبر خرائط العالم.",
+      "premiumBenefits": {
+        "adFree": "بلا إعلانات مع فتح جميع أوضاع اللعب",
+        "maps": "آلاف الخرائط",
+        "platforms": "العب على الويب والتطبيقات وسطح المكتب"
+      },
+      "benefits": {
+        "mapsTitle": "+1000",
+        "mapsBody": "خريطة حول العالم",
+        "modesTitle": "+10",
+        "modesBody": "أوضاع لعب",
+        "friendsTitle": "نافس",
+        "friendsBody": "مع الأصدقاء",
+        "progressTitle": "تابع",
+        "progressBody": "تقدمك"
+      },
+      "completeTitle": "اكتمل التحدي اليومي",
+      "completeBody": "تم حفظ نتيجتك. عُد غداً لخمس مواقع جديدة.",
+      "yourGuess": "تخمينك",
+      "correctPosition": "الموقع الصحيح",
+      "mapUnavailable": "تعذر تحميل المسار المحدد. لا تزال نتيجتك متاحة.",
+      "resultMap": "خريطة تعرض تخمينات اليوم الخمسة والمواقع الصحيحة"
+    },
     "aria": {
       "screen": "المهمة اليومية",
       "back": "العودة إلى الصفحة الرئيسية",
       "dayPicker": "اختيار يوم المهمة"
+    },
+    "game": {
+      "title": "المهمة اليومية",
+      "resultsTab": "النتائج",
+      "mapTab": "الخريطة",
+      "myGame": "لعبتي",
+      "friends": "الأصدقاء",
+      "clubs": "الأندية",
+      "country": "الدولة",
+      "all": "الكل",
+      "player": "اللاعب",
+      "you": "أنت",
+      "total": "الإجمالي",
+      "statusTitle": "المهمة اليومية",
+      "statusBody": "مكتملة!",
+      "curious": "هل تريد معرفة أداء الآخرين؟ ألقِ نظرة على ألعاب اللاعبين!",
+      "comparisonUnavailable": "تفاصيل جولات اللاعبين الآخرين غير متاحة بعد.",
+      "replay": "إعادة لعب جولات الآخرين",
+      "round": "الجولة",
+      "of": "من",
+      "score": "النقاط",
+      "distance": "المسافة",
+      "roundsCompleted": "الجولات المكتملة",
+      "totalDistance": "المسافة الإجمالية",
+      "placePin": "ضع علامة على الخريطة",
+      "submitGuess": "إرسال التخمين",
+      "submitting": "جارٍ التحقق…",
+      "next": "التالي",
+      "finalScore": "نتيجتك",
+      "breakdown": "التفاصيل",
+      "overview": "ملخص النتيجة",
+      "pointsOf": "من 25,000 نقطة",
+      "yourGuess": "تخمينك",
+      "correctPosition": "الموقع الصحيح",
+      "resultMapUnavailable": "تعذر تحميل خريطة النتيجة. لا تزال درجات الجولات متاحة أدناه.",
+      "resultMetaTitle": "نتيجة المهمة اليومية",
+      "resultMetaDescription": "راجع نتيجة مهمة WorldGuess اليومية وتفاصيل الجولات الخمس.",
+      "loadingResults": "جارٍ تحميل نتيجة المهمة…",
+      "backToMission": "العودة إلى المهمة اليومية",
+      "loadingMap": "جارٍ تحميل الخريطة…",
+      "mapUnavailable": "صور الخريطة غير متاحة.",
+      "retryMap": "تحميل موقع آخر",
+      "selectLocation": "اختر موقعاً على الخريطة قبل الإرسال.",
+      "total": "الإجمالي",
+      "zoomIn": "تكبير الخريطة",
+      "zoomOut": "تصغير الخريطة",
+      "recenter": "إعادة توسيط العرض",
+      "settings": "إعدادات الخريطة",
+      "openReactions": "أضف تفاعلاً على هذا الموقع",
+      "reactionsTitle": "أضف تفاعلاً على هذا الموقع",
+      "closeReactions": "إغلاق التفاعلات",
+      "reactionsPrompt": "تفاعل مع هذا الموقع وأخبر الآخرين برأيك!",
+      "reactionSent": "تم إرسال التفاعل",
+      "expandMap": "توسيع الخريطة",
+      "closeMap": "إغلاق الخريطة الموسعة",
+      "mapLabel": "خريطة العالم لوضع تخمينك",
+      "timeExpired": "انتهى وقت هذه الجولة.",
+      "correctLocation": "الموقع الصحيح",
+      "aria": {
+        "resultMap": "خريطة تعرض تخميناتك الخمسة والمواقع الصحيحة",
+        "showBreakdown": "عرض تفاصيل الجولات الخمس",
+        "showOverview": "العودة إلى ملخص النتيجة"
+      },
+      "errors": {
+        "invalidGuess": "تعذر إرسال التخمين. حاول مرة أخرى.",
+        "unavailable": "المهمة اليومية غير متاحة مؤقتاً.",
+        "resultUnavailable": "النتيجة غير متاحة مؤقتاً",
+        "resultUnavailableDescription": "تعذر تحميل هذه المهمة المكتملة. أعد المحاولة أو ارجع إلى المهمة اليومية.",
+        "retry": "إعادة المحاولة"
+      }
     }
   },
   "Auth": {
@@ -179,6 +355,7 @@
     "Errors": {
       "generic": "حدث خطأ ما. حاول مرة أخرى.",
       "oauthFailed": "تعذر إكمال تسجيل الدخول الاجتماعي. حاول مرة أخرى.",
+      "sessionExpired": "انتهت جلستك. سجّل الدخول مجدداً للمتابعة.",
       "emailRequired": "البريد الإلكتروني مطلوب.",
       "emailInvalid": "أدخل بريداً إلكترونياً صالحاً.",
       "passwordRequired": "كلمة المرور مطلوبة.",

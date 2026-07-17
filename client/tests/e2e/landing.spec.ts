@@ -36,14 +36,14 @@ test.describe("public landing page", () => {
     await expect(
       landingNav.getByRole("link", { name: "Leaderboards" }),
     ).toHaveAttribute("href", "#compete");
-    await expect(page.getByRole("link", { name: "Login" })).toHaveAttribute(
+    const header = page.locator("header");
+    await expect(header.getByRole("link", { name: "Login" })).toHaveAttribute(
       "href",
       "/en/login",
     );
-    await expect(page.getByRole("link", { name: "Play Free" })).toHaveAttribute(
-      "href",
-      "/en/sign-up",
-    );
+    await expect(
+      header.getByRole("link", { name: "Play Free" }),
+    ).toHaveAttribute("href", "/en/sign-up");
   });
 
   test("uses layered video, background, character, and text assets", async ({
@@ -101,7 +101,7 @@ test.describe("public landing page", () => {
     );
   });
 
-  test("authenticated sessions see the signed-in dashboard", async ({
+  test("invalid access cookie is not enough — GET /home decides auth (401 → landing)", async ({
     context,
     page,
   }) => {
@@ -117,84 +117,15 @@ test.describe("public landing page", () => {
     ]);
 
     await page.goto("/en");
-
-    await expect(page.getByTestId("public-landing")).toHaveCount(0);
-    await expect(page.getByTestId("auth-home-main")).toBeVisible();
-    await expect(page.getByTestId("auth-home-rail")).toBeVisible();
-
-    // Main column landmarks (home-loggedin.png)
-    await expect(
-      page.getByRole("heading", { name: "Welcome back, Radiant!" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("img", { name: "WorldGuess home" }),
-    ).toBeVisible();
-    for (const title of [
-      "Singleplayer",
-      "Multiplayer",
-      "Party",
-      "Quiz",
-    ]) {
-      await expect(page.getByRole("heading", { name: title })).toBeVisible();
-    }
-    await expect(
-      page.getByRole("heading", {
-        name: "Subscribe to play without limits!",
-      }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Recommended for you" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Game Modes" }),
-    ).toBeVisible();
-    await expect(page.locator("[data-play-mode]")).toHaveCount(4);
-    await expect(page.locator("[data-game-mode]")).toHaveCount(3);
-
-    // Right rail landmarks
-    await expect(
-      page.getByRole("heading", { name: "Daily Challenge" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Your Stats" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Friends Online" }),
-    ).toBeVisible();
-    await expect(page.getByTestId("daily-week")).toBeVisible();
-    await expect(page.locator('[data-today="true"]')).toHaveCount(1);
-    await expect(page.locator("[data-online-marker]")).toHaveCount(4);
-
-    await expect(page.locator("img[src*='authenticated-home']")).toHaveCount(
-      12,
-    );
-
-    await page.goto("/ar");
-    await expect(
-      page.getByRole("heading", { name: "مرحباً بعودتك، راديانت!" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "التحدي اليومي" }),
-    ).toBeVisible();
+    // Backend rejects the fake JWT → public landing (cookie is only a hint).
+    await expect(page.getByTestId("public-landing")).toBeVisible();
+    await expect(page.getByTestId("auth-home-main")).toHaveCount(0);
   });
 
-  test("daily challenge PLAY opens daily-mission screen", async ({
-    context,
+  test("daily-mission screen is reachable and matches mission landmarks", async ({
     page,
   }) => {
-    await context.addCookies([
-      {
-        name: "access_token",
-        value: "test-session",
-        domain: "127.0.0.1",
-        path: "/",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
-
-    await page.goto("/en");
-    await page.getByTestId("daily-challenge-play").click();
+    await page.goto("/en/daily-mission");
     await expect(page).toHaveURL(/\/en\/daily-mission\/?$/);
 
     await expect(page.getByTestId("daily-mission-screen")).toBeVisible();
@@ -210,7 +141,6 @@ test.describe("public landing page", () => {
     await expect(page.getByTestId("mission-play-cta")).toBeVisible();
     await expect(page.getByTestId("mission-play-cta")).toHaveText(/PLAY/i);
 
-    // Design A badge must not appear
     await expect(page.getByTestId("mission-a-badge")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /^A$/, exact: true }),
@@ -219,10 +149,12 @@ test.describe("public landing page", () => {
       page.getByRole("link", { name: /^A$/, exact: true }),
     ).toHaveCount(0);
 
-    // Mission public assets are used (Next/Image rewrites to /_next/image?url=%2Fmission%2F…)
     await expect(page.locator("img[src*='mission']")).toHaveCount(4);
+    await expect(page.getByTestId("mission-players-strip")).toBeVisible();
 
-    // Back returns home
+    await page.getByTestId("mission-today-control").click();
+    await expect(page.getByTestId("mission-calendar")).toBeVisible();
+
     await page.getByRole("link", { name: "Back to home" }).click();
     await expect(page).toHaveURL(/\/en\/?$/);
   });

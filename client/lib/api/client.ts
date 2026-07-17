@@ -13,6 +13,9 @@ import { ApiError, parseApiErrorBody } from "@/lib/api/errors";
 type ApiFetchOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
+  idempotencyKey?: string;
+  /** Retry once through the refresh-token endpoint when auth has expired. */
+  requiresAuth?: boolean;
   /** When true, copy Set-Cookie from the backend onto the Next response. */
   forwardCookies?: boolean;
 };
@@ -80,29 +83,56 @@ export async function apiFetch(
   const base = getBackendApiUrl();
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
   const method = options.method ?? "GET";
-  const { cookieHeader, csrfToken } = await prepareBackendCookies(base, method);
-
-  const headers = new Headers({
-    Accept: "application/json",
-  });
+  const prepared = await prepareBackendCookies(base, method);
 
   let body: string | undefined;
   if (options.body !== undefined) {
-    headers.set("Content-Type", "application/json");
     body = JSON.stringify(options.body);
   }
 
-  if (cookieHeader) headers.set("Cookie", cookieHeader);
-  if (isUnsafeMethod(method) && csrfToken) {
-    headers.set("X-CSRF-Token", csrfToken);
-  }
+  const send = (cookieHeader: string, csrfToken?: string) => {
+    const headers = new Headers({ Accept: "application/json" });
+    if (body !== undefined) headers.set("Content-Type", "application/json");
+    if (cookieHeader) headers.set("Cookie", cookieHeader);
+    if (options.idempotencyKey) {
+      headers.set("Idempotency-Key", options.idempotencyKey);
+    }
+    if (isUnsafeMethod(method) && csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
+    return fetch(url, { method, headers, body, cache: "no-store" });
+  };
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body,
-    cache: "no-store",
-  });
+  let response = await send(prepared.cookieHeader, prepared.csrfToken);
+
+  if (
+    options.requiresAuth &&
+    (response.status === 401 || response.status === 403) &&
+    cookieValue(prepared.cookieHeader, "refresh_token")
+  ) {
+    const refreshHeaders = new Headers({ Accept: "application/json" });
+    refreshHeaders.set("Cookie", prepared.cookieHeader);
+    if (prepared.csrfToken) {
+      refreshHeaders.set("X-CSRF-Token", prepared.csrfToken);
+    }
+    const refreshResponse = await fetch(`${base}/auth/refresh`, {
+      method: "POST",
+      headers: refreshHeaders,
+      cache: "no-store",
+    });
+    await forwardAuthCookies(refreshResponse);
+
+    if (refreshResponse.ok) {
+      const refreshedCookieHeader = mergeCookieHeader(
+        prepared.cookieHeader,
+        authCookiesFromResponse(refreshResponse),
+      );
+      response = await send(
+        refreshedCookieHeader,
+        cookieValue(refreshedCookieHeader, "csrf_token"),
+      );
+    }
+  }
 
   if (options.forwardCookies) {
     await forwardAuthCookies(response);

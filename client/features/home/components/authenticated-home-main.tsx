@@ -2,11 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight, Gamepad2, Shield, Swords } from "lucide-react";
 import type { AuthenticatedHomeCopy } from "@/features/home/types";
+import type { AuthenticatedHomeData } from "@/features/home/schemas";
+import type { AppLocale } from "@/lib/i18n/routing";
 import {
   GAME_MODE_KEYS,
   PLAY_MODE_KEYS,
-  RECOMMENDED_MAP_KEYS,
 } from "@/features/home/layout-contract";
+import { formatWelcome } from "@/features/home/format";
 import {
   AUTHENTICATED_ASSETS,
   PLAY_TILE,
@@ -28,24 +30,36 @@ const modeIcons = [
 ] as const;
 
 type AuthenticatedHomeMainProps = Readonly<{
+  locale: AppLocale;
   copy: AuthenticatedHomeCopy;
+  data: AuthenticatedHomeData;
 }>;
 
 function isEasyDifficulty(value: string) {
   const v = value.toLowerCase();
-  return v === "easy" || v === "سهل";
+  return v === "easy" || v === "سهل" || v === "beginner";
 }
 
-/** Main column densified to fit the viewport without Y-scroll. */
-export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
+export function AuthenticatedHomeMain({
+  locale,
+  copy,
+  data,
+}: AuthenticatedHomeMainProps) {
+  void locale;
+  const welcome = formatWelcome(copy.welcome, data.viewer.display_name);
+  const maps = data.recommended_maps;
+
   return (
     <div
       data-testid="auth-home-main"
       className="flex h-full min-h-0 flex-col overflow-hidden"
     >
       <header data-section="welcome" className="mb-2 shrink-0">
-        <h1 className="text-[1.35rem] font-bold tracking-tight italic text-white sm:text-[1.55rem]">
-          {copy.welcome}
+        <h1
+          data-testid="home-welcome"
+          className="text-[1.35rem] font-bold tracking-tight italic text-white sm:text-[1.55rem]"
+        >
+          {welcome}
         </h1>
         <p className="mt-0.5 text-[0.8rem] text-white/55">{copy.question}</p>
       </header>
@@ -123,7 +137,10 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
               <span className="text-[0.7rem] text-white/50">
                 {copy.premium.price}
               </span>
-              <PlayCta href="#plans" className="min-w-[7rem] px-5 py-1.5 text-[0.62rem]">
+              <PlayCta
+                href="#plans"
+                className="min-w-[7rem] px-5 py-1.5 text-[0.62rem]"
+              >
                 {copy.premium.cta}
               </PlayCta>
             </div>
@@ -143,18 +160,28 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
             {copy.seeAll}
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {copy.maps.map((map, index) => {
-            const mapKey = RECOMMENDED_MAP_KEYS[index] ?? `map-${index}`;
-            return (
+        {maps.length === 0 ? (
+          <p
+            data-testid="recommended-maps-empty"
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-4 text-center text-xs text-white/50"
+          >
+            —
+          </p>
+        ) : (
+          <div
+            data-testid="recommended-maps"
+            className="grid grid-cols-2 gap-2 lg:grid-cols-4"
+          >
+            {maps.map((map, index) => (
               <Panel
-                key={map.title}
-                data-map={mapKey}
+                key={map.id}
+                data-map={map.slug}
+                data-map-id={map.id}
                 className="group overflow-hidden p-0 transition hover:border-white/18"
               >
                 <div className="relative h-[3.75rem] overflow-hidden sm:h-[4rem]">
                   <Image
-                    src={mapThumbnails[index] ?? AUTHENTICATED_ASSETS.mapWorld}
+                    src={mapThumbnails[index % mapThumbnails.length]}
                     alt=""
                     fill
                     sizes="180px"
@@ -166,11 +193,14 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
                   </span>
                 </div>
                 <div className="px-2.5 pt-1.5 pb-2">
-                  <h3 className="text-[0.75rem] font-bold text-white">
-                    {map.title}
+                  <h3
+                    data-testid="map-name"
+                    className="text-[0.75rem] font-bold text-white"
+                  >
+                    {map.name}
                   </h3>
                   <p
-                    className={`text-[0.62rem] font-semibold ${
+                    className={`text-[0.62rem] font-semibold capitalize ${
                       isEasyDifficulty(map.difficulty)
                         ? "text-[#3DDC84]"
                         : "text-[#F5A623]"
@@ -178,7 +208,7 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
                   >
                     {map.difficulty}
                   </p>
-                  <p className="text-[0.58rem] text-white/45">{map.players}</p>
+                  {/* Live player counts omitted — no backend field yet */}
                   <PlayCta
                     href="#play"
                     className="mt-1.5 w-full py-1 text-[0.58rem]"
@@ -187,9 +217,9 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
                   </PlayCta>
                 </div>
               </Panel>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section
@@ -210,7 +240,6 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
             {copy.modeRows.slice(0, 2).map((mode, index) => {
               const { Icon, well } = modeIcons[index];
               const modeKey = GAME_MODE_KEYS[index] ?? `mode-${index}`;
-              const showMeta = index === 1;
               return (
                 <Link
                   href="#play"
@@ -231,13 +260,8 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
                       {mode.description}
                     </small>
                   </span>
-                  {showMeta ? (
-                    <>
-                      <span className="hidden shrink-0 text-[0.68rem] font-semibold text-white/65 sm:block">
-                        {mode.players}
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-white/65" />
-                    </>
+                  {index === 1 ? (
+                    <ChevronRight className="size-4 shrink-0 text-white/65" />
                   ) : null}
                 </Link>
               );
@@ -264,9 +288,6 @@ export function AuthenticatedHomeMain({ copy }: AuthenticatedHomeMainProps) {
                 <small className="mt-0.5 block truncate text-[0.62rem] text-white/50">
                   {copy.modeRows[2].description}
                 </small>
-              </span>
-              <span className="hidden shrink-0 text-[0.68rem] font-semibold text-white/65 sm:block">
-                {copy.modeRows[2].players}
               </span>
               <ChevronRight className="size-4 shrink-0 text-white/65" />
             </Link>

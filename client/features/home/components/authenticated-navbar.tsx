@@ -6,7 +6,6 @@ import type { AppLocale } from "@/lib/i18n/routing";
 import type {
   AuthenticatedAriaCopy,
   AuthenticatedNavCopy,
-  AuthenticatedProfileCopy,
 } from "@/features/home/types";
 import {
   AUTHENTICATED_TOP_NAV,
@@ -18,9 +17,9 @@ type AuthenticatedNavbarProps = Readonly<{
   locale: AppLocale;
   brand: string;
   nav: AuthenticatedNavCopy;
-  profile: AuthenticatedProfileCopy;
+  viewerName: string;
+  viewerAvatarUrl: string | null;
   aria: AuthenticatedAriaCopy;
-  /** Active top-nav id (backend-backed). Defaults to multiplayer. */
   activeTopNavId?: AuthenticatedTopNavId;
 }>;
 
@@ -28,7 +27,8 @@ export function AuthenticatedNavbar({
   locale,
   brand,
   nav,
-  profile,
+  viewerName,
+  viewerAvatarUrl,
   aria,
   activeTopNavId = "multiplayer",
 }: AuthenticatedNavbarProps) {
@@ -53,6 +53,8 @@ export function AuthenticatedNavbar({
     }
   };
 
+  const avatarSrc = viewerAvatarUrl?.trim() || AUTHENTICATED_ASSETS.players;
+
   return (
     <header className="z-30 flex h-[4.5rem] shrink-0 items-center gap-4 border-b border-white/[0.07] bg-[#0A0918]/95 px-4 backdrop-blur-xl lg:px-7">
       <Link href={`/${locale}`} aria-label={brand} className="shrink-0">
@@ -73,8 +75,7 @@ export function AuthenticatedNavbar({
         {AUTHENTICATED_TOP_NAV.map((item) => {
           const isActive = item.id === activeTopNavId;
           const label = labelFor(item.id);
-          // Frontend routes not all shipped yet — titles map to backend domains.
-          const href = `#${item.id}` as Route;
+          const href = `/${locale}${item.href}` as Route;
           return (
             <Link
               key={item.id}
@@ -108,35 +109,30 @@ export function AuthenticatedNavbar({
           <Search className="size-5" strokeWidth={2} />
         </button>
 
-        <div className="hidden items-center gap-2 border-l border-white/10 pl-3 text-sm font-bold text-white sm:flex">
-          <span
-            className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-[#FFE08A] to-[#F5A623] text-[0.7rem] text-[#3a1f00] shadow-[0_0_14px_rgba(245,166,35,0.5)]"
-            aria-hidden="true"
-          >
-            ●
-          </span>
-          {profile.credits}
-        </div>
+        {/* Credits / level intentionally hidden — no backend economy/progression yet */}
 
         <Link
           href={"#profile" as Route}
           className="flex items-center gap-2.5 border-l border-white/10 pl-3"
-          aria-label={profile.name}
+          aria-label={viewerName}
         >
           <span className="relative size-9 overflow-hidden rounded-full border-2 border-[#F5C542] shadow-[0_0_16px_rgba(245,197,66,0.4)]">
             <Image
-              src={AUTHENTICATED_ASSETS.players}
+              src={avatarSrc}
               alt=""
               fill
               sizes="36px"
               className="object-cover object-[50%_42%]"
+              unoptimized={Boolean(viewerAvatarUrl)}
             />
           </span>
           <span className="hidden leading-tight sm:block">
-            <strong className="block text-xs font-bold text-white">
-              {profile.name}
+            <strong
+              data-testid="navbar-viewer-name"
+              className="block text-xs font-bold text-white"
+            >
+              {viewerName}
             </strong>
-            <small className="text-[0.68rem] text-white/55">{profile.level}</small>
           </span>
           <ChevronDown className="hidden size-4 text-white/55 sm:block" />
         </Link>

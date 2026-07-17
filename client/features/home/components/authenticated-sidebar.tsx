@@ -23,10 +23,7 @@ import {
   PlayCta,
 } from "./shared";
 
-const SIDEBAR_ICONS: Record<
-  AuthenticatedSidebarItem,
-  typeof Home
-> = {
+const SIDEBAR_ICONS: Record<AuthenticatedSidebarItem, typeof Home> = {
   home: Home,
   profile: UserRound,
   stats: BarChart3,
@@ -80,15 +77,16 @@ export function AuthenticatedSidebar({
 
   return (
     <aside className="hidden h-full min-h-0 flex-col lg:flex">
-      <nav
-        aria-label={dashboardAriaLabel}
-        className="flex shrink-0 flex-col"
-      >
+      <nav aria-label={dashboardAriaLabel} className="flex shrink-0 flex-col">
         {AUTHENTICATED_SIDE_NAV.map(({ id }) => {
           const isActive = id === activeItem;
           const Icon = SIDEBAR_ICONS[id];
           const path = (
-            id === "home" ? `/${locale}` : `#${id}`
+            id === "home"
+              ? `/${locale}`
+              : id === "missions"
+                ? `/${locale}/missions`
+                : `#${id}`
           ) as Route;
           return (
             <Link
@@ -122,7 +120,7 @@ export function AuthenticatedSidebar({
               priority
             />
           </div>
-          <h2 className="mt-0.5 text-[0.95rem] font-bold italic leading-snug text-white">
+          <h2 className="mt-0.5 text-[0.95rem] leading-snug font-bold text-white italic">
             {premium.sidebarTitle}
           </h2>
           <p className="mt-1.5 text-[0.68rem] leading-snug text-white/55">

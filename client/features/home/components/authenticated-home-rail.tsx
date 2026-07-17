@@ -3,11 +3,14 @@ import Link from "next/link";
 import type { Route } from "next";
 import { TrendingUp, Zap } from "lucide-react";
 import type { AuthenticatedHomeCopy } from "@/features/home/types";
+import type { AuthenticatedHomeData } from "@/features/home/schemas";
 import type { AppLocale } from "@/lib/i18n/routing";
 import {
-  DAILY_TODAY,
-  DAILY_WEEK_DAYS,
-} from "@/features/home/layout-contract";
+  formatAverageScore,
+  formatNumber,
+  formatPlayedToday,
+  weekContaining,
+} from "@/features/home/format";
 import {
   AUTHENTICATED_ASSETS,
   PLAY_CTA_SHADOW,
@@ -15,55 +18,43 @@ import {
   PlayCta,
   RAIL_CARD,
 } from "./shared";
-
-const avatarFocus = [
-  "18% 45%",
-  "50% 45%",
-  "82% 45%",
-  "50% 45%",
-] as const;
-
-const friendRings = [
-  "ring-[#F5C542]/80",
-  "ring-[#A78BFA]/80",
-  "ring-[#D4A574]/80",
-  "ring-[#5EC8FF]/80",
-] as const;
-
-function AvatarFace({
-  index,
-  sizeClass,
-  ringClass = "",
-}: {
-  index: number;
-  sizeClass: string;
-  ringClass?: string;
-}) {
-  const pos = avatarFocus[index % avatarFocus.length];
-  return (
-    <span
-      className={`${sizeClass} shrink-0 rounded-full bg-cover bg-no-repeat ring-2 ${ringClass}`}
-      style={{
-        backgroundImage: `url(${AUTHENTICATED_ASSETS.players})`,
-        backgroundPosition: pos,
-        backgroundSize: "280%",
-      }}
-      aria-hidden="true"
-    />
-  );
-}
+import { DailyCountdown } from "./daily-countdown";
 
 type AuthenticatedHomeRailProps = Readonly<{
   locale: AppLocale;
   copy: AuthenticatedHomeCopy;
+  data: AuthenticatedHomeData;
 }>;
 
-/** Right rail densified to fit the viewport without Y-scroll. */
+/** Right rail: daily challenge + stats (no friends panel until backend supports it). */
 export function AuthenticatedHomeRail({
   locale,
   copy,
+  data,
 }: AuthenticatedHomeRailProps) {
   const dailyMissionHref = `/${locale}/daily-mission` as Route;
+  const challengeDate = data.daily_challenge.challenge.challenge_date;
+  const week = weekContaining(challengeDate ?? undefined);
+  const streak = data.daily_challenge.streak.current_count;
+  const participants = data.daily_challenge.leaderboard_summary.participants;
+  const playersToday = formatPlayedToday(
+    locale,
+    copy.daily.playersToday,
+    participants,
+  );
+  const monthLabel = challengeDate
+    ? new Intl.DateTimeFormat(locale === "ar" ? "ar" : "en", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(`${challengeDate}T12:00:00.000Z`))
+    : "";
+
+  const gamesPlayed = formatNumber(locale, data.stats.games_played);
+  const averageScore = formatAverageScore(locale, data.stats.average_score);
+  const bestScore = formatNumber(locale, data.stats.best_score);
+  const resetEndsAt = data.daily_challenge.countdown?.reset_ends_at;
+
   return (
     <div
       data-testid="auth-home-rail"
@@ -89,12 +80,15 @@ export function AuthenticatedHomeRail({
             </h2>
           </div>
           <div className="flex shrink-0 flex-col items-end leading-none">
-            <span className="flex items-center gap-0.5 text-[0.85rem] font-bold text-[#C4B5FD]">
+            <span
+              data-testid="daily-streak"
+              className="flex items-center gap-0.5 text-[0.85rem] font-bold text-[#C4B5FD]"
+            >
               <Zap
                 className="size-3 fill-[#A78BFA] text-[#A78BFA]"
                 aria-hidden="true"
               />
-              0
+              {formatNumber(locale, streak)}
             </span>
             <p className="mt-0.5 text-[0.55rem] text-white/45">
               {copy.daily.streak}
@@ -103,8 +97,11 @@ export function AuthenticatedHomeRail({
         </div>
 
         <div className="mt-2.5 text-center">
-          <p className="text-[0.72rem] font-semibold text-white">
-            {copy.daily.month}
+          <p
+            data-testid="daily-month"
+            className="text-[0.72rem] font-semibold text-white"
+          >
+            {monthLabel}
           </p>
           <div className="mt-1.5 grid grid-cols-7 gap-x-0.5 text-[0.52rem] font-semibold tracking-wide text-white/40 uppercase">
             {copy.daily.days.map((day) => (
@@ -117,11 +114,11 @@ export function AuthenticatedHomeRail({
             className="mt-0.5 grid grid-cols-7 gap-x-0.5"
             data-testid="daily-week"
           >
-            {DAILY_WEEK_DAYS.map((day) => {
-              const isToday = day === DAILY_TODAY;
+            {week.days.map((day) => {
+              const isToday = day === week.todayDay;
               return (
                 <span
-                  key={day}
+                  key={`${week.year}-${week.monthIndex}-${day}`}
                   data-day={day}
                   data-today={isToday ? "true" : "false"}
                   className={`mx-auto grid size-7 place-items-center rounded-full text-[0.72rem] ${
@@ -140,25 +137,42 @@ export function AuthenticatedHomeRail({
         <div className="mt-2.5 flex items-center gap-2">
           <div className="flex shrink-0 -space-x-1.5">
             {[0, 1, 2].map((i) => (
-              <AvatarFace
+              <span
                 key={i}
-                index={i}
-                sizeClass="size-5"
-                ringClass="ring-[#0B0D26]"
+                className="size-5 shrink-0 rounded-full bg-cover bg-no-repeat ring-2 ring-[#0B0D26]"
+                style={{
+                  backgroundImage: `url(${AUTHENTICATED_ASSETS.players})`,
+                  backgroundPosition: ["18% 45%", "50% 45%", "82% 45%"][i],
+                  backgroundSize: "280%",
+                }}
+                aria-hidden="true"
               />
             ))}
           </div>
-          <p className="text-[0.6rem] leading-snug text-white/50">
-            {copy.daily.playersToday}
+          <p
+            data-testid="daily-players-today"
+            className="text-[0.6rem] leading-snug text-white/50"
+          >
+            {playersToday}
           </p>
         </div>
 
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[0.62rem] text-white/50">{copy.daily.ends}</p>
-            <p className="text-[1.25rem] leading-none font-bold tracking-tight text-[#F5B942]">
-              13:23:44
-            </p>
+            {resetEndsAt ? (
+              <DailyCountdown
+                resetEndsAt={resetEndsAt}
+                className="text-[1.25rem] leading-none font-bold tracking-tight text-[#F5B942]"
+              />
+            ) : (
+              <p
+                data-testid="daily-countdown"
+                className="text-[1.25rem] leading-none font-bold tracking-tight text-[#F5B942]"
+              >
+                --:--:--
+              </p>
+            )}
           </div>
           <Link
             href={dailyMissionHref}
@@ -172,7 +186,7 @@ export function AuthenticatedHomeRail({
 
       <section
         data-section="yourStats"
-        className={`${RAIL_CARD} shrink-0 px-3 pt-2.5 pb-3`}
+        className={`${RAIL_CARD} min-h-0 flex-1 px-3 pt-2.5 pb-3`}
       >
         <div className="flex items-center justify-between">
           <h2 className="text-[0.95rem] font-bold text-white">
@@ -189,70 +203,39 @@ export function AuthenticatedHomeRail({
             <p className="text-[0.55rem] leading-tight text-white/45">
               {copy.stats.played}
             </p>
-            <p className="mt-0.5 text-base font-bold text-white">248</p>
+            <p
+              data-testid="stats-games-played"
+              className="mt-0.5 text-base font-bold text-white"
+            >
+              {gamesPlayed}
+            </p>
           </div>
           <div className="border-x border-white/[0.08] px-0.5">
             <p className="text-[0.55rem] leading-tight text-white/45">
-              {copy.stats.streak}
+              {copy.stats.average}
             </p>
-            <p className="mt-0.5 text-base font-bold text-white">7</p>
+            <p
+              data-testid="stats-average-score"
+              className="mt-0.5 text-base font-bold text-white"
+            >
+              {averageScore}
+            </p>
           </div>
           <div className="px-0.5">
             <p className="text-[0.55rem] leading-tight text-white/45">
               {copy.stats.best}
             </p>
-            <p className="mt-0.5 text-base font-bold text-white">24,680</p>
+            <p
+              data-testid="stats-best-score"
+              className="mt-0.5 text-base font-bold text-white"
+            >
+              {bestScore}
+            </p>
           </div>
         </div>
         <PlayCta href="#stats" className="mt-2.5 w-full py-1.5 text-[0.62rem]">
           {copy.stats.cta}
         </PlayCta>
-      </section>
-
-      <section
-        data-section="friendsOnline"
-        className={`${RAIL_CARD} min-h-0 flex-1 overflow-hidden px-3 pt-2.5 pb-2`}
-      >
-        <div className="mb-0.5 flex items-center justify-between">
-          <h2 className="text-[0.95rem] font-bold text-white">
-            {copy.friendsOnline}
-          </h2>
-          <Link
-            href="#friends"
-            className="text-[0.58rem] font-bold tracking-[0.1em] text-[#A78BFA] transition hover:text-white"
-          >
-            {copy.seeAll}
-          </Link>
-        </div>
-        <ul>
-          {copy.friends.map((friend, index) => (
-            <li key={friend.name}>
-              <Link
-                href="#friends"
-                className="flex items-center gap-2 rounded-lg px-0.5 py-1.5 transition hover:bg-white/[0.03]"
-              >
-                <AvatarFace
-                  index={index}
-                  sizeClass="size-7"
-                  ringClass={friendRings[index % friendRings.length]}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.72rem] font-semibold text-white">
-                    {friend.name}
-                  </span>
-                  <span className="block text-[0.58rem] text-white/45">
-                    {friend.status}
-                  </span>
-                </span>
-                <span
-                  className="size-2 shrink-0 rounded-[3px] bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.55)]"
-                  aria-hidden="true"
-                  data-online-marker
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
       </section>
     </div>
   );

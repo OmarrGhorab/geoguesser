@@ -5,7 +5,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // The App Router dev server compiles auth routes on demand. Keep local runs
+  // aligned with CI so parallel first-load navigations do not abort each other.
+  workers: 2,
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:3000",

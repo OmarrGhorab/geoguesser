@@ -13,17 +13,12 @@ type AuthenticatedShellProps = Readonly<{
   locale: AppLocale;
   copy: AuthenticatedChromeCopy;
   children: ReactNode;
-  /** Optional right-rail widgets (home daily challenge, stats, friends, etc.). */
   rightRail?: ReactNode;
   activeSidebarItem?: AuthenticatedSidebarItem;
   activeTopNavId?: AuthenticatedTopNavId;
   showPremiumPromo?: boolean;
 }>;
 
-/**
- * Authenticated app chrome — single viewport, no Y-axis scroll regions.
- * Content is densified to fit home-loggedin.png as one screen.
- */
 export function AuthenticatedShell({
   locale,
   copy,
@@ -45,7 +40,8 @@ export function AuthenticatedShell({
         locale={locale}
         brand={copy.brand}
         nav={copy.nav}
-        profile={copy.profile}
+        viewerName={copy.viewerName}
+        viewerAvatarUrl={copy.viewerAvatarUrl}
         aria={copy.aria}
         activeTopNavId={activeTopNavId}
       />
