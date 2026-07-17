@@ -341,11 +341,18 @@ func (s *Service) GetMissions(ctx context.Context, sess *session.Context) ([]Mis
 		return nil, err
 	}
 	now := s.clock.Now()
+	if err := s.repo.EnsureMissions(ctx, DefaultMissions(now, s.resetHourUTC)); err != nil {
+		return nil, err
+	}
 	missions, err := s.repo.ListActiveMissions(ctx, now)
 	if err != nil {
 		return nil, err
 	}
-	progressList, err := s.repo.ListMissionProgressForOwner(ctx, owner)
+	missionIDs := make([]uuid.UUID, len(missions))
+	for i := range missions {
+		missionIDs[i] = missions[i].ID
+	}
+	progressList, err := s.repo.ListMissionProgressForOwner(ctx, owner, missionIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -353,37 +360,19 @@ func (s *Service) GetMissions(ctx context.Context, sess *session.Context) ([]Mis
 	for _, p := range progressList {
 		progressByMission[p.MissionID] = p
 	}
-	if len(missions) == 0 {
-		defaults := DefaultMissionSummaries(now)
-		for _, m := range defaults {
-			if existing, lookupErr := s.repo.GetMissionByCode(ctx, m.Code); lookupErr == nil && existing == nil {
-				dbMission := Mission{
-					Code:           m.Code,
-					TitleKey:       m.TitleKey,
-					DescriptionKey: m.DescriptionKey,
-					MissionType:    m.MissionType,
-					TargetValue:    m.TargetValue,
-					ActiveStartsAt: now,
-					ActiveEndsAt:   m.ActiveEndsAt,
-					RewardSnapshot: json.RawMessage("{}"),
-					Status:         "active",
-				}
-				_ = s.repo.UpsertMission(ctx, &dbMission)
-			}
-		}
-		missions, err = s.repo.ListActiveMissions(ctx, now)
-		if err != nil {
-			return nil, err
-		}
-	}
 	summaries := make([]MissionSummary, len(missions))
 	for i, m := range missions {
 		summaries[i] = MissionSummary{
 			ID:             m.ID,
 			Code:           m.Code,
+			MissionKey:     m.MissionKey,
 			TitleKey:       m.TitleKey,
 			DescriptionKey: m.DescriptionKey,
 			MissionType:    m.MissionType,
+			Cadence:        m.Cadence,
+			PeriodKey:      m.PeriodKey,
+			IconKey:        m.IconKey,
+			RewardXP:       m.RewardXP,
 			TargetValue:    m.TargetValue,
 			ActiveEndsAt:   m.ActiveEndsAt,
 			Status:         "not_started",
@@ -416,29 +405,12 @@ func (s *Service) ClaimMission(ctx context.Context, sess *session.Context, idemp
 	if err != nil {
 		return nil, ErrChallengeNotFound
 	}
-	progress, err := s.repo.GetMissionProgress(ctx, id, owner)
+	mission, progress, err := s.repo.ClaimMissionAndAwardXP(ctx, id, owner, s.clock.Now())
 	if err != nil {
 		return nil, err
 	}
-	if progress == nil {
-		return nil, ErrChallengeNotFound
-	}
-	if progress.Status != "completed" {
-		return nil, ErrResultsNotReady
-	}
-	if progress.ClaimedAt != nil {
-		resp := &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed"}
-		if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
-			return nil, err
-		}
-		return resp, nil
-	}
-	if err := s.repo.ClaimMissionProgress(ctx, id, owner, s.clock.Now()); err != nil {
-		return nil, err
-	}
-	s.logger.InfoContext(ctx, "challenge mission claimed", slog.String("mission_id", missionID))
-	now := s.clock.Now()
-	resp := &MissionSummary{ID: progress.MissionID, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed", ActiveEndsAt: &now}
+	s.logger.InfoContext(ctx, "challenge mission claimed", slog.String("mission_id", missionID), slog.Int("reward_xp", mission.RewardXP))
+	resp := &MissionSummary{ID: mission.ID, Code: mission.Code, MissionKey: mission.MissionKey, TitleKey: mission.TitleKey, DescriptionKey: mission.DescriptionKey, MissionType: mission.MissionType, Cadence: mission.Cadence, PeriodKey: mission.PeriodKey, IconKey: mission.IconKey, RewardXP: mission.RewardXP, CurrentValue: progress.CurrentValue, TargetValue: progress.TargetValue, Status: "claimed", ActiveEndsAt: mission.ActiveEndsAt}
 	if err := storeIdempotencyResponse(ctx, op, resp); err != nil {
 		return nil, err
 	}
@@ -466,18 +438,22 @@ func (s *Service) FinalizeAttemptResult(ctx context.Context, attempt ChallengeAt
 	}
 	s.logger.InfoContext(ctx, "challenge result finalized", slog.String("challenge_id", attempt.ChallengeID.String()), slog.String("attempt_id", attempt.ID.String()), slog.Int("score", result.TotalScore))
 	challenge, err := s.repo.GetChallengeByID(ctx, attempt.ChallengeID)
-	if err != nil || challenge == nil {
+	if err != nil {
 		return err
+	}
+	if challenge == nil {
+		return ErrChallengeNotFound
 	}
 	owner, err := s.attemptOwner(attempt)
 	if err != nil {
 		return err
 	}
 	if challenge.Type == TypeDaily && challenge.ChallengeDate != nil {
-		s.updateStreak(ctx, owner, *challenge.ChallengeDate)
+		if err := s.updateStreak(ctx, owner, *challenge.ChallengeDate); err != nil {
+			return err
+		}
 	}
-	s.fireMissionProgress(ctx, attempt, challenge, roundResults, owner)
-	return nil
+	return s.fireMissionProgress(ctx, attempt, challenge, roundResults, owner)
 }
 
 func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, completedAt time.Time) error {
@@ -486,9 +462,6 @@ func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, complet
 		return err
 	}
 	if attempt == nil {
-		return nil
-	}
-	if attempt.Status == AttemptStatusCompleted {
 		return nil
 	}
 	gameData, err := s.repo.GetGameCompletionData(ctx, gameID)
@@ -516,22 +489,40 @@ func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, complet
 		resultsDTO[i].DistanceMeters = r.DistanceMeters
 		totalDistance += r.DistanceMeters
 	}
-	if err := s.repo.UpdateAttemptCompletion(ctx, attempt.ID, gameData.TotalScore, totalDistance, durationMS, completedAt); err != nil {
-		return err
+	if attempt.Status != AttemptStatusCompleted {
+		if err := s.repo.UpdateAttemptCompletion(ctx, attempt.ID, gameData.TotalScore, totalDistance, durationMS, completedAt); err != nil {
+			return err
+		}
 	}
+	// Always rebuild the idempotent result/streak/mission projections. The
+	// attempt status may already be completed from a previous partial run.
 	attempt.TotalScore = gameData.TotalScore
 	attempt.CompletionDurationMS = durationMS
 	attempt.CompletedAt = &completedAt
 	attempt.TotalDistanceMeters = totalDistance
-	return s.FinalizeAttemptResult(ctx, *attempt, resultsDTO, completedAt, owner.displayName)
+	if err := s.FinalizeAttemptResult(ctx, *attempt, resultsDTO, completedAt, owner.displayName); err != nil {
+		return err
+	}
+	if attempt.UserID != nil {
+		return s.repo.AwardAccountXP(ctx, attempt.ID, *attempt.UserID, completionXP(attempt.TotalScore))
+	}
+	return nil
+}
+
+func completionXP(totalScore int) int {
+	if totalScore < 0 {
+		totalScore = 0
+	}
+	return 100 + totalScore/100
 }
 
 func (s *Service) materializeDaily(ctx context.Context, date, startsAt, endsAt time.Time) (*Challenge, error) {
-	mapID, err := s.firstActiveMapID(ctx)
+	dailyTimer := DailyRoundTimerSeconds
+	settings, err := normalizeSettings(0, &dailyTimer)
 	if err != nil {
 		return nil, err
 	}
-	settings, err := normalizeSettings(0, nil)
+	mapID, err := s.firstActiveMapID(ctx, settings.RoundCount)
 	if err != nil {
 		return nil, err
 	}
@@ -561,11 +552,11 @@ func (s *Service) materializeDaily(ctx context.Context, date, startsAt, endsAt t
 	return challenge, nil
 }
 
-func (s *Service) firstActiveMapID(ctx context.Context) (uuid.UUID, error) {
+func (s *Service) firstActiveMapID(ctx context.Context, minimumLocations int) (uuid.UUID, error) {
 	if s.defaultMapID != uuid.Nil {
 		return s.defaultMapID, nil
 	}
-	return s.repo.GetDefaultActiveMapID(ctx)
+	return s.repo.GetDefaultActiveMapID(ctx, minimumLocations)
 }
 
 func (s *Service) selectUnique(ctx context.Context, mapID uuid.UUID, count int) ([]maps.SelectedLocation, error) {
@@ -619,7 +610,10 @@ func (s *Service) metadata(ctx context.Context, sess *session.Context, challenge
 	if err != nil {
 		return nil, err
 	}
+	enforceDailyTimerPolicy(challenge.Type, &settings)
 	var attemptSummary *AttemptSummary
+	var lastCompletedGameID *uuid.UUID
+	dailyGamesPlayed := 0
 	owner, ownerErr := ownerFromSession(sess)
 	if ownerErr == nil {
 		attempt, err := s.repo.GetAttemptForOwner(ctx, challenge.ID, owner)
@@ -628,6 +622,9 @@ func (s *Service) metadata(ctx context.Context, sess *session.Context, challenge
 		}
 		if attempt != nil {
 			summary := toAttemptSummary(*attempt, nil)
+			if challenge.Type == TypeDaily {
+				summary, dailyGamesPlayed, lastCompletedGameID = dailyAttemptPresentation(*attempt)
+			}
 			attemptSummary = &summary
 		}
 	}
@@ -651,14 +648,39 @@ func (s *Service) metadata(ctx context.Context, sess *session.Context, challenge
 		}
 		countdown = &CountdownSummary{ResetEndsAt: *challenge.ResetEndsAt, SecondsRemaining: remaining}
 	}
+	missionSummaries := DefaultMissionSummariesForReset(s.clock.Now(), s.resetHourUTC)
+	if ownerErr == nil {
+		missionSummaries, err = s.GetMissions(ctx, sess)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &ChallengeMetadataResponse{
-		Challenge:          toChallengeSummary(challenge, settings),
-		AttemptState:       attemptSummary,
-		Streak:             streak,
-		MissionsSummary:    DefaultMissionSummaries(s.clock.Now()),
-		LeaderboardSummary: LeaderboardSummary{Participants: participants},
-		Countdown:          countdown,
+		Challenge:           toChallengeSummary(challenge, settings),
+		AttemptState:        attemptSummary,
+		LastCompletedGameID: lastCompletedGameID,
+		Streak:              streak,
+		MissionsSummary:     missionSummaries,
+		LeaderboardSummary:  LeaderboardSummary{Participants: participants},
+		Countdown:           countdown,
+		DailyGamesPlayed:    dailyGamesPlayed,
+		DailyGamesTotal:     DailyGamesPerDay,
 	}, nil
+}
+
+func dailyAttemptPresentation(attempt ChallengeAttempt) (AttemptSummary, int, *uuid.UUID) {
+	summary := toAttemptSummary(attempt, nil)
+	gamesPlayed := attempt.DailyGameNumber - 1
+	var lastCompletedGameID *uuid.UUID
+	if attempt.Status == AttemptStatusCompleted {
+		gamesPlayed = attempt.DailyGameNumber
+		lastCompletedGameID = attempt.GameID
+		if attempt.DailyGameNumber < DailyGamesPerDay {
+			summary.Status = AttemptStatusPending
+			summary.GameID = nil
+		}
+	}
+	return summary, gamesPlayed, lastCompletedGameID
 }
 
 func (s *Service) startAttempt(ctx context.Context, sess *session.Context, challenge Challenge) (*ChallengeAttemptResponse, error) {
@@ -673,6 +695,7 @@ func (s *Service) startAttempt(ctx context.Context, sess *session.Context, chall
 	if err != nil {
 		return nil, err
 	}
+	enforceDailyTimerPolicy(challenge.Type, &settings)
 	locationRows, err := s.repo.ListChallengeLocations(ctx, challenge.ID)
 	if err != nil {
 		return nil, err
@@ -681,14 +704,37 @@ func (s *Service) startAttempt(ctx context.Context, sess *session.Context, chall
 		return nil, ErrNotEnoughLocations
 	}
 	selected := make([]maps.SelectedLocation, settings.RoundCount)
+	locationIDs := make([]uuid.UUID, settings.RoundCount)
 	for i := 0; i < settings.RoundCount; i++ {
-		selected[i] = maps.SelectedLocation{ID: locationRows[i].LocationID}
+		locationIDs[i] = locationRows[i].LocationID
+		selected[i] = maps.SelectedLocation{ID: locationIDs[i]}
 	}
-	attempt, _, err := s.repo.CreateAttemptWithGame(ctx, challenge, owner, selected, settings, s.clock.Now())
+	gameChallenge := challenge
+	playable, err := s.repo.AreLocationsPlayable(ctx, locationIDs)
 	if err != nil {
 		return nil, err
 	}
-	attempt, game, err := s.repo.StartAttemptGame(ctx, attempt.ID, s.clock.Now())
+	if !playable && challenge.Type == TypeDaily {
+		gameChallenge.MapID, err = s.repo.GetDefaultActiveMapID(ctx, settings.RoundCount)
+		if err != nil {
+			return nil, err
+		}
+		selected, err = s.selectUniqueBySeed(ctx, gameChallenge.MapID, settings.RoundCount, challenge.Seed+"|playable-v1")
+		if err != nil {
+			return nil, err
+		}
+	}
+	attempt, game, err := s.repo.CreateAttemptWithGame(ctx, gameChallenge, owner, selected, settings, s.clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	if game.MapID != gameChallenge.MapID {
+		_, err = s.repo.RepairUnplayedAttemptGame(ctx, attempt.ID, gameChallenge.MapID, selected, s.clock.Now())
+		if err != nil {
+			return nil, err
+		}
+	}
+	attempt, game, err = s.repo.StartAttemptGame(ctx, attempt.ID, s.clock.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -710,6 +756,16 @@ func normalizeSettings(roundCount int, timerSeconds *int) (SettingsSnapshot, err
 	return SettingsSnapshot{RoundCount: roundCount, TimerSeconds: timerSeconds, MovementRules: "standard", ScoringVersion: DefaultScoringVersion}, nil
 }
 
+// enforceDailyTimerPolicy applies the fixed per-round deadline to both newly
+// materialized dailies and legacy challenge snapshots that omitted a timer.
+func enforceDailyTimerPolicy(challengeType string, settings *SettingsSnapshot) {
+	if challengeType != TypeDaily || settings == nil || settings.TimerSeconds != nil {
+		return
+	}
+	timer := DailyRoundTimerSeconds
+	settings.TimerSeconds = &timer
+}
+
 func challengeLocationsFromSelected(selected []maps.SelectedLocation) []ChallengeLocation {
 	rows := make([]ChallengeLocation, len(selected))
 	for i, location := range selected {
@@ -728,7 +784,7 @@ func toChallengeSummary(challenge Challenge, settings SettingsSnapshot) Challeng
 }
 
 func toAttemptSummary(attempt ChallengeAttempt, currentRound *int) AttemptSummary {
-	return AttemptSummary{ID: attempt.ID, ChallengeID: attempt.ChallengeID, Status: attempt.Status, LeaderboardEligible: attempt.LeaderboardEligible, StartedAt: attempt.StartedAt, CompletedAt: attempt.CompletedAt, TotalScore: attempt.TotalScore, CurrentRoundNumber: currentRound, GameID: attempt.GameID}
+	return AttemptSummary{ID: attempt.ID, ChallengeID: attempt.ChallengeID, Status: attempt.Status, LeaderboardEligible: attempt.LeaderboardEligible, StartedAt: attempt.StartedAt, CompletedAt: attempt.CompletedAt, TotalScore: attempt.TotalScore, CurrentRoundNumber: currentRound, GameID: attempt.GameID, DailyGameNumber: attempt.DailyGameNumber}
 }
 
 func toStreakSummary(streak *Streak, guestLimited bool) StreakSummary {
@@ -870,12 +926,11 @@ func (s *Service) attemptOwner(attempt ChallengeAttempt) (ownerIdentity, error) 
 	return owner, nil
 }
 
-func (s *Service) updateStreak(ctx context.Context, owner ownerIdentity, challengeDate time.Time) {
+func (s *Service) updateStreak(ctx context.Context, owner ownerIdentity, challengeDate time.Time) error {
 	now := s.clock.Now()
 	existing, err := s.repo.GetStreakForOwner(ctx, owner)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "failed to load streak for update", slog.Any("error", err))
-		return
+		return fmt.Errorf("load streak for update: %w", err)
 	}
 	next := ApplyDailyCompletion(existing, challengeDate, now)
 	event := StreakEvent{
@@ -890,35 +945,48 @@ func (s *Service) updateStreak(ctx context.Context, owner ownerIdentity, challen
 		event.PreviousCount = existing.CurrentCount
 	}
 	if existing != nil && next.CurrentCount == existing.CurrentCount {
-		return
+		return nil
 	}
 	if err := s.repo.UpsertStreak(ctx, owner, next); err != nil {
-		s.logger.ErrorContext(ctx, "failed to upsert streak", slog.Any("error", err))
-		return
+		return fmt.Errorf("upsert streak: %w", err)
 	}
-	_ = s.repo.CreateStreakEvent(ctx, event)
+	if err := s.repo.CreateStreakEvent(ctx, event); err != nil {
+		return fmt.Errorf("create streak event: %w", err)
+	}
 	s.logger.InfoContext(ctx, "streak updated", slog.Int("current_count", next.CurrentCount), slog.Int("best_count", next.BestCount))
+	return nil
 }
 
-func (s *Service) fireMissionProgress(ctx context.Context, attempt ChallengeAttempt, challenge *Challenge, roundResults any, owner ownerIdentity) {
+func (s *Service) fireMissionProgress(ctx context.Context, attempt ChallengeAttempt, challenge *Challenge, roundResults any, owner ownerIdentity) error {
 	now := s.clock.Now()
-	resultJSON, _ := json.Marshal(roundResults)
+	resultJSON, err := json.Marshal(roundResults)
+	if err != nil {
+		return fmt.Errorf("encode mission round results: %w", err)
+	}
 	var results []struct {
 		RoundNumber    int `json:"round_number"`
 		Score          int `json:"score"`
 		DistanceMeters int `json:"distance_meters"`
 	}
-	_ = json.Unmarshal(resultJSON, &results)
+	if err := json.Unmarshal(resultJSON, &results); err != nil {
+		return fmt.Errorf("decode mission round results: %w", err)
+	}
 	eventSource := &attempt.ID
 	challengeSource := &attempt.ChallengeID
 	if challenge.Type == TypeDaily {
-		s.applyMissionEvent(ctx, owner, now, "daily_completion", 1, eventSource, challengeSource)
+		if err := s.applyMissionEvent(ctx, owner, now, "daily_completion", 1, eventSource, challengeSource); err != nil {
+			return err
+		}
 		if attempt.UserID != nil {
-			s.applyMissionEvent(ctx, owner, now, "streak_milestone", 1, eventSource, challengeSource)
+			if err := s.applyMissionEvent(ctx, owner, now, "streak_milestone", 1, nil, challengeSource); err != nil {
+				return err
+			}
 		}
 	}
 	if challenge.Type == TypeShared {
-		s.applyMissionEvent(ctx, owner, now, "shared_participation", 1, eventSource, challengeSource)
+		if err := s.applyMissionEvent(ctx, owner, now, "shared_participation", 1, eventSource, challengeSource); err != nil {
+			return err
+		}
 	}
 	highAccuracy := true
 	for _, r := range results {
@@ -928,30 +996,29 @@ func (s *Service) fireMissionProgress(ctx context.Context, attempt ChallengeAtte
 		}
 	}
 	if highAccuracy && len(results) > 0 {
-		s.applyMissionEvent(ctx, owner, now, "round_accuracy", 1, eventSource, challengeSource)
+		if err := s.applyMissionEvent(ctx, owner, now, "round_accuracy", 1, eventSource, challengeSource); err != nil {
+			return err
+		}
 	}
-	s.applyMissionEvent(ctx, owner, now, "score_threshold", attempt.TotalScore, eventSource, challengeSource)
+	return s.applyMissionEvent(ctx, owner, now, "score_threshold", attempt.TotalScore, eventSource, challengeSource)
 }
 
-func (s *Service) applyMissionEvent(ctx context.Context, owner ownerIdentity, now time.Time, missionCode string, delta int, sourceAttemptID, sourceChallengeID *uuid.UUID) {
+func (s *Service) applyMissionEvent(ctx context.Context, owner ownerIdentity, now time.Time, missionCode string, delta int, sourceAttemptID, sourceChallengeID *uuid.UUID) error {
 	if delta <= 0 {
-		return
+		return nil
 	}
-	mission, err := s.repo.GetMissionByCode(ctx, missionCode)
+	if err := s.repo.EnsureMissions(ctx, DefaultMissions(now, s.resetHourUTC)); err != nil {
+		return fmt.Errorf("materialize mission period: %w", err)
+	}
+	missions, err := s.repo.ListActiveMissionsByType(ctx, missionCode, now)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "failed to lookup mission for progress event", slog.String("mission_code", missionCode), slog.Any("error", err))
-		return
+		return fmt.Errorf("lookup %s mission: %w", missionCode, err)
 	}
-	if mission == nil {
-		return
+	for _, mission := range missions {
+		event := MissionProgressEvent{SourceAttemptID: sourceAttemptID, SourceChallengeID: sourceChallengeID, EventType: missionCode, Delta: delta}
+		if err := s.repo.ApplyMissionProgressEvent(ctx, mission, owner, event, now); err != nil {
+			return fmt.Errorf("apply %s mission progress: %w", missionCode, err)
+		}
 	}
-	event := MissionProgressEvent{
-		SourceAttemptID:   sourceAttemptID,
-		SourceChallengeID: sourceChallengeID,
-		EventType:         missionCode,
-		Delta:             delta,
-	}
-	if err := s.repo.ApplyMissionProgressEvent(ctx, *mission, owner, event, now); err != nil {
-		s.logger.ErrorContext(ctx, "failed to apply mission progress", slog.String("mission_code", missionCode), slog.Any("error", err))
-	}
+	return nil
 }

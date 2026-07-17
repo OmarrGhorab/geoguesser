@@ -76,6 +76,7 @@ type Guess struct {
 	DistanceMeters int       `gorm:"type:int;not null"`
 	Score          int       `gorm:"type:int;not null"`
 	IdempotencyKey *string   `gorm:"type:text"`
+	TimedOut       bool      `gorm:"type:boolean;not null;default:false"`
 	SubmittedAt    time.Time `gorm:"type:timestamptz;not null;default:now()"`
 	CreatedAt      time.Time `gorm:"type:timestamptz;not null;default:now()"`
 }

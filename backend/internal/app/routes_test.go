@@ -20,6 +20,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/home"
 	"github.com/raven/geoguess/backend/internal/leaderboards"
 	"github.com/raven/geoguess/backend/internal/matchmaking"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
@@ -45,7 +46,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -76,7 +77,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(nil, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -123,7 +124,7 @@ func TestRouterPublicUserRoutesUseProfilesContract(t *testing.T) {
 
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID.String()+"/stats", nil)
@@ -225,7 +226,7 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -259,7 +260,7 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	challengesHandler := challenges.NewHandler(stubChallengeService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -297,7 +298,7 @@ func TestRouterMountsDocumentedLeaderboardRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil, nil)
 
 	endpoints := []string{
 		"/api/v1/leaderboards/global",
@@ -489,7 +490,7 @@ func newProfileRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, profileMetrics), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	return router, csrfManager, accessToken
 }
@@ -512,7 +513,7 @@ func TestRouterMatchmakingRequiresRegisteredAuth(t *testing.T) {
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 
 	// Nil matchmaking handler means routes are not mounted.
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
 	router.ServeHTTP(w, req)
@@ -564,7 +565,7 @@ func newMatchmakingRouter(t *testing.T, cfg config.Config, limiter appmiddleware
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	mmHandler := matchmaking.NewHandler(svc, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler, nil, nil)
 	return router, csrfManager, accessToken, userID
 }
 
@@ -721,7 +722,7 @@ func newFriendsRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	friendsHandler := friends.NewHandler(friends.NewService(friendsRouteStore{}, nil), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, friendsHandler)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, friendsHandler, nil)
 	return router, csrfManager, accessToken
 }
 
@@ -860,12 +861,85 @@ func TestRouterFriendsLeaderboardRequiresAuth(t *testing.T) {
 	}
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/leaderboards/friends", nil)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("friends leaderboard unauth = %d, want 401", w.Code)
+	}
+}
+
+type homeRouteService struct {
+	userID uuid.UUID
+}
+
+func (s homeRouteService) Get(context.Context, *session.Context) (*home.Response, error) {
+	return &home.Response{Viewer: home.ViewerDTO{UserID: s.userID, DisplayName: "Radiant"}}, nil
+}
+
+func newHomeRouter(t *testing.T, cfg config.Config, limiter appmiddleware.RateLimiter) (http.Handler, string) {
+	t.Helper()
+	userID := uuid.New()
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+	csrfManager, err := auth.NewCSRFManager(cfg.CSRFSecret)
+	if err != nil {
+		t.Fatalf("csrf manager setup failed: %v", err)
+	}
+	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
+	if err != nil {
+		t.Fatalf("token manager setup failed: %v", err)
+	}
+	accessToken, _, err := tokenManager.GenerateAccessToken(userID, "user")
+	if err != nil {
+		t.Fatalf("access token generation failed: %v", err)
+	}
+	authService := auth.NewService(nil, nil, tokenManager, nil, csrfManager, nil, nil, nil, nil, nil, cfg, clock.NewSystem())
+	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	homeHandler := home.NewHandler(homeRouteService{userID: userID}, obs.Logger, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, homeHandler)
+	return router, accessToken
+}
+
+func TestRouterHomeRequiresRegisteredAuth(t *testing.T) {
+	router, _ := newHomeRouter(t, testConfig(), noopRateLimiter{})
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/home", nil)
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("GET home unauthenticated = %d body=%s, want 401", response.Code, response.Body.String())
+	}
+}
+
+func TestRouterHomeRegisteredReadReachesHandler(t *testing.T) {
+	router, accessToken := newHomeRouter(t, testConfig(), noopRateLimiter{})
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/home", nil)
+	request.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET home authenticated = %d body=%s, want 200", response.Code, response.Body.String())
+	}
+}
+
+func TestRouterHomeRateLimit(t *testing.T) {
+	router, accessToken := newHomeRouter(t, testConfig(), staticRateLimiter{allowed: false})
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/home", nil)
+	request.AddCookie(&http.Cookie{Name: auth.AccessTokenCookieName, Value: accessToken})
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("GET home rate limited = %d body=%s, want 429", response.Code, response.Body.String())
 	}
 }

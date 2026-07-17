@@ -21,6 +21,50 @@ func TestNormalizeSettingsValidation(t *testing.T) {
 	}
 }
 
+func TestDailyTimerPolicySetsThreeMinutesForLegacySnapshots(t *testing.T) {
+	settings := SettingsSnapshot{RoundCount: DefaultRoundCount}
+	enforceDailyTimerPolicy(TypeDaily, &settings)
+	if settings.TimerSeconds == nil || *settings.TimerSeconds != DailyRoundTimerSeconds {
+		t.Fatalf("daily timer = %v, want %d", settings.TimerSeconds, DailyRoundTimerSeconds)
+	}
+
+	shared := SettingsSnapshot{RoundCount: DefaultRoundCount}
+	enforceDailyTimerPolicy(TypeShared, &shared)
+	if shared.TimerSeconds != nil {
+		t.Fatalf("shared timer = %v, want nil", *shared.TimerSeconds)
+	}
+}
+
+func TestCompletionXP(t *testing.T) {
+	if got := completionXP(0); got != 100 {
+		t.Fatalf("completionXP(0) = %d, want 100", got)
+	}
+	if got := completionXP(25_000); got != 350 {
+		t.Fatalf("completionXP(25000) = %d, want 350", got)
+	}
+}
+
+func TestDailyAttemptPresentationKeepsCompletedGameForResults(t *testing.T) {
+	gameID := uuid.New()
+	attempt := ChallengeAttempt{
+		Status:          AttemptStatusCompleted,
+		GameID:          &gameID,
+		DailyGameNumber: 4,
+	}
+
+	summary, gamesPlayed, lastCompletedGameID := dailyAttemptPresentation(attempt)
+
+	if summary.Status != AttemptStatusPending || summary.GameID != nil {
+		t.Fatalf("next attempt summary = %+v, want pending without active game", summary)
+	}
+	if gamesPlayed != 4 {
+		t.Fatalf("games played = %d, want 4", gamesPlayed)
+	}
+	if lastCompletedGameID == nil || *lastCompletedGameID != gameID {
+		t.Fatalf("last completed game = %v, want %s", lastCompletedGameID, gameID)
+	}
+}
+
 func TestSelectUniqueRejectsInsufficientUniqueLocations(t *testing.T) {
 	mapID := uuid.New()
 	locationID := uuid.New()

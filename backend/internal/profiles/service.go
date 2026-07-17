@@ -436,16 +436,18 @@ func validatePreferences(prefs map[string]any) []apphttp.FieldError {
 
 func toProfileDTO(p *RegisteredProfile) ProfileDTO {
 	return ProfileDTO{
-		UserID:      p.UserID,
-		Email:       p.Email,
-		DisplayName: p.DisplayName,
-		AvatarURL:   p.AvatarURL,
-		CountryCode: p.CountryCode,
-		Locale:      p.Locale,
-		Timezone:    p.Timezone,
-		Preferences: p.Preferences,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
+		UserID:           p.UserID,
+		Email:            p.Email,
+		DisplayName:      p.DisplayName,
+		AvatarURL:        p.AvatarURL,
+		CountryCode:      p.CountryCode,
+		Locale:           p.Locale,
+		Timezone:         p.Timezone,
+		Preferences:      p.Preferences,
+		ExperiencePoints: p.ExperiencePoints,
+		Level:            p.Level,
+		CreatedAt:        p.CreatedAt,
+		UpdatedAt:        p.UpdatedAt,
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
 	"github.com/raven/geoguess/backend/internal/health"
+	"github.com/raven/geoguess/backend/internal/home"
 	"github.com/raven/geoguess/backend/internal/leaderboards"
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
@@ -26,7 +27,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/uploads"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler, matchmakingHandler *matchmaking.Handler, friendsHandler *friends.Handler) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler, matchmakingHandler *matchmaking.Handler, friendsHandler *friends.Handler, homeHandler *home.Handler) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -77,6 +78,14 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 			})
 		}
 
+		if homeHandler != nil {
+			homeReadLimit := appmiddleware.RateLimitConfig{Limit: 120, Window: 1 * time.Minute}
+			api.With(
+				appmiddleware.RequireAuth(logger),
+				appmiddleware.RateLimitWithObserver(rateLimiter, homeReadLimit, appmiddleware.RateLimitByRegisteredUser("home-read"), logger, homeHandler.RecordRateLimited),
+			).Get("/home", homeHandler.Get)
+		}
+
 		if uploadsHandler != nil {
 			api.Route("/uploads", func(u chi.Router) {
 				uploadsHandler.RegisterUploadRoutes(u)
@@ -103,6 +112,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 				g.Post("/{gameId}/start", gamesHandler.StartGame)
 				g.Get("/{gameId}/rounds/current", gamesHandler.GetCurrentRound)
 				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess"), logger)).Post("/{gameId}/rounds/{roundId}/guesses", gamesHandler.SubmitGuess)
+				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess-timeout"), logger)).Post("/{gameId}/rounds/{roundId}/timeout", gamesHandler.ExpireRound)
 				g.Get("/{gameId}/results", gamesHandler.GetResults)
 			})
 		}

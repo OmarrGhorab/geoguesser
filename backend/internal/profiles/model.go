@@ -9,16 +9,18 @@ import (
 // RegisteredProfile is the editable profile owned by a registered account.
 // It is the private, owner-facing view and is never returned to other users.
 type RegisteredProfile struct {
-	UserID      uuid.UUID
-	Email       string
-	DisplayName string
-	AvatarURL   *string
-	CountryCode *string
-	Locale      string
-	Timezone    *string
-	Preferences map[string]any
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	UserID           uuid.UUID
+	Email            string
+	DisplayName      string
+	AvatarURL        *string
+	CountryCode      *string
+	Locale           string
+	Timezone         *string
+	Preferences      map[string]any
+	ExperiencePoints int64
+	Level            int
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // ProfileUpdate carries the requested changes to a registered profile. Nil

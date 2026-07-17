@@ -11,6 +11,19 @@
 #   still tunnel with: ngrok http 3000
 
 services:
+  migrate:
+    build:
+      context: ./backend
+      target: migrate
+    env_file:
+      - ./backend/.env
+    # This one-shot service is safe to rerun: Goose records applied versions.
+    entrypoint: ["/bin/sh", "-c"]
+    # Escape `$` so Compose leaves the secret for the container's shell, where
+    # it is supplied by env_file instead of interpolated from the host shell.
+    command: ['goose -dir /migrations postgres "$${DATABASE_URL}" up']
+    restart: "no"
+
   api:
     build:
       context: ./backend
@@ -26,6 +39,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   client:
     image: node:22-alpine
@@ -38,6 +54,9 @@ services:
       BACKEND_API_URL: http://api:8080/api/v1
       # Browser talks to the host-mapped API port.
       NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-ws://localhost:8080/realtime}
+      # Required only for the interactive daily mission panorama and guess map.
+      # Restrict this browser key to your frontend origins in Google Cloud.
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
       PNPM_STORE_DIR: /root/.pnpm-store
       CI: "true"
     ports:

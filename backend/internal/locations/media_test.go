@@ -43,6 +43,28 @@ func TestStaticProviderMediaURLRejectsUnsafeProviderRefs(t *testing.T) {
 	}
 }
 
+func TestPanoramaIDAllowsOnlyOpaqueKnownProviderIDs(t *testing.T) {
+	t.Parallel()
+
+	valid := "CAoSLEFGMVFpcE5fexample_123-abc"
+	if got, ok := PanoramaID("google_street_view", valid); !ok || got != valid {
+		t.Fatalf("PanoramaID() = %q, %v, want valid id", got, ok)
+	}
+	for _, test := range []struct {
+		provider string
+		ref      string
+	}{
+		{provider: "image", ref: valid},
+		{provider: "google_street_view", ref: "https://example.test/pano"},
+		{provider: "google_street_view", ref: "short"},
+		{provider: "google_street_view", ref: "javascript:alert(1)"},
+	} {
+		if got, ok := PanoramaID(test.provider, test.ref); ok || got != "" {
+			t.Fatalf("PanoramaID(%q, %q) = %q, %v, want rejection", test.provider, test.ref, got, ok)
+		}
+	}
+}
+
 func TestAuthorizeMediaAccessTiers(t *testing.T) {
 	service := Service{}
 	userID := "0197a000-0000-7000-8000-000000000001"

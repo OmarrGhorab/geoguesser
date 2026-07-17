@@ -2,8 +2,11 @@ package locations
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 )
+
+var panoramaIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,512}$`)
 
 // Provider resolves a location's provider and provider_ref into a playable media URL.
 type Provider interface {
@@ -36,4 +39,17 @@ func MediaType(provider string) string {
 	default:
 		return MediaTypeImage
 	}
+}
+
+// PanoramaID returns a client-playable opaque panorama identifier for known
+// panorama providers. It never exposes coordinates or arbitrary provider data.
+func PanoramaID(provider, providerRef string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "streetview", "google_street_view", "panorama":
+		value := strings.TrimSpace(providerRef)
+		if panoramaIDPattern.MatchString(value) {
+			return value, true
+		}
+	}
+	return "", false
 }

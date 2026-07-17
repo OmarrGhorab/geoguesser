@@ -152,6 +152,9 @@ func (s *Service) GetGame(ctx context.Context, sess *session.Context, gameID str
 	if player == nil {
 		return nil, ErrForbidden
 	}
+	if err := s.finalizeCompletedGame(ctx, game); err != nil {
+		return nil, err
+	}
 	current, err := s.repo.GetCurrentRound(ctx, game.ID)
 	if err != nil {
 		return nil, err
@@ -228,14 +231,37 @@ func (s *Service) GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID
 // GetCurrentRound returns the current round without hidden coordinates.
 // For multiplayer/ranked modes, expired deadlines advance rounds/games before the read.
 func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, gameID string) (*CurrentRoundResponse, error) {
-	game, _, err := s.loadOwnedGame(ctx, sess, gameID)
+	game, player, err := s.loadOwnedGame(ctx, sess, gameID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.finalizeCompletedGame(ctx, game); err != nil {
 		return nil, err
 	}
 	if game.Status != GameStatusActive {
 		return nil, ErrGameNotActive
 	}
 	now := s.clock.Now()
+	if game.Mode == GameModeDaily {
+		row, err := s.repo.GetCurrentRound(ctx, game.ID)
+		if err != nil {
+			return nil, err
+		}
+		if row != nil && row.EndsAt != nil && !now.Before(*row.EndsAt) {
+			saved, _, completed, err := s.repo.ExpireSoloRoundTx(ctx, game.ID, row.RoundID, player.ID, now)
+			if err != nil && !errors.Is(err, ErrRoundClosed) {
+				return nil, err
+			}
+			if completed && saved != nil && s.completionHook != nil {
+				if err := s.completionHook.OnGameCompleted(ctx, game.ID, saved.SubmittedAt); err != nil {
+					return nil, fmt.Errorf("finalize completed daily game: %w", err)
+				}
+			}
+			if completed {
+				return nil, ErrGameNotActive
+			}
+		}
+	}
 	if IsMultiplayerMode(game.Mode) {
 		row, err := s.repo.GetCurrentRound(ctx, game.ID)
 		if err != nil {
@@ -495,7 +521,7 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		)
 		if s.completionHook != nil {
 			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
-				s.logger.ErrorContext(ctx, "game completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+				return nil, fmt.Errorf("finalize completed game: %w", err)
 			}
 		}
 	}
@@ -508,8 +534,61 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 			DistanceMeters: saved.DistanceMeters,
 			Score:          saved.Score,
 			SubmittedAt:    saved.SubmittedAt,
+			TimedOut:       saved.TimedOut,
 		},
 		ActualLocation: toRevealedLocation(*actual),
+		MaxScore:       5000,
+		ScorePercent:   saved.Score * 100 / 5000,
+		Outcome:        guessOutcome(saved.Score, saved.TimedOut),
+	}, nil
+}
+
+// ExpireRound advances an elapsed daily round with a zero-score timeout.
+func (s *Service) ExpireRound(ctx context.Context, sess *session.Context, gameID, roundID string) (*GuessResultResponse, error) {
+	owner, err := ownerFromSession(sess)
+	if err != nil {
+		return nil, err
+	}
+	parsedGameID, err := uuid.Parse(gameID)
+	if err != nil {
+		return nil, ErrGameNotFound
+	}
+	parsedRoundID, err := uuid.Parse(roundID)
+	if err != nil {
+		return nil, ErrRoundNotFound
+	}
+	game, err := s.repo.GetGameByID(ctx, parsedGameID)
+	if err != nil {
+		return nil, err
+	}
+	if game == nil || game.Mode != GameModeDaily || game.Status != GameStatusActive {
+		return nil, ErrGameNotActive
+	}
+	player, err := s.repo.GetSoloPlayer(ctx, game.ID)
+	if err != nil {
+		return nil, err
+	}
+	if player == nil || !ownerMatches(owner, *player) {
+		return nil, ErrForbidden
+	}
+	saved, actual, completed, err := s.repo.ExpireSoloRoundTx(ctx, game.ID, parsedRoundID, player.ID, s.clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	if saved == nil || actual == nil {
+		return nil, ErrRoundNotFound
+	}
+	if completed && s.completionHook != nil {
+		if err := s.completionHook.OnGameCompleted(ctx, game.ID, saved.SubmittedAt); err != nil {
+			return nil, fmt.Errorf("finalize timed-out game: %w", err)
+		}
+	}
+	return &GuessResultResponse{
+		Guess:          GuessResult{ID: saved.ID, Latitude: saved.Latitude, Longitude: saved.Longitude, DistanceMeters: 0, Score: 0, SubmittedAt: saved.SubmittedAt, TimedOut: true},
+		ActualLocation: toRevealedLocation(*actual),
+		MaxScore:       5000,
+		ScorePercent:   0,
+		Outcome:        "timed_out",
 	}, nil
 }
 
@@ -570,7 +649,7 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 	if saved.GameCompleted {
 		if s.completionHook != nil {
 			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
-				s.logger.ErrorContext(ctx, "multiplayer completion hook failed", slog.String("game_id", game.ID.String()), slog.Any("error", err))
+				return nil, fmt.Errorf("finalize multiplayer game: %w", err)
 			}
 		}
 	}
@@ -582,8 +661,12 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 			DistanceMeters: saved.Guess.DistanceMeters,
 			Score:          saved.Guess.Score,
 			SubmittedAt:    saved.Guess.SubmittedAt,
+			TimedOut:       saved.Guess.TimedOut,
 		},
 		ActualLocation: toRevealedLocation(*actual),
+		MaxScore:       5000,
+		ScorePercent:   saved.Guess.Score * 100 / 5000,
+		Outcome:        guessOutcome(saved.Guess.Score, saved.Guess.TimedOut),
 	}, nil
 }
 
@@ -645,6 +728,9 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, gameID 
 	if game.Status != GameStatusCompleted {
 		return nil, ErrResultsNotReady
 	}
+	if err := s.finalizeCompletedGame(ctx, game); err != nil {
+		return nil, err
+	}
 	loadedGame, players, rounds, err := s.repo.LoadResults(ctx, game.ID)
 	if err != nil {
 		return nil, err
@@ -661,6 +747,22 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, gameID 
 		Players: playerDTOs,
 		Rounds:  rounds,
 	}, nil
+}
+
+// finalizeCompletedGame makes post-game projections retriable from every owned read.
+// The hook is idempotent, so a transient failure never strands a completed game.
+func (s *Service) finalizeCompletedGame(ctx context.Context, game *Game) error {
+	if game == nil || game.Status != GameStatusCompleted || s.completionHook == nil {
+		return nil
+	}
+	completedAt := s.clock.Now()
+	if game.CompletedAt != nil {
+		completedAt = *game.CompletedAt
+	}
+	if err := s.completionHook.OnGameCompleted(ctx, game.ID, completedAt); err != nil {
+		return fmt.Errorf("retry completed game finalization: %w", err)
+	}
+	return nil
 }
 
 type ownerIdentity struct {
@@ -755,7 +857,8 @@ func uniqueSelectedLocations(selected []maps.SelectedLocation, count int) []maps
 
 func (s *Service) toRoundDTO(row currentRoundRow) RoundDTO {
 	mediaURL := ""
-	if s.media != nil {
+	panoramaID, hasPanoramaID := locations.PanoramaID(row.Provider, row.ProviderRef)
+	if !hasPanoramaID && s.media != nil {
 		if resolved, err := s.media.MediaURL(row.Provider, row.ProviderRef); err == nil {
 			mediaURL = resolved
 		}
@@ -769,6 +872,7 @@ func (s *Service) toRoundDTO(row currentRoundRow) RoundDTO {
 		Media: &RoundMedia{
 			Type:        locations.MediaType(row.Provider),
 			URL:         mediaURL,
+			PanoramaID:  panoramaID,
 			Attribution: row.Attribution,
 		},
 	}
@@ -843,7 +947,24 @@ func (s *Service) guessReplayResponse(ctx context.Context, guess Guess) (*GuessR
 			DistanceMeters: guess.DistanceMeters,
 			Score:          guess.Score,
 			SubmittedAt:    guess.SubmittedAt,
+			TimedOut:       guess.TimedOut,
 		},
 		ActualLocation: toRevealedLocation(*answer),
+		MaxScore:       5000,
+		ScorePercent:   guess.Score * 100 / 5000,
+		Outcome:        guessOutcome(guess.Score, guess.TimedOut),
 	}, nil
+}
+
+func guessOutcome(score int, timedOut bool) string {
+	if timedOut {
+		return "timed_out"
+	}
+	if score == 5000 {
+		return "perfect"
+	}
+	if score >= 4000 {
+		return "close"
+	}
+	return "miss"
 }

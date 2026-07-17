@@ -5,6 +5,7 @@ import "time"
 const (
 	GameModeSolo        = "solo"
 	GameModePrivateRoom = "private_room"
+	GameModeDaily       = "daily"
 	GameModeRanked      = "ranked"
 
 	GameStatusPending   = "pending"

@@ -23,16 +23,18 @@ func NewRepository(db *gorm.DB) *Repository {
 }
 
 type profileRow struct {
-	UserID      uuid.UUID `gorm:"column:user_id"`
-	Email       string    `gorm:"column:email"`
-	DisplayName string    `gorm:"column:display_name"`
-	AvatarURL   *string   `gorm:"column:avatar_url"`
-	CountryCode *string   `gorm:"column:country_code"`
-	Locale      string    `gorm:"column:locale"`
-	Timezone    *string   `gorm:"column:timezone"`
-	Preferences []byte    `gorm:"column:preferences"`
-	CreatedAt   time.Time `gorm:"column:created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	UserID           uuid.UUID `gorm:"column:user_id"`
+	Email            string    `gorm:"column:email"`
+	DisplayName      string    `gorm:"column:display_name"`
+	AvatarURL        *string   `gorm:"column:avatar_url"`
+	CountryCode      *string   `gorm:"column:country_code"`
+	Locale           string    `gorm:"column:locale"`
+	Timezone         *string   `gorm:"column:timezone"`
+	Preferences      []byte    `gorm:"column:preferences"`
+	ExperiencePoints int64     `gorm:"column:experience_points"`
+	Level            int       `gorm:"column:level"`
+	CreatedAt        time.Time `gorm:"column:created_at"`
+	UpdatedAt        time.Time `gorm:"column:updated_at"`
 }
 
 func (row profileRow) toDomain() (*RegisteredProfile, error) {
@@ -41,16 +43,18 @@ func (row profileRow) toDomain() (*RegisteredProfile, error) {
 		return nil, err
 	}
 	return &RegisteredProfile{
-		UserID:      row.UserID,
-		Email:       row.Email,
-		DisplayName: row.DisplayName,
-		AvatarURL:   row.AvatarURL,
-		CountryCode: row.CountryCode,
-		Locale:      row.Locale,
-		Timezone:    row.Timezone,
-		Preferences: prefs,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
+		UserID:           row.UserID,
+		Email:            row.Email,
+		DisplayName:      row.DisplayName,
+		AvatarURL:        row.AvatarURL,
+		CountryCode:      row.CountryCode,
+		Locale:           row.Locale,
+		Timezone:         row.Timezone,
+		Preferences:      prefs,
+		ExperiencePoints: row.ExperiencePoints,
+		Level:            row.Level,
+		CreatedAt:        row.CreatedAt,
+		UpdatedAt:        row.UpdatedAt,
 	}, nil
 }
 
@@ -74,7 +78,7 @@ func (r *Repository) GetCurrentProfile(ctx context.Context, userID uuid.UUID) (*
 	var row profileRow
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT u.id AS user_id, u.email, p.display_name, p.avatar_url, p.country_code,
-		       p.locale, p.timezone, p.preferences, p.created_at, p.updated_at
+		       p.locale, p.timezone, p.preferences, p.experience_points, p.level, p.created_at, p.updated_at
 		FROM users u
 		JOIN user_profiles p ON p.user_id = u.id
 		WHERE u.id = ?
@@ -98,7 +102,7 @@ func (r *Repository) UpdateProfile(ctx context.Context, userID uuid.UUID, update
 		var row profileRow
 		err := tx.Raw(`
 			SELECT u.id AS user_id, u.email, p.display_name, p.avatar_url, p.country_code,
-			       p.locale, p.timezone, p.preferences, p.created_at, p.updated_at
+			       p.locale, p.timezone, p.preferences, p.experience_points, p.level, p.created_at, p.updated_at
 			FROM users u
 			JOIN user_profiles p ON p.user_id = u.id
 			WHERE u.id = ?
@@ -152,7 +156,7 @@ func (r *Repository) UpdateProfile(ctx context.Context, userID uuid.UUID, update
 		var updated profileRow
 		if err := tx.Raw(`
 			SELECT u.id AS user_id, u.email, p.display_name, p.avatar_url, p.country_code,
-			       p.locale, p.timezone, p.preferences, p.created_at, p.updated_at
+			       p.locale, p.timezone, p.preferences, p.experience_points, p.level, p.created_at, p.updated_at
 			FROM users u
 			JOIN user_profiles p ON p.user_id = u.id
 			WHERE u.id = ?
