@@ -23,8 +23,11 @@ const (
 	AttemptStatusAbandoned = "abandoned"
 	AttemptStatusExpired   = "expired"
 
-	DefaultRoundCount     = 5
-	DefaultScoringVersion = 1
+	DefaultRoundCount      = 5
+	DailyRoundTimerSeconds = 180
+	DailyGamesPerDay       = 5
+	ExperiencePerLevel     = 1000
+	DefaultScoringVersion  = 1
 
 	StreakStatusInactive  = "inactive"
 	StreakStatusActive    = "active"
@@ -80,6 +83,8 @@ type ChallengeAttempt struct {
 	CompletedAt          *time.Time `gorm:"type:timestamptz"`
 	TotalScore           int        `gorm:"type:int;not null;default:0"`
 	TotalDistanceMeters  int        `gorm:"type:int;not null;default:0"`
+	AwardedXP            int        `gorm:"type:int;not null;default:0"`
+	DailyGameNumber      int        `gorm:"type:int;not null;default:1"`
 	CompletionDurationMS *int64     `gorm:"type:bigint"`
 	CreatedAt            time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 	UpdatedAt            time.Time  `gorm:"type:timestamptz;not null;default:now()"`
@@ -131,7 +136,11 @@ func (Streak) TableName() string { return "streaks" }
 
 type Mission struct {
 	ID             uuid.UUID       `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	Code           string          `gorm:"type:text;not null"`
+	Code           string          `gorm:"type:text;not null"` // unique period instance key
+	MissionKey     string          `gorm:"type:text;not null"`
+	Cadence        string          `gorm:"type:text;not null"`
+	PeriodKey      string          `gorm:"type:text;not null"`
+	IconKey        string          `gorm:"type:text;not null"`
 	TitleKey       string          `gorm:"type:text;not null"`
 	DescriptionKey string          `gorm:"type:text;not null"`
 	MissionType    string          `gorm:"type:text;not null"`
@@ -139,6 +148,7 @@ type Mission struct {
 	ActiveStartsAt time.Time       `gorm:"type:timestamptz;not null"`
 	ActiveEndsAt   *time.Time      `gorm:"type:timestamptz"`
 	RewardSnapshot json.RawMessage `gorm:"type:jsonb;not null"`
+	RewardXP       int             `gorm:"type:int;not null"`
 	Status         string          `gorm:"type:text;not null;default:'active'"`
 	CreatedAt      time.Time       `gorm:"type:timestamptz;not null;default:now()"`
 	UpdatedAt      time.Time       `gorm:"type:timestamptz;not null;default:now()"`

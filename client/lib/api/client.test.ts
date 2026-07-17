@@ -102,4 +102,57 @@ describe("apiJson", () => {
       ),
     ).rejects.toBeInstanceOf(z.ZodError);
   });
+
+  it("refreshes an expired authenticated action once and retries with the new access token", async () => {
+    cookieStore.getAll.mockReturnValue([
+      { name: "access_token", value: "expired.jwt" },
+      { name: "refresh_token", value: "refresh.jwt" },
+      { name: "csrf_token", value: "signed.csrf" },
+    ]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { code: "forbidden", message: "Forbidden" } },
+          { status: 403 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response('{"user":{"id":"user-1"}}', {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "set-cookie":
+              "access_token=fresh.jwt; Path=/; HttpOnly; SameSite=Lax",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await apiJson(
+      "/challenges/daily/attempts",
+      z.object({ ok: z.boolean() }),
+      { method: "POST", requiresAuth: true },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "http://api:8080/api/v1/auth/refresh",
+    );
+    const refreshHeaders = new Headers(
+      (fetchMock.mock.calls[1]?.[1] as RequestInit).headers,
+    );
+    expect(refreshHeaders.get("x-csrf-token")).toBe("signed.csrf");
+    const retryHeaders = new Headers(
+      (fetchMock.mock.calls[2]?.[1] as RequestInit).headers,
+    );
+    expect(retryHeaders.get("cookie")).toContain("access_token=fresh.jwt");
+    expect(cookieStore.set).toHaveBeenCalledWith(
+      "access_token",
+      "fresh.jwt",
+      expect.any(Object),
+    );
+  });
 });

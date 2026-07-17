@@ -111,7 +111,11 @@ export default async function LocaleLayout({
 
   // Minimal client provider for next-intl navigation; no full message catalog.
   return (
-    <html lang={appLocale} dir={getDirection(appLocale)}>
+    <html
+      lang={appLocale}
+      dir={getDirection(appLocale)}
+      data-scroll-behavior="smooth"
+    >
       <body>
         <NextIntlClientProvider locale={appLocale} messages={{}}>
           {children}

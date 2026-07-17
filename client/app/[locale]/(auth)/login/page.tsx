@@ -7,7 +7,7 @@ import { siteUrl } from "@/lib/site";
 
 type LoginPageProps = Readonly<{
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ oauth_error?: string }>;
+  searchParams: Promise<{ oauth_error?: string; reason?: string }>;
 }>;
 
 export async function generateMetadata({
@@ -31,7 +31,7 @@ export default async function LoginPage({
   searchParams,
 }: LoginPageProps) {
   const { locale } = await params;
-  const { oauth_error: oauthError } = await searchParams;
+  const { oauth_error: oauthError, reason } = await searchParams;
   const appLocale = locale as AppLocale;
   setRequestLocale(appLocale);
 
@@ -42,7 +42,13 @@ export default async function LoginPage({
   return (
     <LoginForm
       locale={appLocale}
-      initialFormError={oauthError ? "oauthFailed" : undefined}
+      initialFormError={
+        oauthError
+          ? "oauthFailed"
+          : reason === "session_expired"
+            ? "sessionExpired"
+            : undefined
+      }
       labels={{
         titleLine1: t("titleLine1"),
         titleLine2: t("titleLine2"),

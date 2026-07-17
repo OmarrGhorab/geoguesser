@@ -25,6 +25,7 @@ type ServiceAPI interface {
 	StartGame(rctx context.Context, sess *session.Context, gameID string) (*GameResponse, error)
 	GetCurrentRound(rctx context.Context, sess *session.Context, gameID string) (*CurrentRoundResponse, error)
 	SubmitGuess(rctx context.Context, sess *session.Context, gameID, roundID, idempotencyKey string, req SubmitGuessRequest) (*GuessResultResponse, error)
+	ExpireRound(rctx context.Context, sess *session.Context, gameID, roundID string) (*GuessResultResponse, error)
 	GetResults(rctx context.Context, sess *session.Context, gameID string) (*GameResultsResponse, error)
 }
 
@@ -41,8 +42,19 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		g.Post("/{gameId}/start", h.StartGame)
 		g.Get("/{gameId}/rounds/current", h.GetCurrentRound)
 		g.Post("/{gameId}/rounds/{roundId}/guesses", h.SubmitGuess)
+		g.Post("/{gameId}/rounds/{roundId}/timeout", h.ExpireRound)
 		g.Get("/{gameId}/results", h.GetResults)
 	})
+}
+
+// ExpireRound handles a server-authoritative daily round timeout.
+func (h *Handler) ExpireRound(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.service.ExpireRound(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "gameId"), chi.URLParam(r, "roundId"))
+	if err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.OK(w, r, resp)
 }
 
 // CreateGame handles POST /games.

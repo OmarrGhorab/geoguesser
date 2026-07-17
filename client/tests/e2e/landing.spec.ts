@@ -36,14 +36,14 @@ test.describe("public landing page", () => {
     await expect(
       landingNav.getByRole("link", { name: "Leaderboards" }),
     ).toHaveAttribute("href", "#compete");
-    await expect(page.getByRole("link", { name: "Login" })).toHaveAttribute(
+    const header = page.locator("header");
+    await expect(header.getByRole("link", { name: "Login" })).toHaveAttribute(
       "href",
       "/en/login",
     );
-    await expect(page.getByRole("link", { name: "Play Free" })).toHaveAttribute(
-      "href",
-      "/en/sign-up",
-    );
+    await expect(
+      header.getByRole("link", { name: "Play Free" }),
+    ).toHaveAttribute("href", "/en/sign-up");
   });
 
   test("uses layered video, background, character, and text assets", async ({
@@ -101,7 +101,7 @@ test.describe("public landing page", () => {
     );
   });
 
-  test("authenticated sessions keep the signed-in home", async ({
+  test("invalid access cookie is not enough — GET /home decides auth (401 → landing)", async ({
     context,
     page,
   }) => {
@@ -117,10 +117,45 @@ test.describe("public landing page", () => {
     ]);
 
     await page.goto("/en");
+    // Backend rejects the fake JWT → public landing (cookie is only a hint).
+    await expect(page.getByTestId("public-landing")).toBeVisible();
+    await expect(page.getByTestId("auth-home-main")).toHaveCount(0);
+  });
 
-    await expect(page.getByTestId("public-landing")).toHaveCount(0);
+  test("daily-mission screen is reachable and matches mission landmarks", async ({
+    page,
+  }) => {
+    await page.goto("/en/daily-mission");
+    await expect(page).toHaveURL(/\/en\/daily-mission\/?$/);
+
+    await expect(page.getByTestId("daily-mission-screen")).toBeVisible();
+    await expect(page.getByTestId("mission-today-control")).toBeVisible();
+    await expect(page.getByTestId("mission-today-control")).toContainText(
+      "TODAY",
+    );
+    await expect(page.getByTestId("mission-feature-cards")).toBeVisible();
+    await expect(page.locator("[data-mission-card]")).toHaveCount(3);
+    await expect(page.getByTestId("mission-played-today")).toContainText(
+      "have played today",
+    );
+    await expect(page.getByTestId("mission-play-cta")).toBeVisible();
+    await expect(page.getByTestId("mission-play-cta")).toHaveText(/PLAY/i);
+
+    await expect(page.getByTestId("mission-a-badge")).toHaveCount(0);
     await expect(
-      page.getByRole("heading", { name: "WorldGuess" }),
-    ).toBeVisible();
+      page.getByRole("button", { name: /^A$/, exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /^A$/, exact: true }),
+    ).toHaveCount(0);
+
+    await expect(page.locator("img[src*='mission']")).toHaveCount(4);
+    await expect(page.getByTestId("mission-players-strip")).toBeVisible();
+
+    await page.getByTestId("mission-today-control").click();
+    await expect(page.getByTestId("mission-calendar")).toBeVisible();
+
+    await page.getByRole("link", { name: "Back to home" }).click();
+    await expect(page).toHaveURL(/\/en\/?$/);
   });
 });

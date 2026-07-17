@@ -77,19 +77,22 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:              getEnv("APP_ENV", "development"),
-		Version:             getEnv("VERSION", "0.1.0"),
-		HTTPAddr:            getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:         getEnv("DATABASE_URL", "postgres://geoguess:geoguess@localhost:5432/geoguess?sslmode=disable"),
-		RedisURL:            getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		AllowedOrigin:       getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
-		MetricsAuthToken:    strings.TrimSpace(os.Getenv("METRICS_AUTH_TOKEN")),
-		ReadTimeout:         durationSeconds("HTTP_READ_TIMEOUT_SECONDS", 10),
-		WriteTimeout:        durationSeconds("HTTP_WRITE_TIMEOUT_SECONDS", 15),
-		IdleTimeout:         durationSeconds("HTTP_IDLE_TIMEOUT_SECONDS", 60),
-		AccessTokenSecret:   strings.TrimSpace(os.Getenv("ACCESS_TOKEN_SECRET")),
-		AccessTokenTTL:      durationSeconds("ACCESS_TOKEN_TTL_SECONDS", 15*60),
-		RefreshTokenTTL:     durationSeconds("REFRESH_TOKEN_TTL_SECONDS", 7*24*60*60),
+		AppEnv:            getEnv("APP_ENV", "development"),
+		Version:           getEnv("VERSION", "0.1.0"),
+		HTTPAddr:          getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:       getEnv("DATABASE_URL", "postgres://geoguess:geoguess@localhost:5432/geoguess?sslmode=disable"),
+		RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		AllowedOrigin:     getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
+		MetricsAuthToken:  strings.TrimSpace(os.Getenv("METRICS_AUTH_TOKEN")),
+		ReadTimeout:       durationSeconds("HTTP_READ_TIMEOUT_SECONDS", 10),
+		WriteTimeout:      durationSeconds("HTTP_WRITE_TIMEOUT_SECONDS", 15),
+		IdleTimeout:       durationSeconds("HTTP_IDLE_TIMEOUT_SECONDS", 60),
+		AccessTokenSecret: strings.TrimSpace(os.Getenv("ACCESS_TOKEN_SECRET")),
+		AccessTokenTTL:    durationSeconds("ACCESS_TOKEN_TTL_SECONDS", 15*60),
+		// Keep the rotating refresh session for 30 days. Access tokens remain
+		// short-lived; the BFF refreshes them transparently, so a normal login
+		// remains valid for the full remembered-session period.
+		RefreshTokenTTL:     durationSeconds("REFRESH_TOKEN_TTL_SECONDS", 30*24*60*60),
 		RefreshTokenSecret:  strings.TrimSpace(os.Getenv("REFRESH_TOKEN_SECRET")),
 		CSRFSecret:          strings.TrimSpace(os.Getenv("CSRF_SECRET")),
 		GuestSessionSecret:  strings.TrimSpace(os.Getenv("GUEST_SESSION_SECRET")),

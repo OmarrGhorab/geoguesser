@@ -32,6 +32,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.ReadTimeout <= 0 {
 		t.Errorf("ReadTimeout must be positive, got %v", cfg.ReadTimeout)
 	}
+	if cfg.RefreshTokenTTL != 30*24*time.Hour {
+		t.Errorf("RefreshTokenTTL default = %v, want 30 days", cfg.RefreshTokenTTL)
+	}
 	if cfg.RoomReconnectGrace != 30*time.Second {
 		t.Errorf("RoomReconnectGrace default = %v, want 30s", cfg.RoomReconnectGrace)
 	}

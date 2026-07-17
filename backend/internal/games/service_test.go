@@ -33,6 +33,51 @@ func TestNewService(t *testing.T) {
 	}
 }
 
+func TestFinalizeCompletedGameRetriesIdempotentProjection(t *testing.T) {
+	t.Parallel()
+
+	completedAt := time.Date(2026, 7, 17, 10, 0, 0, 0, time.UTC)
+	hook := &recordingCompletionHook{err: errors.New("temporary projection failure")}
+	svc := NewServiceWithHook(
+		nil,
+		fakeLocationSelector{},
+		nil,
+		clock.Fixed(completedAt.Add(time.Hour)),
+		slog.Default(),
+		nil,
+		nil,
+		hook,
+	)
+	game := &Game{ID: uuid.New(), Status: GameStatusCompleted, CompletedAt: &completedAt}
+
+	if err := svc.finalizeCompletedGame(context.Background(), game); err == nil {
+		t.Fatal("finalizeCompletedGame() error = nil, want transient hook error")
+	}
+	if hook.calls != 1 || !hook.completedAt.Equal(completedAt) {
+		t.Fatalf("hook calls = %d at %s", hook.calls, hook.completedAt)
+	}
+
+	hook.err = nil
+	if err := svc.finalizeCompletedGame(context.Background(), game); err != nil {
+		t.Fatalf("finalizeCompletedGame() retry error = %v", err)
+	}
+	if hook.calls != 2 {
+		t.Fatalf("hook calls after retry = %d, want 2", hook.calls)
+	}
+}
+
+type recordingCompletionHook struct {
+	calls       int
+	completedAt time.Time
+	err         error
+}
+
+func (h *recordingCompletionHook) OnGameCompleted(_ context.Context, _ uuid.UUID, completedAt time.Time) error {
+	h.calls++
+	h.completedAt = completedAt
+	return h.err
+}
+
 func TestOwnerFromSession(t *testing.T) {
 	t.Parallel()
 
@@ -142,6 +187,25 @@ func TestRoundDTOHidesAnswerFields(t *testing.T) {
 		ProviderRef: "https://example.test/location.jpg",
 	})
 	if dto.Media == nil || dto.Media.URL != "https://example.test/location.jpg" {
+		t.Fatalf("media = %+v", dto.Media)
+	}
+}
+
+func TestRoundDTOProjectsPlayablePanoramaWithoutCoordinates(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	svc := NewServiceWithMedia(nil, nil, fakeMediaProvider{}, clock.Fixed(now), slog.Default())
+	dto := svc.toRoundDTO(currentRoundRow{
+		RoundID:     uuid.New(),
+		RoundNumber: 1,
+		RoundStatus: RoundStatusActive,
+		StartsAt:    &now,
+		LocationID:  uuid.New(),
+		Provider:    "google_street_view",
+		ProviderRef: "CAoSLEFGMVFpcE5fexample_123-abc",
+	})
+	if dto.Media == nil || dto.Media.PanoramaID != "CAoSLEFGMVFpcE5fexample_123-abc" || dto.Media.URL != "" {
 		t.Fatalf("media = %+v", dto.Media)
 	}
 }

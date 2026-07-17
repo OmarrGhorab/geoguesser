@@ -19,6 +19,8 @@ security: []
 
 tags:
   - name: Auth
+  - name: Home
+    description: Authenticated home-screen read models.
   - name: Profile
   - name: Uploads
   - name: Maps
@@ -166,6 +168,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionResponse'
+
+  /home:
+    get:
+      tags: [Home]
+      summary: Get authenticated home snapshot
+      description: >
+        Returns the active registered viewer, completed-game aggregate stats,
+        current daily challenge metadata, and up to four active public maps in
+        one coherent initial snapshot. Online friends, economy, progression,
+        billing, and live mode activity are intentionally excluded.
+      operationId: getAuthenticatedHome
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: Authenticated home snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /auth/oauth/{provider}:
     get:
@@ -663,6 +691,34 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /games/{gameId}/rounds/{roundId}/timeout:
+    post:
+      tags: [Games]
+      summary: Advance an expired daily round
+      description: Records a zero-score timeout after the server deadline, reveals the correct location, and activates the next round or completes the game.
+      operationId: expireDailyRound
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+        - $ref: '#/components/parameters/RoundId'
+      responses:
+        '200':
+          description: Expired round advanced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuessResultResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
@@ -2089,6 +2145,41 @@ components:
         display_name:
           type: string
 
+    HomeResponse:
+      type: object
+      required: [viewer, stats, daily_challenge, recommended_maps]
+      additionalProperties: false
+      properties:
+        viewer:
+          $ref: '#/components/schemas/HomeViewer'
+        stats:
+          $ref: '#/components/schemas/UserStats'
+        daily_challenge:
+          $ref: '#/components/schemas/ChallengeMetadataResponse'
+        recommended_maps:
+          type: array
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/Map'
+    HomeViewer:
+      type: object
+      required: [user_id, display_name]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        avatar_url:
+          type: [string, 'null']
+          format: uri
+        country_code:
+          type: [string, 'null']
+          minLength: 2
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+
     ProfileResponse:
       type: object
       required: [profile, stats, progress]
@@ -2101,7 +2192,7 @@ components:
           $ref: '#/components/schemas/ProgressSummary'
     Profile:
       type: object
-      required: [user_id, email, display_name, locale, created_at, updated_at]
+      required: [user_id, email, display_name, locale, experience_points, level, created_at, updated_at]
       properties:
         user_id:
           type: string
@@ -2138,6 +2229,12 @@ components:
             theme:
               type: string
               enum: [system, light, dark]
+        experience_points:
+          type: integer
+          minimum: 0
+        level:
+          type: integer
+          minimum: 1
         created_at:
           type: string
           format: date-time
@@ -2442,7 +2539,7 @@ components:
           $ref: '#/components/schemas/RoundMedia'
     RoundMedia:
       type: object
-      required: [type, url]
+      required: [type]
       properties:
         type:
           type: string
@@ -2450,6 +2547,11 @@ components:
         url:
           type: string
           format: uri
+        panorama_id:
+          type: string
+          minLength: 8
+          maxLength: 512
+          pattern: '^[A-Za-z0-9_-]+$'
         attribution:
           type: [string, 'null']
 
@@ -2565,15 +2667,25 @@ components:
           maximum: 180
     GuessResultResponse:
       type: object
-      required: [guess, actual_location]
+      required: [guess, actual_location, max_score, score_percent, outcome]
       properties:
         guess:
           $ref: '#/components/schemas/GuessResult'
         actual_location:
           $ref: '#/components/schemas/RevealedLocation'
+        max_score:
+          type: integer
+          const: 5000
+        score_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        outcome:
+          type: string
+          enum: [perfect, close, miss, timed_out]
     GuessResult:
       type: object
-      required: [id, latitude, longitude, distance_meters, score, submitted_at]
+      required: [id, latitude, longitude, distance_meters, score, submitted_at, timed_out]
       properties:
         id:
           type: string
@@ -2592,6 +2704,8 @@ components:
         submitted_at:
           type: string
           format: date-time
+        timed_out:
+          type: boolean
     RevealedLocation:
       type: object
       required: [latitude, longitude, country_code]
@@ -2662,13 +2776,19 @@ components:
 
     ChallengeMetadataResponse:
       type: object
-      required: [challenge, streak, missions_summary, leaderboard_summary]
+      required: [challenge, streak, missions_summary, leaderboard_summary, daily_games_played, daily_games_total]
       properties:
         challenge:
           $ref: '#/components/schemas/ChallengeSummary'
         attempt_state:
           anyOf:
             - $ref: '#/components/schemas/ChallengeAttemptSummary'
+            - type: 'null'
+        last_completed_game_id:
+          description: Most recently completed owned daily game, retained while the next daily game is available.
+          anyOf:
+            - type: string
+              format: uuid
             - type: 'null'
         streak:
           $ref: '#/components/schemas/StreakSummary'
@@ -2687,6 +2807,13 @@ components:
           anyOf:
             - $ref: '#/components/schemas/ChallengeCountdown'
             - type: 'null'
+        daily_games_played:
+          type: integer
+          minimum: 0
+          maximum: 5
+        daily_games_total:
+          type: integer
+          const: 5
     ChallengeAttemptResponse:
       type: object
       required: [challenge, attempt]
@@ -2781,6 +2908,10 @@ components:
         game_id:
           type: [string, 'null']
           format: uuid
+        daily_game_number:
+          type: integer
+          minimum: 1
+          maximum: 5
     ChallengeCountdown:
       type: object
       required: [reset_ends_at, seconds_remaining]
@@ -2919,13 +3050,17 @@ components:
             $ref: '#/components/schemas/MissionSummary'
     MissionSummary:
       type: object
-      required: [code, title_key, description_key, mission_type, current_value, target_value, status]
+      required: [code, mission_key, title_key, description_key, mission_type, cadence, period_key, icon_key, reward_xp, current_value, target_value, status]
       properties:
         id:
           type: [string, 'null']
           format: uuid
         code:
           type: string
+          description: Unique mission instance identifier, scoped to its daily or weekly period.
+        mission_key:
+          type: string
+          description: Stable mission definition identifier for client copy and icon selection.
         title_key:
           type: string
         description_key:
@@ -2933,6 +3068,19 @@ components:
         mission_type:
           type: string
           enum: [daily_completion, shared_participation, score_threshold, leaderboard_milestone, streak_milestone, round_accuracy]
+        cadence:
+          type: string
+          enum: [daily, weekly]
+        period_key:
+          type: string
+          description: UTC reset period, formatted YYYY-MM-DD for daily or YYYY-Www for weekly.
+        icon_key:
+          type: string
+          description: Stable key for the mission's UI icon.
+        reward_xp:
+          type: integer
+          minimum: 0
+          description: Account XP granted atomically when this completed mission is claimed.
         current_value:
           type: integer
           minimum: 0

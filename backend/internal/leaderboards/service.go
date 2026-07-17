@@ -242,7 +242,7 @@ func (s *Service) GetDaily(ctx context.Context, limit int, cursor string, dateOv
 func (s *Service) OnGameCompleted(ctx context.Context, gameID uuid.UUID, completedAt time.Time) error {
 	if s.challengeHook != nil {
 		if err := s.challengeHook.OnGameCompleted(ctx, gameID, completedAt); err != nil {
-			s.logger.ErrorContext(ctx, "challenge completion hook failed", slog.String("game_id", gameID.String()), slog.Any("error", err))
+			return fmt.Errorf("finalize challenge completion: %w", err)
 		}
 	}
 	dailyScope, err := s.repo.DailyCacheScopeForGame(ctx, gameID)

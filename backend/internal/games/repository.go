@@ -302,6 +302,57 @@ func (r *Repository) SubmitGuessTx(ctx context.Context, gameID, roundID, playerI
 	return &saved, &answer, completedGame, nil
 }
 
+// ExpireSoloRoundTx records a zero-score timeout and advances the daily game.
+func (r *Repository) ExpireSoloRoundTx(ctx context.Context, gameID, roundID, playerID uuid.UUID, now time.Time) (*Guess, *answerLocation, bool, error) {
+	var saved Guess
+	var answer answerLocation
+	completedGame := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var round Round
+		if err := tx.Clauses(lockingClause()).First(&round, "id = ? AND game_id = ?", roundID, gameID).Error; err != nil {
+			return err
+		}
+		if round.Status != RoundStatusActive || round.EndsAt == nil || now.Before(*round.EndsAt) {
+			return ErrRoundClosed
+		}
+		if err := tx.Raw(`SELECT id, latitude, longitude, country_code, region, locality FROM locations WHERE id = ?`, round.LocationID).Scan(&answer).Error; err != nil {
+			return err
+		}
+		saved = Guess{RoundID: roundID, GamePlayerID: playerID, Latitude: 0, Longitude: 0, DistanceMeters: 0, Score: 0, SubmittedAt: now, TimedOut: true}
+		if err := tx.Create(&saved).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&Round{}).Where("id = ?", roundID).Updates(map[string]any{"status": RoundStatusCompleted, "revealed_at": now}).Error; err != nil {
+			return err
+		}
+		var next Round
+		if err := tx.Where("game_id = ? AND status = ?", gameID, RoundStatusPending).Order("round_number ASC").First(&next).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			completedGame = true
+			return tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{"status": GameStatusCompleted, "completed_at": now}).Error
+		}
+		var game Game
+		if err := tx.First(&game, "id = ?", gameID).Error; err != nil {
+			return err
+		}
+		var endsAt *time.Time
+		if game.TimerSeconds != nil {
+			deadline := now.Add(time.Duration(*game.TimerSeconds) * time.Second)
+			endsAt = &deadline
+		}
+		return tx.Model(&Round{}).Where("id = ?", next.ID).Updates(map[string]any{"status": RoundStatusActive, "starts_at": now, "ends_at": endsAt}).Error
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, false, nil
+	}
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("expire solo round: %w", err)
+	}
+	return &saved, &answer, completedGame, nil
+}
+
 // MultiplayerTxHooks run inside the multiplayer game transaction so ranked match
 // lifecycle stays atomic with game/round state changes.
 type MultiplayerTxHooks struct {
@@ -565,6 +616,7 @@ func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, 
 		DistanceMeters *int
 		Score          *int
 		SubmittedAt    *time.Time
+		TimedOut       *bool
 	}
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT
@@ -581,6 +633,7 @@ func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, 
 			g.distance_meters,
 			g.score,
 			g.submitted_at
+			,g.timed_out
 		FROM rounds r
 		JOIN locations l ON l.id = r.location_id
 		LEFT JOIN guesses g ON g.round_id = r.id
@@ -611,6 +664,7 @@ func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, 
 				DistanceMeters: *row.DistanceMeters,
 				Score:          *row.Score,
 				SubmittedAt:    *row.SubmittedAt,
+				TimedOut:       row.TimedOut != nil && *row.TimedOut,
 			})
 		}
 		results = append(results, result)

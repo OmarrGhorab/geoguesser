@@ -18,16 +18,18 @@ type ProfileResponse struct {
 // tokens or session identifiers; email is included because this response is
 // only ever returned to the profile's owner.
 type ProfileDTO struct {
-	UserID      uuid.UUID      `json:"user_id"`
-	Email       string         `json:"email"`
-	DisplayName string         `json:"display_name"`
-	AvatarURL   *string        `json:"avatar_url,omitempty"`
-	CountryCode *string        `json:"country_code,omitempty"`
-	Locale      string         `json:"locale"`
-	Timezone    *string        `json:"timezone,omitempty"`
-	Preferences map[string]any `json:"preferences,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	UserID           uuid.UUID      `json:"user_id"`
+	Email            string         `json:"email"`
+	DisplayName      string         `json:"display_name"`
+	AvatarURL        *string        `json:"avatar_url,omitempty"`
+	CountryCode      *string        `json:"country_code,omitempty"`
+	Locale           string         `json:"locale"`
+	Timezone         *string        `json:"timezone,omitempty"`
+	Preferences      map[string]any `json:"preferences,omitempty"`
+	ExperiencePoints int64          `json:"experience_points"`
+	Level            int            `json:"level"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
 // UpdateProfileRequest is the request body for PATCH /profile. Pointer

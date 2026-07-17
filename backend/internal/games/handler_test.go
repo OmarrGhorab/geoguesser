@@ -159,6 +159,10 @@ func (f *fakeServiceAPI) SubmitGuess(context.Context, *session.Context, string, 
 	return f.guess, nil
 }
 
+func (f *fakeServiceAPI) ExpireRound(context.Context, *session.Context, string, string) (*GuessResultResponse, error) {
+	return f.guess, nil
+}
+
 func (f *fakeServiceAPI) GetResults(context.Context, *session.Context, string) (*GameResultsResponse, error) {
 	return f.results, nil
 }

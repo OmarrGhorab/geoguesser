@@ -43,6 +43,7 @@ type AttemptSummary struct {
 	TotalScore          int        `json:"total_score"`
 	CurrentRoundNumber  *int       `json:"current_round_number,omitempty"`
 	GameID              *uuid.UUID `json:"game_id,omitempty"`
+	DailyGameNumber     int        `json:"daily_game_number"`
 }
 
 type StreakSummary struct {
@@ -57,9 +58,14 @@ type StreakSummary struct {
 type MissionSummary struct {
 	ID             uuid.UUID  `json:"id,omitempty"`
 	Code           string     `json:"code"`
+	MissionKey     string     `json:"mission_key"`
 	TitleKey       string     `json:"title_key"`
 	DescriptionKey string     `json:"description_key"`
 	MissionType    string     `json:"mission_type"`
+	Cadence        string     `json:"cadence"`
+	PeriodKey      string     `json:"period_key"`
+	IconKey        string     `json:"icon_key"`
+	RewardXP       int        `json:"reward_xp"`
 	CurrentValue   int        `json:"current_value"`
 	TargetValue    int        `json:"target_value"`
 	Status         string     `json:"status"`
@@ -76,12 +82,15 @@ type CountdownSummary struct {
 }
 
 type ChallengeMetadataResponse struct {
-	Challenge          ChallengeSummary   `json:"challenge"`
-	AttemptState       *AttemptSummary    `json:"attempt_state,omitempty"`
-	Streak             StreakSummary      `json:"streak"`
-	MissionsSummary    []MissionSummary   `json:"missions_summary"`
-	LeaderboardSummary LeaderboardSummary `json:"leaderboard_summary"`
-	Countdown          *CountdownSummary  `json:"countdown,omitempty"`
+	Challenge           ChallengeSummary   `json:"challenge"`
+	AttemptState        *AttemptSummary    `json:"attempt_state,omitempty"`
+	LastCompletedGameID *uuid.UUID         `json:"last_completed_game_id,omitempty"`
+	Streak              StreakSummary      `json:"streak"`
+	MissionsSummary     []MissionSummary   `json:"missions_summary"`
+	LeaderboardSummary  LeaderboardSummary `json:"leaderboard_summary"`
+	Countdown           *CountdownSummary  `json:"countdown,omitempty"`
+	DailyGamesPlayed    int                `json:"daily_games_played"`
+	DailyGamesTotal     int                `json:"daily_games_total"`
 }
 
 type ChallengeAttemptResponse struct {

@@ -34,6 +34,9 @@ type CurrentRoundResponse struct {
 type GuessResultResponse struct {
 	Guess          GuessResult      `json:"guess"`
 	ActualLocation RevealedLocation `json:"actual_location"`
+	MaxScore       int              `json:"max_score"`
+	ScorePercent   int              `json:"score_percent"`
+	Outcome        string           `json:"outcome"`
 }
 
 // GameResultsResponse returns final durable game results.
@@ -71,8 +74,9 @@ type RoundDTO struct {
 // RoundMedia is media metadata safe for current-round display.
 type RoundMedia struct {
 	Type        string  `json:"type"`
-	URL         string  `json:"url"`
-	Attribution *string `json:"attribution"`
+	URL         string  `json:"url,omitempty"`
+	PanoramaID  string  `json:"panorama_id,omitempty"`
+	Attribution *string `json:"attribution,omitempty"`
 }
 
 // LocationMediaProvider resolves stored location media references into public URLs.
@@ -88,6 +92,7 @@ type GuessResult struct {
 	DistanceMeters int       `json:"distance_meters"`
 	Score          int       `json:"score"`
 	SubmittedAt    time.Time `json:"submitted_at"`
+	TimedOut       bool      `json:"timed_out"`
 }
 
 // GamePlayerDTO is a public participant snapshot.
