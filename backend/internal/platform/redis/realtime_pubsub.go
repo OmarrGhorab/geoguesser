@@ -323,9 +323,15 @@ func extractEventID(payload []byte) string {
 	}
 	var envelope struct {
 		EventID string `json:"event_id"`
+		Event   struct {
+			EventID string `json:"event_id"`
+		} `json:"event"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
 		return ""
+	}
+	if envelope.EventID == "" {
+		envelope.EventID = envelope.Event.EventID
 	}
 	return strings.TrimSpace(envelope.EventID)
 }
