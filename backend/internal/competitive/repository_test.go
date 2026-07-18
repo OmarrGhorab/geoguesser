@@ -144,7 +144,7 @@ func seedCompletedRanked1v1(t *testing.T, db *gorm.DB, seasonID uuid.UUID, resul
 			?, ?
 		)
 	`, matchID, "comp-fk-"+matchID.String(), gameID, seasonID,
-		now.Add(-10*time.Minute), now.Add(-9*time.Minute), now.Add(-time.Minute), now.Add(-time.Minute),
+		now.Add(-10*time.Minute), now.Add(-9*time.Minute), now.Add(-time.Minute), nil,
 		result, winnerSlot, now.Add(-time.Minute), now, now)
 
 	mustExec(t, db, `
