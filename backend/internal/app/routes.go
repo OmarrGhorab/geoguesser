@@ -119,6 +119,9 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess"), logger)).Post("/{gameId}/rounds/{roundId}/guesses", gamesHandler.SubmitGuess)
 				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess-timeout"), logger)).Post("/{gameId}/rounds/{roundId}/timeout", gamesHandler.ExpireRound)
 				g.Get("/{gameId}/results", gamesHandler.GetResults)
+				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("practice-next"), logger)).Post("/{gameId}/rounds/next", gamesHandler.NextPracticeRound)
+				g.Get("/{gameId}/rounds", gamesHandler.GetPracticeHistory)
+				g.With(appmiddleware.RateLimit(rateLimiter, gameCreateLimit, appmiddleware.RateLimitByIP("practice-end"), logger)).Post("/{gameId}/end", gamesHandler.EndPractice)
 			})
 		}
 

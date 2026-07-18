@@ -32,6 +32,7 @@ func TestRedaction_MetricsOmitSensitiveLabels(t *testing.T) {
 	storageKey := "team-chat/sanitized/" + uuid.NewString() + "/full-object-key.jpg"
 	answerLat := "40.416775"
 	guessLng := "-3.703790"
+	roomCode := "SECRET-ROOM-CODE"
 
 	reg := prometheus.NewRegistry()
 	mm, err := matchmaking.NewMetrics(reg)
@@ -45,6 +46,10 @@ func TestRedaction_MetricsOmitSensitiveLabels(t *testing.T) {
 	comp, err := competitive.NewMetrics(reg)
 	if err != nil {
 		t.Fatalf("competitive metrics: %v", err)
+	}
+	gameMetrics, err := games.NewPrometheusMetrics(reg)
+	if err != nil {
+		t.Fatalf("games metrics: %v", err)
 	}
 
 	// Observe only with bounded categorical labels (as production code paths do).
@@ -74,6 +79,8 @@ func TestRedaction_MetricsOmitSensitiveLabels(t *testing.T) {
 	comp.ObserveLeaderboardRead("cache_hit", time.Millisecond)
 	comp.ObserveRollover("applied", 2, time.Millisecond)
 	comp.ObserveCacheInvalidate("season")
+	gameMetrics.ObserveModeOperation(games.GameModePractice, "next_round", "error")
+	gameMetrics.ObserveRoundClose("party_lobby", "worker_closed")
 
 	families, err := reg.Gather()
 	if err != nil {
@@ -83,7 +90,7 @@ func TestRedaction_MetricsOmitSensitiveLabels(t *testing.T) {
 		t.Fatal("expected metric families")
 	}
 
-	prohibited := []string{rawTicket, redisKey, userID, chatBody, storageKey, answerLat, guessLng}
+	prohibited := []string{rawTicket, redisKey, userID, chatBody, storageKey, answerLat, guessLng, roomCode}
 	for _, family := range families {
 		for _, metric := range family.GetMetric() {
 			for _, lp := range metric.GetLabel() {

@@ -135,9 +135,12 @@ func (h *Handler) Room(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := conn.Write(r.Context(), websocket.MessageText, payload); err != nil {
-		h.logger.InfoContext(r.Context(), "room websocket snapshot write failed", slog.String("room_code", state.Room.Code), slog.Any("error", err))
+		h.logger.InfoContext(r.Context(), "room websocket snapshot write failed", slog.Any("error", err))
 		return
 	}
+	client := NewRoomClient(state.Room.Code, h.hub.QueueSize())
+	h.hub.Add(client)
+	defer h.hub.Remove(client)
 
 	h.metrics.RecordConnectionOpened(state.Room.Code)
 	defer func() {
@@ -145,11 +148,49 @@ func (h *Handler) Room(w http.ResponseWriter, r *http.Request) {
 		h.metrics.RecordConnectionClosed(state.Room.Code, "closed")
 	}()
 
+	readCtx, cancelRead := context.WithCancel(r.Context())
+	defer cancelRead()
+	readPayloads := make(chan []byte)
+	readErrors := make(chan error, 1)
+	go func() {
+		for {
+			_, inbound, readErr := conn.Read(readCtx)
+			if readErr != nil {
+				readErrors <- readErr
+				return
+			}
+			select {
+			case readPayloads <- inbound:
+			case <-readCtx.Done():
+				return
+			}
+		}
+	}()
+
 	for {
-		if _, payload, err := conn.Read(r.Context()); err != nil {
+		select {
+		case event := <-client.Send:
+			outbound, marshalErr := json.Marshal(event)
+			if marshalErr != nil {
+				h.logger.WarnContext(r.Context(), "room websocket event encode failed", slog.String("event_type", event.Type), slog.Any("error", marshalErr))
+				return
+			}
+			if writeErr := conn.Write(r.Context(), websocket.MessageText, outbound); writeErr != nil {
+				return
+			}
+			h.metrics.RecordEventDelivered(event.Type)
+		case inbound := <-readPayloads:
+			if len(inbound) > 0 {
+				_, _ = h.provider.TouchPresence(r.Context(), sess, state.Room.Code)
+			}
+		case <-client.Done():
+			h.metrics.ObserveSlowConsumer(ChannelKindRoom)
+			_ = conn.Close(websocket.StatusPolicyViolation, "slow consumer")
 			return
-		} else if len(payload) > 0 {
-			_, _ = h.provider.TouchPresence(r.Context(), sess, state.Room.Code)
+		case <-readErrors:
+			return
+		case <-r.Context().Done():
+			return
 		}
 	}
 }

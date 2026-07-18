@@ -31,15 +31,16 @@ func (Game) TableName() string {
 
 // Round is one playable challenge within a game.
 type Round struct {
-	ID          uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	GameID      uuid.UUID  `gorm:"type:uuid;not null"`
-	LocationID  uuid.UUID  `gorm:"type:uuid;not null"`
-	RoundNumber int        `gorm:"type:int;not null"`
-	Status      string     `gorm:"type:text;not null;default:'pending'"`
-	StartsAt    *time.Time `gorm:"type:timestamptz"`
-	EndsAt      *time.Time `gorm:"type:timestamptz"`
-	RevealedAt  *time.Time `gorm:"type:timestamptz"`
-	CreatedAt   time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+	ID                     uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	GameID                 uuid.UUID  `gorm:"type:uuid;not null"`
+	LocationID             uuid.UUID  `gorm:"type:uuid;not null"`
+	RoundNumber            int        `gorm:"type:int;not null"`
+	Status                 string     `gorm:"type:text;not null;default:'pending'"`
+	StartsAt               *time.Time `gorm:"type:timestamptz"`
+	EndsAt                 *time.Time `gorm:"type:timestamptz"`
+	RevealedAt             *time.Time `gorm:"type:timestamptz"`
+	CreatedAt              time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+	CreationIdempotencyKey *string    `gorm:"type:text"`
 }
 
 // TableName returns the database table name.

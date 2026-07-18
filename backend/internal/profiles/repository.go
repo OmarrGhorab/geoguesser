@@ -233,6 +233,7 @@ func (r *Repository) GetStats(ctx context.Context, userID uuid.UUID) (*StatsSumm
 		FROM game_players gp
 		JOIN games g ON g.id = gp.game_id
 		WHERE gp.user_id = ? AND gp.status = 'active' AND g.status = 'completed'
+		  AND g.mode NOT IN ('practice', 'party_lobby')
 	`, userID).Scan(&result).Error; err != nil {
 		return nil, fmt.Errorf("failed to get stats: %w", err)
 	}
@@ -268,6 +269,7 @@ func (r *Repository) ListGameHistory(ctx context.Context, userID uuid.UUID, limi
 		WHERE gp.user_id = ?
 		  AND gp.status = 'active'
 		  AND g.status IN ('completed', 'active', 'abandoned')
+		  AND g.mode NOT IN ('practice', 'party_lobby')
 	`
 	args := []any{userID}
 	if createdAtCursor != nil && idCursor != nil {

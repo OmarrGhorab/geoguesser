@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "round": {
+        "id": "00000000-0000-4000-8000-000000000134",
+        "round_number": 1,
+        "status": "completed",
+        "starts_at": "2026-07-18T12:00:00Z",
+        "ends_at": null,
+        "media": {"type": "panorama"}
+      },
+      "guess": {
+        "id": "00000000-0000-4000-8000-000000000133",
+        "latitude": 30.0444,
+        "longitude": 31.2357,
+        "distance_meters": 1250,
+        "accuracy_score": 4890,
+        "speed_bonus": 0,
+        "score": 4890,
+        "submitted_at": "2026-07-18T12:00:00Z",
+        "timed_out": false
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}

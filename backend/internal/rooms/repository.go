@@ -178,6 +178,96 @@ func (r *Repository) ListParticipants(ctx context.Context, roomID uuid.UUID) ([]
 	return rows, nil
 }
 
+// ListPartyLobbyStandings returns a bounded deterministic free-for-all table.
+func (r *Repository) ListPartyLobbyStandings(ctx context.Context, roomID uuid.UUID) ([]PartyLobbyStanding, error) {
+	var rows []PartyLobbyStanding
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT gp.id AS player_id,
+		       gp.display_name,
+		       gp.total_score,
+		       COALESCE(SUM(CASE WHEN g.timed_out = false THEN g.distance_meters ELSE 0 END), 0)::int AS total_distance_meters,
+		       COUNT(g.id) FILTER (WHERE g.timed_out = false)::int AS rounds_scored,
+		       rp.joined_at
+		FROM room_players rp
+		JOIN game_players gp ON gp.id = rp.game_player_id
+		LEFT JOIN guesses g ON g.game_player_id = gp.id
+		WHERE rp.room_id = ? AND rp.status IN ('joined', 'disconnected')
+		GROUP BY gp.id, gp.display_name, gp.total_score, rp.joined_at
+		ORDER BY gp.total_score DESC,
+		         COALESCE(SUM(CASE WHEN g.timed_out = false THEN g.distance_meters ELSE 0 END), 0) ASC,
+		         rp.joined_at ASC, gp.id ASC
+		LIMIT 50
+	`, roomID).Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list party lobby standings: %w", err)
+	}
+	for i := range rows {
+		rows[i].Placement = i + 1
+		if i > 0 && rows[i].TotalScore == rows[i-1].TotalScore && rows[i].TotalDistanceMeters == rows[i-1].TotalDistanceMeters {
+			rows[i].Placement = rows[i-1].Placement
+			rows[i].Tied = true
+			rows[i-1].Tied = true
+		}
+	}
+	return rows, nil
+}
+
+// ApplyGameOutcome synchronizes the durable room terminal state after the game
+// transaction commits and returns the authoritative room for event publication.
+func (r *Repository) ApplyGameOutcome(ctx context.Context, gameID uuid.UUID, completed bool, now time.Time) (*Room, error) {
+	var room Room
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("game_id = ?", gameID).First(&room).Error; err != nil {
+			return err
+		}
+		updates := map[string]any{"updated_at": now}
+		if completed {
+			updates["status"] = StatusCompleted
+		}
+		if err := tx.Model(&Room{}).Where("id = ?", room.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		return tx.First(&room, "id = ?", room.ID).Error
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("apply room game outcome: %w", err)
+	}
+	return &room, nil
+}
+
+// ApplyRoomStartedInTx implements games.HostedRoomLifecycleHook. The room and
+// its Party Lobby game become active atomically.
+func (r *Repository) ApplyRoomStartedInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+	result := tx.WithContext(ctx).Model(&Room{}).
+		Where("game_id = ? AND status = ?", gameID, StatusLobby).
+		Updates(map[string]any{"status": StatusActive, "updated_at": now})
+	if result.Error != nil {
+		return fmt.Errorf("activate hosted room: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrRoomNotJoinable
+	}
+	return nil
+}
+
+// ApplyRoomCompletedInTx implements games.HostedRoomLifecycleHook. Durable room
+// completion commits with the final Party Lobby round and game.
+func (r *Repository) ApplyRoomCompletedInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+	result := tx.WithContext(ctx).Model(&Room{}).
+		Where("game_id = ? AND status IN ?", gameID, []string{StatusActive, StatusCompleted}).
+		Updates(map[string]any{"status": StatusCompleted, "updated_at": now})
+	if result.Error != nil {
+		return fmt.Errorf("complete hosted room: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrRoomNotFound
+	}
+	return nil
+}
+
 func (r *Repository) UpdateSettings(ctx context.Context, roomID uuid.UUID, req UpdateRoomSettingsRequest, now time.Time) (*Room, error) {
 	var room Room
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

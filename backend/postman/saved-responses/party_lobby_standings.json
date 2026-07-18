@@ -1,0 +1,13 @@
+{
+  "standings": [
+    {
+      "placement": 1,
+      "player_id": "00000000-0000-4000-8000-000000000132",
+      "display_name": "Raven",
+      "total_score": 24110,
+      "total_distance_meters": 4200,
+      "rounds_scored": 5,
+      "tied": false
+    }
+  ]
+}

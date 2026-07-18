@@ -167,7 +167,8 @@ func main() {
 		logger.Error("failed to register games metrics", slog.Any("error", err))
 		os.Exit(1)
 	}
-	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), gamesMetrics, leaderboardsService)
+	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), gamesMetrics, leaderboardsService).
+		WithPracticeCursorSigningSecret(cfg.GuestSessionSecret)
 	// Ranked lifecycle adapter is wired after matchmakingRepo is constructed below.
 
 	var storageProvider storage.Provider
@@ -202,6 +203,7 @@ func main() {
 	challengesHandler := challenges.NewHandler(challengesService, logger)
 	leaderboardsHandler := leaderboards.NewHandler(leaderboardsService, logger).WithMetrics(leaderboardsMetrics)
 	roomsService := rooms.NewServiceWithGames(roomsRepo, roomCoordinator, gamesService, logger, nil)
+	gamesService.WithHostedRoomLifecycle(roomsRepo)
 	roomsHandler := rooms.NewHandler(roomsService, logger)
 
 	// Realtime metrics + multi-instance Pub/Sub fanout for party/match channels.
@@ -331,7 +333,10 @@ func main() {
 	matchplayRepo := matchplay.NewRepository(db)
 	matchLiveStore := redisplatform.NewMatchLiveStore(redisClient)
 	eventPublisher := matchplay.NewPublisher(channelPub, logger).WithMetrics(matchplayMetrics)
-	gamesService.WithMultiplayerEvents(app.NewGameOutcomeEventAdapter(matchplayRepo, eventPublisher, realtimeStore))
+	gamesService.WithMultiplayerEvents(games.MultiplayerEventFanout{
+		roomsService,
+		app.NewGameOutcomeEventAdapter(matchplayRepo, eventPublisher, realtimeStore),
+	})
 	matchplayService := matchplay.NewService(matchplayRepo, logger, matchplayMetrics, matchplay.ServiceConfig{
 		ReconnectGrace:   cfg.MatchReconnectGrace,
 		CasualInactivity: cfg.CasualInactivity,
@@ -391,7 +396,7 @@ func main() {
 	lifecycleWorker := matchplay.NewLifecycleRunner(matchplayService, matchplay.LifecycleWorkerConfig{
 		Interval: cfg.MatchSweepInterval,
 	}, logger)
-	deadlineWorker := games.NewRankedDeadlineRunner(gamesService, games.RankedDeadlineWorkerConfig{
+	deadlineWorker := games.NewTimedMultiplayerDeadlineRunner(gamesService, games.TimedMultiplayerDeadlineWorkerConfig{
 		Interval:  cfg.MatchSweepInterval,
 		BatchSize: 50,
 	}, logger)

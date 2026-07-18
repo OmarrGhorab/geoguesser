@@ -66,6 +66,44 @@ func TestFinalizeCompletedGameRetriesIdempotentProjection(t *testing.T) {
 	}
 }
 
+func TestFinalizeCompletedGameSkipsProgressionNeutralModes(t *testing.T) {
+	t.Parallel()
+
+	hook := &recordingCompletionHook{}
+	svc := NewServiceWithHook(nil, fakeLocationSelector{}, nil, clock.Fixed(time.Now()), slog.Default(), nil, nil, hook)
+	for _, mode := range []string{GameModePractice, GameModePartyLobby, GameModePrivateRoom} {
+		if err := svc.finalizeCompletedGame(context.Background(), &Game{ID: uuid.New(), Mode: mode, Status: GameStatusCompleted}); err != nil {
+			t.Fatalf("mode %s: %v", mode, err)
+		}
+	}
+	if hook.calls != 0 {
+		t.Fatalf("progression hook calls = %d, want 0", hook.calls)
+	}
+}
+
+func TestPracticeCursorBindsGameAndRound(t *testing.T) {
+	t.Parallel()
+
+	gameID := uuid.New()
+	key := derivePracticeCursorKey("test-practice-cursor-secret")
+	cursor := encodePracticeCursor(key, gameID, 42)
+	round, err := decodePracticeCursor(key, cursor, gameID)
+	if err != nil || round != 42 {
+		t.Fatalf("decode = %d, %v", round, err)
+	}
+	if _, err := decodePracticeCursor(key, cursor, uuid.New()); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("cross-game cursor err = %v", err)
+	}
+	tamperedPrefix := "A"
+	if cursor[0] == 'A' {
+		tamperedPrefix = "B"
+	}
+	tampered := tamperedPrefix + cursor[1:]
+	if _, err := decodePracticeCursor(key, tampered, gameID); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("tampered cursor err = %v", err)
+	}
+}
+
 type recordingCompletionHook struct {
 	calls       int
 	completedAt time.Time

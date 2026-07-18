@@ -55,13 +55,22 @@
       "targets": [{"expr": "histogram_quantile(0.95, sum by (le, command) (rate(matchplay_command_duration_seconds_bucket[5m])))", "legendFormat": "{{command}}"}],
       "title": "Match command p95",
       "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 7,
+      "targets": [{"expr": "sum by (mode, operation, outcome) (rate(game_mode_operations_total[5m]))", "legendFormat": "{{mode}} {{operation}} {{outcome}}"}],
+      "title": "Practice mode operations",
+      "type": "timeseries"
     }
   ],
   "schemaVersion": 39,
-  "tags": ["geoguess", "casual", "ranked", "backend"],
+  "tags": ["geoguess", "casual", "ranked", "party-lobby", "practice", "backend"],
   "templating": {"list": [{"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"}]},
   "time": {"from": "now-6h", "to": "now"},
-  "title": "GeoGuess Casual & Ranked Backend",
+  "title": "GeoGuess Game Modes Backend",
   "uid": "geoguess-casual-ranked-backend",
-  "version": 1
+  "version": 2
 }

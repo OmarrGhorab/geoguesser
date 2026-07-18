@@ -1,0 +1,11 @@
+.git/
+.github/
+.env*
+node_modules/
+client/node_modules/
+client/.next/
+coverage/
+backend/tmp/
+*.log*
+*.test
+*.out

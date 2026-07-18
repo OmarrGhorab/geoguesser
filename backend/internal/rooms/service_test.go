@@ -57,6 +57,76 @@ func TestServiceRejectsInvalidCreateRoom(t *testing.T) {
 	}
 }
 
+func TestServiceCreateRoomAppliesPartyLobbyDefaults(t *testing.T) {
+	service := NewService(newMemoryStore(), nil, nil, nil)
+	service.clock = func() time.Time { return time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC) }
+	guest := "party-host"
+	created, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &guest}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate,
+	})
+	if err != nil {
+		t.Fatalf("CreateRoom: %v", err)
+	}
+	if created.Room.Mode != games.GameModePartyLobby || created.Room.RoundCount != 5 || created.Room.MaxPlayers != 50 {
+		t.Fatalf("defaults = %+v", created.Room)
+	}
+	if created.Room.TimerSeconds == nil || *created.Room.TimerSeconds != 180 {
+		t.Fatalf("timer = %v, want 180", created.Room.TimerSeconds)
+	}
+}
+
+func TestServicePublishesPartyLobbyGameOutcomeAndCompletesRoom(t *testing.T) {
+	store := newMemoryStore()
+	coordinator := newMemoryCoordinator()
+	service := NewService(store, coordinator, nil, nil)
+	guest := "outcome-host"
+	created, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &guest}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	room := store.rooms[created.Room.Code]
+	room.Status = StatusActive
+	if err := service.PublishMultiplayerOutcome(context.Background(), *room.GameID, games.MultiplayerGuessOutcome{RoundCompleted: true, GameCompleted: true}); err != nil {
+		t.Fatalf("publish outcome: %v", err)
+	}
+	if room.Status != StatusCompleted {
+		t.Fatalf("room status = %s", room.Status)
+	}
+}
+
+func TestServiceStartRoomIsDurableAndNaturallyIdempotent(t *testing.T) {
+	store := newMemoryStore()
+	coordinator := newMemoryCoordinator()
+	gameService := &memoryGameService{store: store}
+	service := NewServiceWithGames(store, coordinator, gameService, nil, nil)
+	service.clock = func() time.Time { return time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC) }
+	host := "start-host"
+	created, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &host}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate, MaxPlayers: 2,
+	})
+	if err != nil {
+		t.Fatalf("create room: %v", err)
+	}
+	guest := "start-guest"
+	if _, err := service.JoinRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &guest}, JoinRoomRequest{Code: created.Room.Code}); err != nil {
+		t.Fatalf("join room: %v", err)
+	}
+	key := "room-start-retry-key"
+	started, err := service.StartRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &host}, created.Room.Code, key)
+	if err != nil || started.Room.Status != StatusActive {
+		t.Fatalf("start room=%+v err=%v", started, err)
+	}
+	replay, err := service.StartRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &host}, created.Room.Code, key)
+	if err != nil || replay.Room.Status != StatusActive || gameService.starts != 1 {
+		t.Fatalf("start replay=%+v starts=%d err=%v", replay, gameService.starts, err)
+	}
+	if len(coordinator.commands) != 0 {
+		t.Fatalf("start must not consume Redis command claims: %+v", coordinator.commands)
+	}
+}
+
 func TestServiceGetRoomRequiresParticipantAndReturnsCurrentPlayer(t *testing.T) {
 	store := newMemoryStore()
 	service := NewService(store, newMemoryCoordinator(), nil, nil)
@@ -91,6 +161,29 @@ type memoryStore struct {
 	rooms          map[string]*Room
 	participants   map[uuid.UUID][]Participant
 	playersByGuest map[string]uuid.UUID
+}
+
+type memoryGameService struct {
+	store  *memoryStore
+	starts int
+}
+
+func (s *memoryGameService) StartPrivateRoomGame(_ context.Context, gameID uuid.UUID) (*games.MultiplayerStart, error) {
+	for _, room := range s.store.rooms {
+		if room.GameID != nil && *room.GameID == gameID {
+			if room.Status != StatusLobby {
+				return nil, games.ErrInvalidTransition
+			}
+			room.Status = StatusActive
+			s.starts++
+			return &games.MultiplayerStart{}, nil
+		}
+	}
+	return nil, games.ErrGameNotFound
+}
+
+func (*memoryGameService) GetPrivateRoomRoundState(context.Context, uuid.UUID) (*games.MultiplayerRoundState, error) {
+	return nil, nil
 }
 
 func newMemoryStore() *memoryStore {
@@ -204,6 +297,19 @@ func (s *memoryStore) StartRoom(_ context.Context, roomID uuid.UUID, now time.Ti
 		}
 	}
 	return nil, ErrRoomNotFound
+}
+
+func (s *memoryStore) ApplyGameOutcome(_ context.Context, gameID uuid.UUID, completed bool, now time.Time) (*Room, error) {
+	for _, room := range s.rooms {
+		if room.GameID != nil && *room.GameID == gameID {
+			if completed {
+				room.Status = StatusCompleted
+			}
+			room.UpdatedAt = now
+			return room, nil
+		}
+	}
+	return nil, nil
 }
 
 type memoryCoordinator struct {

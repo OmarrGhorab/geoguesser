@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	apphttp "github.com/raven/geoguess/backend/internal/http"
@@ -28,6 +29,9 @@ type ServiceAPI interface {
 	ExpireRound(rctx context.Context, sess *session.Context, gameID, roundID string) (*GuessResultResponse, error)
 	GetResults(rctx context.Context, sess *session.Context, gameID string) (*GameResultsResponse, error)
 	GetSharedRoundResults(rctx context.Context, sess *session.Context, gameID, roundID string) (*SharedRoundResultsResponse, error)
+	NextPracticeRound(rctx context.Context, sess *session.Context, gameID, idempotencyKey string) (*CurrentRoundResponse, error)
+	GetPracticeHistory(rctx context.Context, sess *session.Context, gameID, cursor string, limit int) (*PracticeHistoryResponse, error)
+	EndPractice(rctx context.Context, sess *session.Context, gameID string) (*GameResponse, error)
 }
 
 // NewHandler returns a new handler.
@@ -46,7 +50,46 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		g.Post("/{gameId}/rounds/{roundId}/timeout", h.ExpireRound)
 		g.Get("/{gameId}/rounds/{roundId}/results", h.GetSharedRoundResults)
 		g.Get("/{gameId}/results", h.GetResults)
+		g.Post("/{gameId}/rounds/next", h.NextPracticeRound)
+		g.Get("/{gameId}/rounds", h.GetPracticeHistory)
+		g.Post("/{gameId}/end", h.EndPractice)
 	})
+}
+
+func (h *Handler) NextPracticeRound(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.service.NextPracticeRound(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "gameId"), r.Header.Get("Idempotency-Key"))
+	if err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.OK(w, r, resp)
+}
+
+func (h *Handler) GetPracticeHistory(w http.ResponseWriter, r *http.Request) {
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			h.mapError(w, r, ErrInvalidGameRequest)
+			return
+		}
+		limit = parsed
+	}
+	resp, err := h.service.GetPracticeHistory(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "gameId"), r.URL.Query().Get("cursor"), limit)
+	if err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.OK(w, r, resp)
+}
+
+func (h *Handler) EndPractice(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.service.EndPractice(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "gameId"))
+	if err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.OK(w, r, resp)
 }
 
 // ExpireRound handles a server-authoritative daily round timeout.
@@ -152,6 +195,8 @@ func (h *Handler) GetSharedRoundResults(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handler) mapError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, ErrInvalidCursor):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(http.StatusBadRequest, CodeInvalidCursor, MsgInvalidCursor).WithCause(err))
 	case errors.Is(err, ErrInvalidGameRequest), errors.Is(err, ErrInvalidGuess):
 		apphttp.Error(w, r, h.logger, apphttp.ErrValidationFailed.WithCause(err))
 	case errors.Is(err, ErrForbidden):
@@ -160,6 +205,10 @@ func (h *Handler) mapError(w http.ResponseWriter, r *http.Request, err error) {
 		apphttp.Error(w, r, h.logger, apphttp.ErrNotFound.WithCause(err))
 	case errors.Is(err, ErrAlreadyGuessed), errors.Is(err, ErrIdempotencyConflict):
 		apphttp.Error(w, r, h.logger, apphttp.ErrConflict.WithCause(err))
+	case errors.Is(err, ErrWrongGameMode):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(http.StatusUnprocessableEntity, CodeWrongGameMode, MsgWrongGameMode).WithCause(err))
+	case errors.Is(err, ErrCurrentRoundIncomplete):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(http.StatusUnprocessableEntity, CodeCurrentRoundIncomplete, MsgCurrentRoundIncomplete).WithCause(err))
 	case errors.Is(err, ErrInvalidTransition), errors.Is(err, ErrGameNotActive), errors.Is(err, ErrRoundClosed), errors.Is(err, ErrRoundNotCurrent), errors.Is(err, ErrNotEnoughLocations), errors.Is(err, ErrResultsNotReady):
 		apphttp.Error(w, r, h.logger, apphttp.ErrUnprocessable.WithCause(err))
 	default:

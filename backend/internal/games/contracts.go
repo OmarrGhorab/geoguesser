@@ -2,6 +2,7 @@ package games
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,32 @@ type MatchLifecycleHook interface {
 // MultiplayerEventSink publishes post-commit round/match transition events.
 type MultiplayerEventSink interface {
 	PublishMultiplayerOutcome(ctx context.Context, gameID uuid.UUID, outcome MultiplayerGuessOutcome) error
+}
+
+// HostedRoomLifecycleHook keeps a hosted room's durable lifecycle in the same
+// PostgreSQL transaction as its Party Lobby game. Realtime publication remains
+// post-commit and reloadable from this authoritative state.
+type HostedRoomLifecycleHook interface {
+	ApplyRoomStartedInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, at time.Time) error
+	ApplyRoomCompletedInTx(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, at time.Time) error
+}
+
+// MultiplayerEventFanout delivers outcomes to independent room and match
+// channels. Every sink is attempted so one degraded transport cannot suppress
+// the other; joined errors remain observable to the caller.
+type MultiplayerEventFanout []MultiplayerEventSink
+
+func (f MultiplayerEventFanout) PublishMultiplayerOutcome(ctx context.Context, gameID uuid.UUID, outcome MultiplayerGuessOutcome) error {
+	var errs []error
+	for _, sink := range f {
+		if sink == nil {
+			continue
+		}
+		if err := sink.PublishMultiplayerOutcome(ctx, gameID, outcome); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // TerminalResultApplier is optionally implemented by MatchLifecycleHook adapters

@@ -18,13 +18,29 @@ groups:
           summary: Match lifecycle events are failing to publish
           runbook: Check Redis connectivity and API logs before enabling additional matchmaking traffic.
       - alert: GeoGuessRankedDeadlineWorkerErrors
-        expr: increase(game_round_close_total{mode_class="ranked",outcome="worker_error"}[10m]) > 0
+        expr: increase(game_round_close_total{mode_class=~"ranked|all",outcome="worker_error"}[10m]) > 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: Ranked round deadline worker cannot process expired rounds
           runbook: Check PostgreSQL availability, lock contention, and worker error logs.
+      - alert: GeoGuessPartyLobbyDeadlineWorkerErrors
+        expr: increase(game_round_close_total{mode_class=~"party_lobby|all",outcome="worker_error"}[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Party Lobby deadlines are not advancing
+          runbook: Check PostgreSQL availability, round locks, and hosted-room event delivery.
+      - alert: GeoGuessPracticeAdvanceFailures
+        expr: increase(game_mode_operations_total{mode="practice",operation="next_round",outcome="error"}[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Practice next-round requests are failing repeatedly
+          runbook: Check map location availability, PostgreSQL locks, and API error logs.
       - alert: GeoGuessMatchLifecycleSweepErrors
         expr: increase(matchplay_sweep_total{outcome="error"}[10m]) > 0
         for: 5m

@@ -36,18 +36,19 @@ type CurrentRoundResponse struct {
 // Ranked guesses include accuracy_score + speed_bonus (0–250); Casual keeps
 // speed_bonus=0. SubmittedCount/EligibleCount are multiplayer progress fields.
 type GuessResultResponse struct {
-	Guess            GuessResult       `json:"guess"`
-	ActualLocation   *RevealedLocation `json:"actual_location"` // nil until delayed shared reveal
-	MaxScore         int               `json:"max_score"`
-	ScorePercent     int               `json:"score_percent"`
-	MaxAccuracyScore int               `json:"max_accuracy_score"`
-	MaxSpeedBonus    int               `json:"max_speed_bonus"` // 250 Ranked; 0 Casual/solo
-	Outcome          string            `json:"outcome"`
-	RoundCompleted   bool              `json:"round_completed"`
-	GameCompleted    bool              `json:"game_completed"`
-	SubmittedCount   *int              `json:"submitted_count,omitempty"`
-	EligibleCount    *int              `json:"eligible_count,omitempty"`
-	NextRoundNumber  *int              `json:"next_round_number,omitempty"`
+	Guess              GuessResult       `json:"guess"`
+	ActualLocation     *RevealedLocation `json:"actual_location"` // nil until delayed shared reveal
+	MaxScore           int               `json:"max_score"`
+	ScorePercent       int               `json:"score_percent"`
+	MaxAccuracyScore   int               `json:"max_accuracy_score"`
+	MaxSpeedBonus      int               `json:"max_speed_bonus"` // 250 Ranked; 0 Casual/solo
+	Outcome            string            `json:"outcome"`
+	RoundCompleted     bool              `json:"round_completed"`
+	GameCompleted      bool              `json:"game_completed"`
+	SubmittedCount     *int              `json:"submitted_count,omitempty"`
+	EligibleCount      *int              `json:"eligible_count,omitempty"`
+	NextRoundNumber    *int              `json:"next_round_number,omitempty"`
+	NextRoundAvailable bool              `json:"next_round_available,omitempty"`
 }
 
 // GameResultsResponse returns final durable game results.
@@ -95,6 +96,21 @@ type GameDTO struct {
 	TotalScore         int        `json:"total_score"`
 	StartedAt          *time.Time `json:"started_at"`
 	CompletedAt        *time.Time `json:"completed_at"`
+	OpenEnded          bool       `json:"open_ended"`
+}
+
+// PracticeRoundHistoryItem is one bounded owner-only Practice history row.
+type PracticeRoundHistoryItem struct {
+	Round          RoundDTO          `json:"round"`
+	Guess          *GuessResult      `json:"guess,omitempty"`
+	ActualLocation *RevealedLocation `json:"actual_location,omitempty"`
+}
+
+// PracticeHistoryResponse is a bounded cursor page for an open-ended session.
+type PracticeHistoryResponse struct {
+	Items      []PracticeRoundHistoryItem `json:"items"`
+	NextCursor *string                    `json:"next_cursor"`
+	HasMore    bool                       `json:"has_more"`
 }
 
 // RoundDTO is safe for current-round responses before reveal.

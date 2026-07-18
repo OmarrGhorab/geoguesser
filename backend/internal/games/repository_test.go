@@ -2,6 +2,7 @@ package games_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -118,6 +119,51 @@ func TestRepositorySoloGamePersistenceFlow(t *testing.T) {
 	}
 	if refreshedPlayer.TotalScore != saved.Score {
 		t.Fatalf("player total = %d, want %d", refreshedPlayer.TotalScore, saved.Score)
+	}
+}
+
+func TestRepositoryPracticeOpenEndedFlow(t *testing.T) {
+	repo, db := setupGamesRepositoryTest(t)
+	ctx := context.Background()
+	mapID, locationIDs := seedGameMap(t, db, 2)
+	guest := "practice-" + uuid.NewString()
+	game := &games.Game{Mode: games.GameModePractice, Status: games.GameStatusPending, MapID: mapID, RoundCount: 1, ScoringVersion: games.ScoringVersionV1}
+	player := &games.GamePlayer{GuestIdentityHash: &guest, DisplayName: "Practice", Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive}
+	rounds := []games.Round{{LocationID: locationIDs[0], RoundNumber: 1, Status: games.RoundStatusPending}}
+	if err := repo.CreateGameBundle(ctx, game, player, rounds); err != nil {
+		t.Fatalf("create practice: %v", err)
+	}
+	now := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
+	if _, err := repo.StartGame(ctx, game.ID, now, nil); err != nil {
+		t.Fatalf("start practice: %v", err)
+	}
+	current, err := repo.GetCurrentRound(ctx, game.ID)
+	if err != nil || current == nil {
+		t.Fatalf("current practice: %+v %v", current, err)
+	}
+	_, _, completed, err := repo.SubmitGuessTx(ctx, game.ID, current.RoundID, player.ID, games.Guess{Latitude: 30, Longitude: 31}, now.Add(time.Second))
+	if err != nil || completed {
+		t.Fatalf("practice guess completed=%v err=%v", completed, err)
+	}
+	key := "next-" + uuid.NewString()
+	next, err := repo.AppendPracticeRound(ctx, game.ID, locationIDs[1], key, now.Add(2*time.Second))
+	if err != nil || next == nil || next.RoundNumber != 2 || next.EndsAt != nil {
+		t.Fatalf("next=%+v err=%v", next, err)
+	}
+	replay, err := repo.AppendPracticeRound(ctx, game.ID, locationIDs[0], key, now.Add(3*time.Second))
+	if err != nil || replay == nil || replay.RoundID != next.RoundID {
+		t.Fatalf("replay=%+v err=%v", replay, err)
+	}
+	if _, err := repo.AppendPracticeRound(ctx, game.ID, locationIDs[0], "different", now.Add(4*time.Second)); !errors.Is(err, games.ErrCurrentRoundIncomplete) {
+		t.Fatalf("incomplete err=%v", err)
+	}
+	history, hasMore, err := repo.ListPracticeHistory(ctx, game.ID, player.ID, 0, 1)
+	if err != nil || len(history) != 1 || !hasMore || history[0].RoundNumber != 1 {
+		t.Fatalf("history=%+v hasMore=%v err=%v", history, hasMore, err)
+	}
+	ended, err := repo.EndPractice(ctx, game.ID, now.Add(5*time.Second))
+	if err != nil || ended.Status != games.GameStatusCompleted {
+		t.Fatalf("ended=%+v err=%v", ended, err)
 	}
 }
 

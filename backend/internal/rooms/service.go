@@ -3,6 +3,7 @@ package rooms
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -22,6 +23,14 @@ type Store interface {
 	UpdateSettings(ctx context.Context, roomID uuid.UUID, req UpdateRoomSettingsRequest, now time.Time) (*Room, error)
 	SetPlayerStatus(ctx context.Context, roomID, playerID uuid.UUID, status string, leftAt *time.Time) (*Room, error)
 	StartRoom(ctx context.Context, roomID uuid.UUID, now time.Time) (*Room, error)
+}
+
+type standingStore interface {
+	ListPartyLobbyStandings(ctx context.Context, roomID uuid.UUID) ([]PartyLobbyStanding, error)
+}
+
+type gameOutcomeStore interface {
+	ApplyGameOutcome(ctx context.Context, gameID uuid.UUID, completed bool, now time.Time) (*Room, error)
 }
 
 type Coordinator interface {
@@ -84,6 +93,7 @@ func (s *Service) CreateRoom(ctx context.Context, sess *session.Context, req Cre
 	if err != nil {
 		return nil, err
 	}
+	req = applyCreateRoomDefaults(req)
 	if err := validateCreateRoomRequest(req); err != nil {
 		return nil, err
 	}
@@ -94,7 +104,7 @@ func (s *Service) CreateRoom(ctx context.Context, sess *session.Context, req Cre
 	}
 
 	game := &games.Game{
-		Mode:            games.GameModePrivateRoom,
+		Mode:            games.GameModePartyLobby,
 		Status:          games.GameStatusPending,
 		MapID:           req.MapID,
 		CreatedByUserID: owner.userID,
@@ -307,19 +317,14 @@ func (s *Service) StartRoom(ctx context.Context, sess *session.Context, roomCode
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(idempotencyKey) == "" {
+	key := strings.TrimSpace(idempotencyKey)
+	if len(key) < 16 || len(key) > 128 {
 		return nil, ErrIdempotencyConflict
 	}
-	if s.coordinator != nil {
-		claimed, err := s.coordinator.ClaimCommand(ctx, room.Code, "start", strings.TrimSpace(idempotencyKey), 24*time.Hour)
-		if err != nil {
-			return nil, err
-		}
-		if !claimed {
-			return nil, ErrIdempotencyConflict
-		}
-	}
 	if !CanStart(room.Status) {
+		if room.Status == StatusActive || room.Status == StatusCompleted {
+			return s.loadAndPublish(ctx, *room, EventRoomSnapshot)
+		}
 		return nil, ErrRoomAlreadyStarted
 	}
 	if len(activeParticipants(participants)) < 2 {
@@ -330,19 +335,38 @@ func (s *Service) StartRoom(ctx context.Context, sess *session.Context, roomCode
 	}
 	if s.games != nil {
 		if _, err := s.games.StartPrivateRoomGame(ctx, *room.GameID); err != nil {
+			if errors.Is(err, games.ErrInvalidTransition) {
+				reloaded, loadErr := s.repo.GetRoomByCode(ctx, room.Code)
+				if loadErr != nil {
+					return nil, loadErr
+				}
+				if reloaded != nil && (reloaded.Status == StatusActive || reloaded.Status == StatusCompleted) {
+					return s.loadAndPublish(ctx, *reloaded, EventRoomSnapshot)
+				}
+			}
 			return nil, err
 		}
-	}
-	updated, err := s.repo.StartRoom(ctx, room.ID, s.clock().UTC())
-	if err != nil {
-		return nil, err
+		updated, err := s.repo.GetRoomByCode(ctx, room.Code)
+		if err != nil {
+			return nil, err
+		}
+		if updated == nil || updated.Status != StatusActive {
+			return nil, ErrRoomNotJoinable
+		}
+		room = updated
+	} else {
+		updated, err := s.repo.StartRoom(ctx, room.ID, s.clock().UTC())
+		if err != nil {
+			return nil, err
+		}
+		room = updated
 	}
 	if s.coordinator != nil {
-		if err := s.coordinator.ClearReady(ctx, updated.Code); err != nil {
+		if err := s.coordinator.ClearReady(ctx, room.Code); err != nil {
 			return nil, err
 		}
 	}
-	return s.loadAndPublish(ctx, *updated, EventRoomStarted)
+	return s.loadAndPublish(ctx, *room, EventRoomStarted)
 }
 
 func (s *Service) loadAndPublish(ctx context.Context, room Room, eventType string) (*RoomResponse, error) {
@@ -372,6 +396,30 @@ func (s *Service) loadAndPublish(ctx context.Context, room Room, eventType strin
 		_ = s.coordinator.Publish(ctx, room.Code, map[string]any{"type": eventType, "room": dto})
 	}
 	return resp, nil
+}
+
+// PublishMultiplayerOutcome implements games.MultiplayerEventSink for hosted
+// Party Lobby channels. Matchmade events are handled by a separate sink.
+func (s *Service) PublishMultiplayerOutcome(ctx context.Context, gameID uuid.UUID, outcome games.MultiplayerGuessOutcome) error {
+	if !outcome.RoundCompleted {
+		return nil
+	}
+	repo, ok := s.repo.(gameOutcomeStore)
+	if !ok {
+		return nil
+	}
+	room, err := repo.ApplyGameOutcome(ctx, gameID, outcome.GameCompleted, s.clock().UTC())
+	if err != nil || room == nil {
+		return err
+	}
+	eventType := EventRoundEnded
+	if outcome.GameCompleted {
+		eventType = EventGameCompleted
+	} else if outcome.NextRoundID != nil {
+		eventType = EventRoundStarted
+	}
+	_, err = s.loadAndPublish(ctx, *room, eventType)
+	return err
 }
 
 func (s *Service) buildRoomDTO(ctx context.Context, room Room, participants []Participant, currentPlayerID *uuid.UUID) (RoomDTO, error) {
@@ -455,6 +503,17 @@ func (s *Service) buildRoomDTO(ctx context.Context, room Room, participants []Pa
 		}
 	}
 
+	var standings []PartyLobbyStanding
+	if room.Status == StatusActive || room.Status == StatusCompleted {
+		if repo, ok := s.repo.(standingStore); ok {
+			var err error
+			standings, err = repo.ListPartyLobbyStandings(ctx, room.ID)
+			if err != nil {
+				return RoomDTO{}, err
+			}
+		}
+	}
+
 	return RoomDTO{
 		ID:              room.ID,
 		Code:            room.Code,
@@ -472,7 +531,23 @@ func (s *Service) buildRoomDTO(ctx context.Context, room Room, participants []Pa
 		ReadyPlayerIDs:  readyIDs,
 		CurrentRound:    currentRound,
 		GuessProgress:   guessProgress,
+		Mode:            games.GameModePartyLobby,
+		Standings:       standings,
 	}, nil
+}
+
+func applyCreateRoomDefaults(req CreateRoomRequest) CreateRoomRequest {
+	if req.RoundCount == 0 {
+		req.RoundCount = 5
+	}
+	if req.TimerSeconds == nil {
+		seconds := 180
+		req.TimerSeconds = &seconds
+	}
+	if req.MaxPlayers == 0 {
+		req.MaxPlayers = 50
+	}
+	return req
 }
 
 func normalizeRoomCode(code string) string {
@@ -656,4 +731,7 @@ const (
 	EventRoomPlayerRemoved      = "room.player_removed"
 	EventRoomStarted            = "room.started"
 	EventRoomPlayerDisconnected = "room.player_disconnected"
+	EventRoundStarted           = "round.started"
+	EventRoundEnded             = "round.ended"
+	EventGameCompleted          = "game.completed"
 )
