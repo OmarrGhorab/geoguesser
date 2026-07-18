@@ -453,10 +453,10 @@ func TestMultiplayerLifecycleHooks_CommitAndRollback(t *testing.T) {
 	if err := db.Create(match).Error; err != nil {
 		t.Fatalf("create match: %v", err)
 	}
-	for _, player := range []*games.GamePlayer{pA, pB} {
+	for i, player := range []*games.GamePlayer{pA, pB} {
 		participant := &matchmaking.MatchPlayer{
 			MatchID: match.ID, UserID: *player.UserID, GamePlayerID: player.ID,
-			TeamSlot: *player.TeamSlot, Status: matchmaking.ParticipantStatusActive, AssignedAt: now,
+			TeamSlot: i + 1, Status: matchmaking.ParticipantStatusActive, AssignedAt: now,
 		}
 		if err := db.Create(participant).Error; err != nil {
 			t.Fatalf("create match player: %v", err)

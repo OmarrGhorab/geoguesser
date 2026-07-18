@@ -464,19 +464,22 @@ func (r *Repository) InsertReport(ctx context.Context, report MessageReport, ext
 			return fmt.Errorf("lock message for report: %w", err)
 		}
 
-		err := tx.Create(&report).Error
-		if err != nil {
-			if isChatUniqueViolation(err) {
-				var existing MessageReport
-				if findErr := tx.Where("message_id = ? AND reporter_user_id = ?", report.MessageID, report.ReporterUserID).
-					Take(&existing).Error; findErr != nil {
-					return findErr
-				}
-				stored = existing
-				created = false
-				return nil
+		result := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "message_id"}, {Name: "reporter_user_id"}},
+			DoNothing: true,
+		}).Create(&report)
+		if result.Error != nil {
+			return fmt.Errorf("insert report: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			var existing MessageReport
+			if findErr := tx.Where("message_id = ? AND reporter_user_id = ?", report.MessageID, report.ReporterUserID).
+				Take(&existing).Error; findErr != nil {
+				return findErr
 			}
-			return fmt.Errorf("insert report: %w", err)
+			stored = existing
+			created = false
+			return nil
 		}
 		created = true
 		stored = report
