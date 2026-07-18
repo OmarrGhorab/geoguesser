@@ -2,6 +2,16 @@ package games
 
 import "errors"
 
+const (
+	CodeWrongGameMode          = "wrong_game_mode"
+	CodeCurrentRoundIncomplete = "current_round_incomplete"
+	CodeInvalidCursor          = "invalid_cursor"
+
+	MsgWrongGameMode          = "This operation is not available for the game mode."
+	MsgCurrentRoundIncomplete = "Complete the current Practice round before creating another."
+	MsgInvalidCursor          = "The Practice history cursor is invalid."
+)
+
 var (
 	// ErrInvalidGameRequest indicates invalid create/start input.
 	ErrInvalidGameRequest = errors.New("invalid game request")
@@ -29,4 +39,10 @@ var (
 	ErrNotEnoughLocations = errors.New("not enough locations")
 	// ErrResultsNotReady indicates final results were requested before completion.
 	ErrResultsNotReady = errors.New("game results not ready")
+	// ErrWrongGameMode indicates that an operation is not available for this mode.
+	ErrWrongGameMode = errors.New("wrong game mode")
+	// ErrCurrentRoundIncomplete requires the Practice guess before advancing.
+	ErrCurrentRoundIncomplete = errors.New("current round incomplete")
+	// ErrInvalidCursor indicates a malformed or cross-game history cursor.
+	ErrInvalidCursor = errors.New("invalid cursor")
 )

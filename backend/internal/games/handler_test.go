@@ -103,6 +103,9 @@ func TestHandlerMapsDomainErrors(t *testing.T) {
 		{name: "not found", err: ErrGameNotFound, want: http.StatusNotFound, code: apphttp.ErrCodeNotFound},
 		{name: "conflict", err: ErrAlreadyGuessed, want: http.StatusConflict, code: apphttp.ErrCodeConflict},
 		{name: "unprocessable", err: ErrRoundClosed, want: http.StatusUnprocessableEntity, code: apphttp.ErrCodeUnprocessable},
+		{name: "wrong mode", err: ErrWrongGameMode, want: http.StatusUnprocessableEntity, code: CodeWrongGameMode},
+		{name: "round incomplete", err: ErrCurrentRoundIncomplete, want: http.StatusUnprocessableEntity, code: CodeCurrentRoundIncomplete},
+		{name: "invalid cursor", err: ErrInvalidCursor, want: http.StatusBadRequest, code: CodeInvalidCursor},
 	}
 
 	for _, tc := range cases {
@@ -126,14 +129,54 @@ func TestHandlerMapsDomainErrors(t *testing.T) {
 	}
 }
 
+func TestHandlerPracticeEndpoints(t *testing.T) {
+	t.Parallel()
+
+	gameID := uuid.NewString()
+	roundID := uuid.New()
+	svc := &fakeServiceAPI{currentRound: &CurrentRoundResponse{Round: RoundDTO{ID: roundID}}, game: &GameResponse{Game: GameDTO{ID: uuid.MustParse(gameID), Mode: GameModePractice}}}
+	handler := NewHandler(svc, slog.Default())
+	router := chi.NewRouter()
+	router.Post("/games/{gameId}/rounds/next", handler.NextPracticeRound)
+	router.Get("/games/{gameId}/rounds", handler.GetPracticeHistory)
+	router.Post("/games/{gameId}/end", handler.EndPractice)
+
+	next := httptest.NewRequest(http.MethodPost, "/games/"+gameID+"/rounds/next", nil)
+	next.Header.Set("Idempotency-Key", "practice-next-key")
+	nextResult := httptest.NewRecorder()
+	router.ServeHTTP(nextResult, next)
+	if nextResult.Code != http.StatusOK || svc.nextGameID != gameID || svc.nextIdempotencyKey != "practice-next-key" {
+		t.Fatalf("next status=%d game=%q key=%q body=%s", nextResult.Code, svc.nextGameID, svc.nextIdempotencyKey, nextResult.Body.String())
+	}
+
+	history := httptest.NewRequest(http.MethodGet, "/games/"+gameID+"/rounds?cursor=signed&limit=25", nil)
+	historyResult := httptest.NewRecorder()
+	router.ServeHTTP(historyResult, history)
+	if historyResult.Code != http.StatusOK || svc.historyCursor != "signed" || svc.historyLimit != 25 {
+		t.Fatalf("history status=%d cursor=%q limit=%d body=%s", historyResult.Code, svc.historyCursor, svc.historyLimit, historyResult.Body.String())
+	}
+
+	end := httptest.NewRequest(http.MethodPost, "/games/"+gameID+"/end", nil)
+	endResult := httptest.NewRecorder()
+	router.ServeHTTP(endResult, end)
+	if endResult.Code != http.StatusOK || svc.endGameID != gameID {
+		t.Fatalf("end status=%d game=%q body=%s", endResult.Code, svc.endGameID, endResult.Body.String())
+	}
+}
+
 type fakeServiceAPI struct {
-	createGame   *GameResponse
-	createErr    error
-	game         *GameResponse
-	start        *GameResponse
-	currentRound *CurrentRoundResponse
-	guess        *GuessResultResponse
-	results      *GameResultsResponse
+	createGame         *GameResponse
+	createErr          error
+	game               *GameResponse
+	start              *GameResponse
+	currentRound       *CurrentRoundResponse
+	guess              *GuessResultResponse
+	results            *GameResultsResponse
+	nextGameID         string
+	nextIdempotencyKey string
+	historyCursor      string
+	historyLimit       int
+	endGameID          string
 }
 
 func (f *fakeServiceAPI) CreateGame(context.Context, *session.Context, CreateGameRequest) (*GameResponse, error) {
@@ -169,4 +212,21 @@ func (f *fakeServiceAPI) GetResults(context.Context, *session.Context, string) (
 
 func (f *fakeServiceAPI) GetSharedRoundResults(context.Context, *session.Context, string, string) (*SharedRoundResultsResponse, error) {
 	return nil, nil
+}
+
+func (f *fakeServiceAPI) NextPracticeRound(_ context.Context, _ *session.Context, gameID, idempotencyKey string) (*CurrentRoundResponse, error) {
+	f.nextGameID = gameID
+	f.nextIdempotencyKey = idempotencyKey
+	return f.currentRound, nil
+}
+
+func (f *fakeServiceAPI) GetPracticeHistory(_ context.Context, _ *session.Context, _ string, cursor string, limit int) (*PracticeHistoryResponse, error) {
+	f.historyCursor = cursor
+	f.historyLimit = limit
+	return &PracticeHistoryResponse{}, nil
+}
+
+func (f *fakeServiceAPI) EndPractice(_ context.Context, _ *session.Context, gameID string) (*GameResponse, error) {
+	f.endGameID = gameID
+	return f.game, nil
 }

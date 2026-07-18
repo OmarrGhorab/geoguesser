@@ -14,6 +14,7 @@ type PrometheusMetrics struct {
 	FinalizationTotal    *prometheus.CounterVec
 	FinalizationDuration *prometheus.HistogramVec
 	RoundCloseTotal      *prometheus.CounterVec
+	ModeOperationsTotal  *prometheus.CounterVec
 }
 
 // NewPrometheusMetrics registers games multiplayer metrics against reg.
@@ -41,6 +42,10 @@ func NewPrometheusMetrics(reg prometheus.Registerer) (*PrometheusMetrics, error)
 			Name: "game_round_close_total",
 			Help: "Multiplayer round close outcomes by mode class.",
 		}, []string{"mode_class", "outcome"}),
+		ModeOperationsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "game_mode_operations_total",
+			Help: "Bounded Practice lifecycle operations.",
+		}, []string{"mode", "operation", "outcome"}),
 	}
 	for _, c := range []prometheus.Collector{
 		m.GuessDuration,
@@ -48,12 +53,23 @@ func NewPrometheusMetrics(reg prometheus.Registerer) (*PrometheusMetrics, error)
 		m.FinalizationTotal,
 		m.FinalizationDuration,
 		m.RoundCloseTotal,
+		m.ModeOperationsTotal,
 	} {
 		if err := reg.Register(c); err != nil {
 			return nil, err
 		}
 	}
 	return m, nil
+}
+
+func (m *PrometheusMetrics) ObserveModeOperation(mode, operation, outcome string) {
+	if m == nil || m.ModeOperationsTotal == nil {
+		return
+	}
+	if mode != GameModePractice {
+		mode = "other"
+	}
+	m.ModeOperationsTotal.WithLabelValues(mode, operation, outcome).Inc()
 }
 
 // ObserveGuessSubmission implements MetricsRecorder.

@@ -269,6 +269,9 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/games/not-a-uuid/start"},
 		{http.MethodGet, "/api/v1/games/not-a-uuid/rounds/current"},
 		{http.MethodPost, "/api/v1/games/not-a-uuid/rounds/not-a-uuid/guesses"},
+		{http.MethodPost, "/api/v1/games/not-a-uuid/rounds/next"},
+		{http.MethodGet, "/api/v1/games/not-a-uuid/rounds"},
+		{http.MethodPost, "/api/v1/games/not-a-uuid/end"},
 		{http.MethodGet, "/api/v1/games/not-a-uuid/results"},
 	}
 

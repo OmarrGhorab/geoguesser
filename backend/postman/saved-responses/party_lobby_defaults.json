@@ -1,0 +1,15 @@
+{
+  "room": {
+    "id": "00000000-0000-4000-8000-000000000131",
+    "code": "GEO131",
+    "mode": "party_lobby",
+    "visibility": "private",
+    "status": "lobby",
+    "version": 1,
+    "max_players": 50,
+    "round_count": 5,
+    "timer_seconds": 180,
+    "players": [],
+    "ready_player_ids": []
+  }
+}

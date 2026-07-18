@@ -8,20 +8,20 @@ import (
 	"github.com/raven/geoguess/backend/internal/platform/workers"
 )
 
-// RankedDeadlineSweeper is the narrow worker dependency.
-type RankedDeadlineSweeper interface {
-	SweepExpiredRankedRounds(ctx context.Context, limit int) error
+// TimedMultiplayerDeadlineSweeper is the narrow worker dependency.
+type TimedMultiplayerDeadlineSweeper interface {
+	SweepExpiredTimedMultiplayerRounds(ctx context.Context, limit int) error
 }
 
-// RankedDeadlineWorkerConfig configures the bounded deadline runner.
-type RankedDeadlineWorkerConfig struct {
+// TimedMultiplayerDeadlineWorkerConfig configures the bounded deadline runner.
+type TimedMultiplayerDeadlineWorkerConfig struct {
 	Interval  time.Duration
 	Timeout   time.Duration
 	BatchSize int
 }
 
-// NewRankedDeadlineRunner advances expired ranked rounds without client traffic.
-func NewRankedDeadlineRunner(sweeper RankedDeadlineSweeper, cfg RankedDeadlineWorkerConfig, logger *slog.Logger) *workers.Runner {
+// NewTimedMultiplayerDeadlineRunner advances expired timed multiplayer rounds without client traffic.
+func NewTimedMultiplayerDeadlineRunner(sweeper TimedMultiplayerDeadlineSweeper, cfg TimedMultiplayerDeadlineWorkerConfig, logger *slog.Logger) *workers.Runner {
 	if cfg.Interval <= 0 {
 		cfg.Interval = time.Second
 	}
@@ -35,6 +35,6 @@ func NewRankedDeadlineRunner(sweeper RankedDeadlineSweeper, cfg RankedDeadlineWo
 		if sweeper == nil {
 			return nil
 		}
-		return sweeper.SweepExpiredRankedRounds(ctx, cfg.BatchSize)
-	}, workers.WithName("ranked-round-deadlines"), workers.WithLogger(logger))
+		return sweeper.SweepExpiredTimedMultiplayerRounds(ctx, cfg.BatchSize)
+	}, workers.WithName("timed-multiplayer-round-deadlines"), workers.WithLogger(logger))
 }

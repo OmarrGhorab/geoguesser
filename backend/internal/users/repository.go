@@ -66,11 +66,13 @@ func (r *Repository) GetUserStats(ctx context.Context, userID uuid.UUID) (*UserS
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT
 			COUNT(*) AS games_played,
-			COALESCE(SUM(total_score), 0) AS total_score,
-			COALESCE(AVG(total_score), 0) AS average_score,
-			COALESCE(MAX(total_score), 0) AS best_score
-		FROM game_players
-		WHERE user_id = ? AND status = 'active'
+			COALESCE(SUM(gp.total_score), 0) AS total_score,
+			COALESCE(AVG(gp.total_score), 0) AS average_score,
+			COALESCE(MAX(gp.total_score), 0) AS best_score
+		FROM game_players gp
+		JOIN games g ON g.id = gp.game_id
+		WHERE gp.user_id = ? AND gp.status = 'active'
+		  AND g.mode NOT IN ('practice', 'party_lobby')
 	`, userID).Scan(&result).Error; err != nil {
 		return nil, fmt.Errorf("failed to get user stats: %w", err)
 	}
@@ -106,6 +108,7 @@ func (r *Repository) ListUserGameHistory(ctx context.Context, userID uuid.UUID, 
 		WHERE gp.user_id = ?
 		  AND gp.status = 'active'
 		  AND g.status IN ('completed', 'active', 'abandoned')
+		  AND g.mode NOT IN ('practice', 'party_lobby')
 	`
 	args := []any{userID}
 	if createdAtCursor != nil && idCursor != nil {

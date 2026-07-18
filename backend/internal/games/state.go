@@ -5,7 +5,12 @@ import "time"
 const (
 	GameModeSolo        = "solo"
 	GameModePrivateRoom = "private_room"
-	GameModeDaily       = "daily"
+	// GameModePartyLobby is the canonical hosted free-for-all mode.
+	// GameModePrivateRoom remains a read-compatible legacy alias.
+	GameModePartyLobby = "party_lobby"
+	// GameModePractice is an owner-only, untimed, open-ended solo session.
+	GameModePractice = "practice"
+	GameModeDaily    = "daily"
 	// GameModeRanked is the legacy multiplayer ranked mode stored on games.mode.
 	GameModeRanked = "ranked"
 
@@ -41,13 +46,27 @@ const (
 // Includes private rooms, legacy ranked, and all casual_*/ranked_* matchmade modes.
 func IsMultiplayerMode(mode string) bool {
 	switch mode {
-	case GameModePrivateRoom, GameModeRanked,
+	case GameModePrivateRoom, GameModePartyLobby, GameModeRanked,
 		GameModeCasualSolo, GameModeCasualDuo, GameModeCasualSquad,
 		GameModeRankedSolo, GameModeRankedDuo, GameModeRankedSquad:
 		return true
 	default:
 		return false
 	}
+}
+
+// IsPartyLobbyMode reports whether mode uses hosted free-for-all room semantics.
+func IsPartyLobbyMode(mode string) bool {
+	return mode == GameModePartyLobby || mode == GameModePrivateRoom
+}
+
+// IsOpenEndedMode reports whether rounds are materialized on demand.
+func IsOpenEndedMode(mode string) bool { return mode == GameModePractice }
+
+// IsProgressionNeutralMode excludes non-competitive learning/social modes from
+// profile, mission, leaderboard, and competitive completion projections.
+func IsProgressionNeutralMode(mode string) bool {
+	return IsPartyLobbyMode(mode) || mode == GameModePractice
 }
 
 // IsRankedMode reports whether the game enforces ranked timer/scoring semantics.

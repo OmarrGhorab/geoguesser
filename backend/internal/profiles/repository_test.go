@@ -99,8 +99,13 @@ func seedProfileMap(t *testing.T, db *gorm.DB, count int) (uuid.UUID, []uuid.UUI
 
 func seedCompletedGame(t *testing.T, db *gorm.DB, userID uuid.UUID, mapID uuid.UUID, totalScore int, completedAt time.Time) {
 	t.Helper()
+	seedCompletedModeGame(t, db, userID, mapID, games.GameModeSolo, totalScore, completedAt)
+}
+
+func seedCompletedModeGame(t *testing.T, db *gorm.DB, userID uuid.UUID, mapID uuid.UUID, mode string, totalScore int, completedAt time.Time) uuid.UUID {
+	t.Helper()
 	g := games.Game{
-		Mode:        games.GameModeSolo,
+		Mode:        mode,
 		Status:      games.GameStatusCompleted,
 		MapID:       mapID,
 		RoundCount:  3,
@@ -121,6 +126,7 @@ func seedCompletedGame(t *testing.T, db *gorm.DB, userID uuid.UUID, mapID uuid.U
 	if err := db.Create(&player).Error; err != nil {
 		t.Fatalf("create game player failed: %v", err)
 	}
+	return g.ID
 }
 
 func TestRepositoryGetCurrentProfile(t *testing.T) {
@@ -301,6 +307,32 @@ func TestRepositoryListGameHistoryPagination(t *testing.T) {
 	}
 	if page2.NextCursor != nil {
 		t.Fatal("expected no next cursor on final page")
+	}
+}
+
+func TestRepositoryPreservesLegacyPrivateRoomHistoryWhileExcludingNewNeutralModes(t *testing.T) {
+	repo, db := setupProfilesRepositoryTest(t)
+	ctx := context.Background()
+	userID := seedUser(t, db, "active")
+	mapID, _ := seedProfileMap(t, db, 1)
+	now := time.Now().UTC()
+	privateID := seedCompletedModeGame(t, db, userID, mapID, games.GameModePrivateRoom, 300, now.Add(-time.Hour))
+	seedCompletedModeGame(t, db, userID, mapID, games.GameModePartyLobby, 400, now.Add(-30*time.Minute))
+	seedCompletedModeGame(t, db, userID, mapID, games.GameModePractice, 500, now)
+
+	stats, err := repo.GetStats(ctx, userID)
+	if err != nil {
+		t.Fatalf("get compatibility stats: %v", err)
+	}
+	if stats.GamesPlayed != 1 || stats.TotalScore != 300 {
+		t.Fatalf("compatibility stats=%+v", stats)
+	}
+	history, err := repo.ListGameHistory(ctx, userID, 10, "")
+	if err != nil {
+		t.Fatalf("get compatibility history: %v", err)
+	}
+	if len(history.Items) != 1 || history.Items[0].GameID != privateID || history.Items[0].Mode != games.GameModePrivateRoom {
+		t.Fatalf("compatibility history=%+v", history.Items)
 	}
 }
 

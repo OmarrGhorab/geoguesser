@@ -38,12 +38,12 @@ type workerSeasonRoller struct {
 	calls atomic.Int64
 }
 
-type workerRankedDeadlines struct {
+type workerTimedMultiplayerDeadlines struct {
 	calls atomic.Int64
 	limit atomic.Int64
 }
 
-func (f *workerRankedDeadlines) SweepExpiredRankedRounds(_ context.Context, limit int) error {
+func (f *workerTimedMultiplayerDeadlines) SweepExpiredTimedMultiplayerRounds(_ context.Context, limit int) error {
 	f.calls.Add(1)
 	f.limit.Store(int64(limit))
 	return nil
@@ -259,8 +259,8 @@ func TestWorkers_RoundDeadlinesPurePolicy(t *testing.T) {
 		t.Fatal("ranked squad should use deadline scoring")
 	}
 
-	deadline := &workerRankedDeadlines{}
-	runner := games.NewRankedDeadlineRunner(deadline, games.RankedDeadlineWorkerConfig{
+	deadline := &workerTimedMultiplayerDeadlines{}
+	runner := games.NewTimedMultiplayerDeadlineRunner(deadline, games.TimedMultiplayerDeadlineWorkerConfig{
 		Interval:  15 * time.Millisecond,
 		Timeout:   50 * time.Millisecond,
 		BatchSize: 17,

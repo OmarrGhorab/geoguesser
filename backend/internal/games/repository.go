@@ -129,7 +129,7 @@ func (r *Repository) StartGame(ctx context.Context, gameID uuid.UUID, now time.T
 	return &game, nil
 }
 
-func (r *Repository) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID, rounds []Round, now time.Time, timerSeconds *int) (*MultiplayerStart, error) {
+func (r *Repository) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID, rounds []Round, now time.Time, timerSeconds *int, hooks MultiplayerTxHooks) (*MultiplayerStart, error) {
 	out := &MultiplayerStart{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var game Game
@@ -169,6 +169,11 @@ func (r *Repository) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID,
 			"ends_at":   endsAt,
 		}).Error; err != nil {
 			return err
+		}
+		if hooks.OnMatchActive != nil {
+			if err := hooks.OnMatchActive(ctx, tx, gameID, now); err != nil {
+				return err
+			}
 		}
 		if err := tx.First(&game, "id = ?", gameID).Error; err != nil {
 			return err
@@ -220,12 +225,184 @@ func (r *Repository) GetCurrentRound(ctx context.Context, gameID uuid.UUID) (*cu
 	return &row, nil
 }
 
+func (r *Repository) GetPracticeRoundByCreationKey(ctx context.Context, gameID uuid.UUID, key string) (*currentRoundRow, error) {
+	var row currentRoundRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT r.id AS round_id, r.round_number, r.status AS round_status,
+		       r.starts_at, r.ends_at, l.id AS location_id, l.provider,
+		       l.provider_ref, l.attribution
+		FROM rounds r
+		JOIN locations l ON l.id = r.location_id
+		WHERE r.game_id = ? AND r.creation_idempotency_key = ?
+		LIMIT 1
+	`, gameID, key).Scan(&row).Error
+	if err != nil {
+		return nil, fmt.Errorf("get practice round replay: %w", err)
+	}
+	if row.RoundID == uuid.Nil {
+		return nil, nil
+	}
+	return &row, nil
+}
+
+// AppendPracticeRound creates exactly one sequential active round after the
+// prior round completes. The game row lock and per-game idempotency key make
+// concurrent retries deterministic without Redis.
+func (r *Repository) AppendPracticeRound(ctx context.Context, gameID, locationID uuid.UUID, idempotencyKey string, now time.Time) (*currentRoundRow, error) {
+	if idempotencyKey == "" {
+		return nil, ErrInvalidGameRequest
+	}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var game Game
+		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
+			return err
+		}
+		if game.Mode != GameModePractice {
+			return ErrWrongGameMode
+		}
+		if game.Status != GameStatusActive {
+			return ErrGameNotActive
+		}
+		var replay Round
+		if err := tx.Where("game_id = ? AND creation_idempotency_key = ?", gameID, idempotencyKey).First(&replay).Error; err == nil {
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		var latest Round
+		if err := tx.Clauses(lockingClause()).Where("game_id = ?", gameID).Order("round_number DESC").First(&latest).Error; err != nil {
+			return err
+		}
+		if latest.Status != RoundStatusCompleted {
+			return ErrCurrentRoundIncomplete
+		}
+		nextNumber := latest.RoundNumber + 1
+		round := Round{
+			GameID: gameID, LocationID: locationID, RoundNumber: nextNumber,
+			Status: RoundStatusActive, StartsAt: &now, CreatedAt: now,
+			CreationIdempotencyKey: &idempotencyKey,
+		}
+		if err := tx.Create(&round).Error; err != nil {
+			return err
+		}
+		return tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{
+			"round_count": nextNumber,
+			"updated_at":  now,
+		}).Error
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrGameNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("append practice round: %w", err)
+	}
+	return r.GetCurrentRound(ctx, gameID)
+}
+
+// EndPractice marks an open-ended session complete and preserves all history.
+func (r *Repository) EndPractice(ctx context.Context, gameID uuid.UUID, now time.Time) (*Game, error) {
+	var game Game
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
+			return err
+		}
+		if game.Mode != GameModePractice {
+			return ErrWrongGameMode
+		}
+		if game.Status == GameStatusCompleted {
+			return nil
+		}
+		if game.Status != GameStatusActive && game.Status != GameStatusPending {
+			return ErrGameNotActive
+		}
+		if err := tx.Model(&Round{}).Where("game_id = ? AND status IN ?", gameID, []string{RoundStatusActive, RoundStatusPending}).Updates(map[string]any{
+			"status": RoundStatusCancelled,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{
+			"status": GameStatusCompleted, "completed_at": now, "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.First(&game, "id = ?", gameID).Error
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrGameNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("end practice: %w", err)
+	}
+	return &game, nil
+}
+
+type practiceHistoryRow struct {
+	RoundID         uuid.UUID
+	RoundNumber     int
+	RoundStatus     string
+	StartsAt        *time.Time
+	EndsAt          *time.Time
+	Provider        string
+	ProviderRef     string
+	Attribution     *string
+	AnswerLatitude  float64
+	AnswerLongitude float64
+	CountryCode     string
+	Region          *string
+	Locality        *string
+	GuessID         *uuid.UUID
+	GuessLatitude   *float64
+	GuessLongitude  *float64
+	DistanceMeters  *int
+	AccuracyScore   *int
+	SpeedBonus      *int
+	Score           *int
+	SubmittedAt     *time.Time
+	TimedOut        *bool
+}
+
+func (r *Repository) ListPracticeHistory(ctx context.Context, gameID, playerID uuid.UUID, after, limit int) ([]practiceHistoryRow, bool, error) {
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	var rows []practiceHistoryRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT r.id AS round_id, r.round_number, r.status AS round_status, r.starts_at, r.ends_at,
+		       l.provider, l.provider_ref, l.attribution,
+		       l.latitude AS answer_latitude, l.longitude AS answer_longitude,
+		       l.country_code, l.region, l.locality,
+		       g.id AS guess_id, g.latitude AS guess_latitude, g.longitude AS guess_longitude,
+		       g.distance_meters, g.accuracy_score, g.speed_bonus, g.score, g.submitted_at, g.timed_out
+		FROM rounds r
+		JOIN locations l ON l.id = r.location_id
+		LEFT JOIN guesses g ON g.round_id = r.id AND g.game_player_id = ?
+		WHERE r.game_id = ? AND r.round_number > ?
+		ORDER BY r.round_number ASC
+		LIMIT ?
+	`, playerID, gameID, after, limit+1).Scan(&rows).Error
+	if err != nil {
+		return nil, false, fmt.Errorf("list practice history: %w", err)
+	}
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
+	return rows, hasMore, nil
+}
+
 // SubmitGuessTx persists a guess and advances round/game state atomically.
 func (r *Repository) SubmitGuessTx(ctx context.Context, gameID, roundID, playerID uuid.UUID, guess Guess, now time.Time) (*Guess, *answerLocation, bool, error) {
 	var saved Guess
 	var answer answerLocation
 	completedGame := false
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var game Game
+		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
+			return err
+		}
 		var round Round
 		if err := tx.Clauses(lockingClause()).First(&round, "id = ? AND game_id = ?", roundID, gameID).Error; err != nil {
 			return err
@@ -270,6 +447,9 @@ func (r *Repository) SubmitGuessTx(ctx context.Context, gameID, roundID, playerI
 		var next Round
 		if err := tx.Where("game_id = ? AND status = ?", gameID, RoundStatusPending).Order("round_number ASC").First(&next).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if game.Mode == GameModePractice {
+					return tx.Model(&Game{}).Where("id = ?", gameID).Update("updated_at", now).Error
+				}
 				completedGame = true
 				if err := tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{
 					"status":       GameStatusCompleted,
@@ -279,10 +459,6 @@ func (r *Repository) SubmitGuessTx(ctx context.Context, gameID, roundID, playerI
 				}
 				return nil
 			}
-			return err
-		}
-		var game Game
-		if err := tx.First(&game, "id = ?", gameID).Error; err != nil {
 			return err
 		}
 		var endsAt *time.Time
@@ -574,10 +750,9 @@ func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uu
 	return out, nil
 }
 
-// ListExpiredRankedGameIDs returns a bounded ordered batch whose active round
-// deadline has elapsed. CloseExpiredMultiplayerRound re-locks and revalidates
-// every row, making concurrent worker instances safe and idempotent.
-func (r *Repository) ListExpiredRankedGameIDs(ctx context.Context, now time.Time, limit int) ([]uuid.UUID, error) {
+// ListExpiredTimedMultiplayerGameIDs returns every timed multiplayer mode
+// serviced by the shared deadline worker.
+func (r *Repository) ListExpiredTimedMultiplayerGameIDs(ctx context.Context, now time.Time, limit int) ([]uuid.UUID, error) {
 	if r == nil || r.db == nil {
 		return nil, ErrGameNotFound
 	}
@@ -590,7 +765,7 @@ func (r *Repository) ListExpiredRankedGameIDs(ctx context.Context, now time.Time
 		FROM games g
 		JOIN rounds r ON r.game_id = g.id
 		WHERE g.status = 'active'
-		  AND g.mode IN ('ranked_solo', 'ranked_duo', 'ranked_squad')
+		  AND g.mode IN ('ranked_solo', 'ranked_duo', 'ranked_squad', 'party_lobby', 'private_room')
 		  AND r.status = 'active'
 		  AND r.ends_at IS NOT NULL
 		  AND r.ends_at <= ?
@@ -598,7 +773,7 @@ func (r *Repository) ListExpiredRankedGameIDs(ctx context.Context, now time.Time
 		LIMIT ?
 	`, now.UTC(), limit).Scan(&ids).Error
 	if err != nil {
-		return nil, fmt.Errorf("list expired ranked games: %w", err)
+		return nil, fmt.Errorf("list expired timed multiplayer games: %w", err)
 	}
 	return ids, nil
 }

@@ -49,13 +49,28 @@ type Service struct {
 	completionHook    GameCompletionHook
 	rankedHook        RankedLifecycleHook
 	matchHook         MatchLifecycleHook
+	hostedRoomHook    HostedRoomLifecycleHook
 	multiplayerEvents MultiplayerEventSink
 	revealPolicy      RoundRevealPolicy
+	practiceCursorKey []byte
 }
 
 // WithMultiplayerEvents attaches post-commit round/match realtime fanout.
 func (s *Service) WithMultiplayerEvents(events MultiplayerEventSink) *Service {
 	s.multiplayerEvents = events
+	return s
+}
+
+// WithHostedRoomLifecycle attaches the transactional hosted-room lifecycle.
+func (s *Service) WithHostedRoomLifecycle(hook HostedRoomLifecycleHook) *Service {
+	s.hostedRoomHook = hook
+	return s
+}
+
+// WithPracticeCursorSigningSecret configures domain-separated HMAC signing for
+// Practice history cursors. The secret must be stable across API instances.
+func (s *Service) WithPracticeCursorSigningSecret(secret string) *Service {
+	s.practiceCursorKey = derivePracticeCursorKey(secret)
 	return s
 }
 
@@ -110,28 +125,41 @@ func (s *Service) WithRevealPolicy(policy RoundRevealPolicy) *Service {
 	return s
 }
 
-// SweepExpiredRankedRounds closes a bounded batch of server-authoritative
+// SweepExpiredTimedMultiplayerRounds closes a bounded batch of server-authoritative
 // deadlines even when no client polls or submits after expiry.
-func (s *Service) SweepExpiredRankedRounds(ctx context.Context, limit int) error {
+func (s *Service) SweepExpiredTimedMultiplayerRounds(ctx context.Context, limit int) error {
 	if s == nil || s.repo == nil {
 		return nil
 	}
 	now := s.clock.Now()
-	gameIDs, err := s.repo.ListExpiredRankedGameIDs(ctx, now, limit)
+	gameIDs, err := s.repo.ListExpiredTimedMultiplayerGameIDs(ctx, now, limit)
 	if err != nil {
-		s.observeRoundClose("ranked", "worker_error")
+		s.observeRoundClose("all", "worker_error")
 		return err
 	}
 	for _, gameID := range gameIDs {
-		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooks())
+		game, loadErr := s.repo.GetGameByID(ctx, gameID)
+		if loadErr != nil {
+			s.observeRoundClose("unknown", "worker_error")
+			return fmt.Errorf("load expired multiplayer game %s: %w", gameID, loadErr)
+		}
+		if game == nil {
+			continue
+		}
+		modeClass := "ranked"
+		if IsPartyLobbyMode(game.Mode) {
+			modeClass = "party_lobby"
+		}
+		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooksForMode(game.Mode))
 		if closeErr == nil || errors.Is(closeErr, ErrRoundClosed) || errors.Is(closeErr, ErrGameNotActive) {
 			if closeErr == nil {
 				s.publishMultiplayerOutcome(ctx, gameID, outcome)
-				s.observeRoundClose("ranked", "worker_closed")
+				s.observeRoundClose(modeClass, "worker_closed")
 			}
 			continue
 		}
-		return fmt.Errorf("close expired ranked round %s: %w", gameID, closeErr)
+		s.observeRoundClose(modeClass, "worker_error")
+		return fmt.Errorf("close expired multiplayer round %s: %w", gameID, closeErr)
 	}
 	return nil
 }
@@ -151,10 +179,15 @@ func (s *Service) CreateGame(ctx context.Context, sess *session.Context, req Cre
 	if err != nil {
 		return nil, err
 	}
-	if req.Mode != GameModeSolo || req.MapID == uuid.Nil {
+	if (req.Mode != GameModeSolo && req.Mode != GameModePractice) || req.MapID == uuid.Nil {
 		return nil, ErrInvalidGameRequest
 	}
-	if req.RoundCount == 0 {
+	if req.Mode == GameModePractice {
+		if req.TimerSeconds != nil || req.RoundCount < 0 || req.RoundCount > 1 {
+			return nil, ErrInvalidGameRequest
+		}
+		req.RoundCount = 1
+	} else if req.RoundCount == 0 {
 		req.RoundCount = 5
 	}
 	if req.RoundCount < 1 || req.RoundCount > 10 {
@@ -177,7 +210,7 @@ func (s *Service) CreateGame(ctx context.Context, sess *session.Context, req Cre
 	}
 
 	game := &Game{
-		Mode:            GameModeSolo,
+		Mode:            req.Mode,
 		Status:          GameStatusPending,
 		MapID:           req.MapID,
 		CreatedByUserID: owner.userID,
@@ -203,9 +236,12 @@ func (s *Service) CreateGame(ctx context.Context, sess *session.Context, req Cre
 	if err := s.repo.CreateGameBundle(ctx, game, player, rounds); err != nil {
 		return nil, err
 	}
-	s.logger.InfoContext(ctx, "solo game created",
+	if game.Mode == GameModePractice {
+		s.observeModeOperation(game.Mode, "create", "success")
+	}
+	s.logger.InfoContext(ctx, "game created",
 		slog.String("game_id", game.ID.String()),
-		slog.String("map_id", game.MapID.String()),
+		slog.String("mode", game.Mode),
 		slog.Int("round_count", game.RoundCount),
 	)
 	return &GameResponse{Game: toGameDTO(*game)}, nil
@@ -274,17 +310,24 @@ func (s *Service) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID) (*
 		return nil, ErrNotEnoughLocations
 	}
 	now := s.clock.Now()
-	return s.repo.StartPrivateRoomGame(ctx, gameID, roundsFromSelected(gameID, selected, game.RoundCount), now, game.TimerSeconds)
+	return s.repo.StartPrivateRoomGame(ctx, gameID, roundsFromSelected(gameID, selected, game.RoundCount), now, game.TimerSeconds, s.multiplayerTxHooksForMode(game.Mode))
 }
 
 func (s *Service) GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID) (*MultiplayerRoundState, error) {
+	game, err := s.repo.GetGameByID(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if game == nil || !IsPartyLobbyMode(game.Mode) {
+		return nil, ErrGameNotFound
+	}
 	state, err := s.repo.GetMultiplayerRoundState(ctx, gameID)
 	if err != nil {
 		return nil, err
 	}
 	now := s.clock.Now()
 	if state != nil && state.Status == RoundStatusActive && state.EndsAt != nil && !now.Before(*state.EndsAt) {
-		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooks())
+		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooksForMode(game.Mode))
 		if closeErr != nil && !errors.Is(closeErr, ErrRoundClosed) {
 			return nil, closeErr
 		}
@@ -426,6 +469,22 @@ func (s *Service) multiplayerTxHooks() MultiplayerTxHooks {
 	return hooks
 }
 
+func (s *Service) multiplayerTxHooksForMode(mode string) MultiplayerTxHooks {
+	if IsPartyLobbyMode(mode) {
+		hooks := MultiplayerTxHooks{}
+		if s.hostedRoomHook != nil {
+			hooks.OnMatchActive = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+				return s.hostedRoomHook.ApplyRoomStartedInTx(ctx, tx, gameID, now)
+			}
+			hooks.OnGameCompleted = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+				return s.hostedRoomHook.ApplyRoomCompletedInTx(ctx, tx, gameID, now)
+			}
+		}
+		return hooks
+	}
+	return s.multiplayerTxHooks()
+}
+
 // AbandonRankedGame abandons an active ranked multiplayer game and cancels the durable match atomically.
 func (s *Service) AbandonRankedGame(ctx context.Context, gameID uuid.UUID) error {
 	if s == nil || s.repo == nil {
@@ -508,7 +567,35 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		}
 		if player == nil || !ownerMatches(owner, *player) {
 			outcome = "rejected"
+			if game.Mode == GameModePractice {
+				return nil, ErrGameNotFound
+			}
 			return nil, ErrForbidden
+		}
+	}
+	key := strings.TrimSpace(idempotencyKey)
+	if game.Mode == GameModePractice && key != "" {
+		if len(key) < 16 || len(key) > 128 {
+			outcome = "rejected"
+			return nil, ErrInvalidGameRequest
+		}
+		existing, replayErr := s.repo.GetGuessByIdempotencyKey(ctx, player.ID, key)
+		if replayErr != nil {
+			outcome = "rejected"
+			return nil, replayErr
+		}
+		if existing != nil {
+			replayRoundID, parseErr := uuid.Parse(roundID)
+			if parseErr != nil {
+				outcome = "rejected"
+				return nil, ErrRoundNotFound
+			}
+			if existing.RoundID != replayRoundID || existing.Latitude != req.Latitude || existing.Longitude != req.Longitude {
+				outcome = "conflict"
+				return nil, ErrIdempotencyConflict
+			}
+			outcome = "replay"
+			return s.guessReplayResponse(ctx, *existing)
 		}
 	}
 	if game.Status != GameStatusActive {
@@ -545,7 +632,6 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		Latitude:  req.Latitude,
 		Longitude: req.Longitude,
 	}
-	key := strings.TrimSpace(idempotencyKey)
 	var releaseClaim func(context.Context)
 	if key != "" {
 		existing, err := s.repo.GetGuessByIdempotencyKey(ctx, player.ID, key)
@@ -562,7 +648,7 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 			outcome = "replay"
 			return s.guessReplayResponse(ctx, *existing)
 		}
-		if s.idempotency != nil {
+		if s.idempotency != nil && game.Mode != GameModePractice {
 			claimed, err := s.idempotency.Claim(ctx, idempotencyClaimKey(player.ID, key), 2*time.Minute)
 			if err != nil {
 				outcome = "rejected"
@@ -600,6 +686,20 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		outcome = "rejected"
 		if releaseClaim != nil {
 			releaseClaim(ctx)
+		}
+		if game.Mode == GameModePractice && key != "" {
+			replay, replayErr := s.repo.GetGuessByIdempotencyKey(ctx, player.ID, key)
+			if replayErr != nil {
+				return nil, replayErr
+			}
+			if replay != nil {
+				if replay.RoundID != parsedRoundID || replay.Latitude != req.Latitude || replay.Longitude != req.Longitude {
+					outcome = "conflict"
+					return nil, ErrIdempotencyConflict
+				}
+				outcome = "replay"
+				return s.guessReplayResponse(ctx, *replay)
+			}
 		}
 		return nil, err
 	}
@@ -641,7 +741,140 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 		}
 	}
 	loc := toRevealedLocation(*actual)
-	return soloGuessResponse(*saved, &loc, true, completedGame), nil
+	resp := soloGuessResponse(*saved, &loc, true, completedGame)
+	if game.Mode == GameModePractice {
+		resp.NextRoundAvailable = true
+	}
+	return resp, nil
+}
+
+// NextPracticeRound appends one owner-only untimed round after the current
+// Practice round completes. Durable idempotency is stored with the round.
+func (s *Service) NextPracticeRound(ctx context.Context, sess *session.Context, gameID, idempotencyKey string) (*CurrentRoundResponse, error) {
+	game, _, err := s.loadOwnedGame(ctx, sess, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if game.Mode != GameModePractice {
+		return nil, ErrWrongGameMode
+	}
+	key := strings.TrimSpace(idempotencyKey)
+	if len(key) < 16 || len(key) > 128 {
+		return nil, ErrInvalidGameRequest
+	}
+	replay, err := s.repo.GetPracticeRoundByCreationKey(ctx, game.ID, key)
+	if err != nil {
+		return nil, err
+	}
+	if replay != nil {
+		return &CurrentRoundResponse{Round: s.toRoundDTO(*replay)}, nil
+	}
+	selected, err := s.selector.SelectLocations(ctx, game.MapID, 1)
+	if err != nil {
+		s.observeModeOperation(GameModePractice, "next_round", "error")
+		return nil, err
+	}
+	selected = uniqueSelectedLocations(selected, 1)
+	if len(selected) != 1 {
+		s.observeModeOperation(GameModePractice, "next_round", "error")
+		return nil, ErrNotEnoughLocations
+	}
+	row, err := s.repo.AppendPracticeRound(ctx, game.ID, selected[0].ID, key, s.clock.Now().UTC())
+	if err != nil {
+		s.observeModeOperation(GameModePractice, "next_round", "error")
+		return nil, err
+	}
+	if row == nil {
+		return nil, ErrRoundNotFound
+	}
+	s.observeModeOperation(GameModePractice, "next_round", "success")
+	return &CurrentRoundResponse{Round: s.toRoundDTO(*row)}, nil
+}
+
+// GetPracticeHistory returns one bounded owner-only round page.
+func (s *Service) GetPracticeHistory(ctx context.Context, sess *session.Context, gameID, cursor string, limit int) (*PracticeHistoryResponse, error) {
+	game, player, err := s.loadOwnedGame(ctx, sess, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if game.Mode != GameModePractice {
+		return nil, ErrWrongGameMode
+	}
+	after, err := decodePracticeCursor(s.practiceCursorKey, cursor, game.ID)
+	if err != nil {
+		return nil, err
+	}
+	if limit == 0 {
+		limit = 20
+	}
+	if limit < 1 || limit > 100 {
+		return nil, ErrInvalidGameRequest
+	}
+	rows, hasMore, err := s.repo.ListPracticeHistory(ctx, game.ID, player.ID, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]PracticeRoundHistoryItem, 0, len(rows))
+	for _, row := range rows {
+		round := s.toRoundDTO(currentRoundRow{
+			RoundID: row.RoundID, RoundNumber: row.RoundNumber, RoundStatus: row.RoundStatus,
+			StartsAt: row.StartsAt, EndsAt: row.EndsAt, Provider: row.Provider,
+			ProviderRef: row.ProviderRef, Attribution: row.Attribution,
+		})
+		item := PracticeRoundHistoryItem{Round: round}
+		if row.GuessID != nil && row.GuessLatitude != nil && row.GuessLongitude != nil && row.DistanceMeters != nil && row.Score != nil && row.SubmittedAt != nil {
+			accuracy := *row.Score
+			if row.AccuracyScore != nil {
+				accuracy = *row.AccuracyScore
+			}
+			bonus := 0
+			if row.SpeedBonus != nil {
+				bonus = *row.SpeedBonus
+			}
+			timedOut := row.TimedOut != nil && *row.TimedOut
+			guess := GuessResult{ID: *row.GuessID, Latitude: *row.GuessLatitude, Longitude: *row.GuessLongitude,
+				DistanceMeters: *row.DistanceMeters, AccuracyScore: accuracy, SpeedBonus: bonus,
+				Score: *row.Score, SubmittedAt: *row.SubmittedAt, TimedOut: timedOut}
+			item.Guess = &guess
+			actual := RevealedLocation{Latitude: row.AnswerLatitude, Longitude: row.AnswerLongitude,
+				CountryCode: row.CountryCode, Region: row.Region, Locality: row.Locality}
+			item.ActualLocation = &actual
+		}
+		items = append(items, item)
+	}
+	resp := &PracticeHistoryResponse{Items: items, HasMore: hasMore}
+	if hasMore && len(rows) > 0 {
+		next := encodePracticeCursor(s.practiceCursorKey, game.ID, rows[len(rows)-1].RoundNumber)
+		resp.NextCursor = &next
+	}
+	return resp, nil
+}
+
+// EndPractice explicitly terminates an open-ended session while preserving history.
+func (s *Service) EndPractice(ctx context.Context, sess *session.Context, gameID string) (*GameResponse, error) {
+	game, _, err := s.loadOwnedGame(ctx, sess, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if game.Mode != GameModePractice {
+		return nil, ErrWrongGameMode
+	}
+	ended, err := s.repo.EndPractice(ctx, game.ID, s.clock.Now().UTC())
+	if err != nil {
+		s.observeModeOperation(GameModePractice, "end", "error")
+		return nil, err
+	}
+	s.observeModeOperation(GameModePractice, "end", "success")
+	return &GameResponse{Game: toGameDTO(*ended)}, nil
+}
+
+func (s *Service) observeModeOperation(mode, operation, outcome string) {
+	type modeOperationMetrics interface {
+		ObserveModeOperation(mode, operation, outcome string)
+	}
+	if metrics, ok := s.metrics.(modeOperationMetrics); ok {
+		metrics.ObserveModeOperation(mode, operation, outcome)
+	}
 }
 
 // ExpireRound advances an elapsed daily round with a zero-score timeout.
@@ -707,7 +940,7 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 	if current.EndsAt != nil && now.After(*current.EndsAt) {
 		// Advance expired multiplayer deadline, then reject this late guess.
 		// Casual has no ends_at, so this path is ranked/private_room only.
-		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks())
+		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooksForMode(game.Mode))
 		if closeErr != nil && !errors.Is(closeErr, ErrRoundClosed) {
 			return nil, closeErr
 		}
@@ -738,7 +971,7 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 		return nil, ErrAlreadyGuessed
 	}
 	// Match becomes active on first accepted multiplayer guess (same TX as score write).
-	hooks := s.multiplayerTxHooks()
+	hooks := s.multiplayerTxHooksForMode(game.Mode)
 	saved, actual, err := s.repo.SubmitMultiplayerGuessTx(ctx, game.ID, parsedRoundID, player.ID, guess, now, hooks)
 	if err != nil {
 		return nil, err
@@ -747,7 +980,7 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 		return nil, ErrRoundNotFound
 	}
 	s.publishMultiplayerOutcome(ctx, game.ID, saved)
-	if saved.GameCompleted {
+	if saved.GameCompleted && !IsProgressionNeutralMode(game.Mode) {
 		if s.completionHook != nil {
 			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
 				return nil, fmt.Errorf("finalize multiplayer game: %w", err)
@@ -857,6 +1090,9 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, gameID 
 	if err != nil {
 		return nil, err
 	}
+	if game.Mode == GameModePractice {
+		return nil, ErrWrongGameMode
+	}
 	if game.Status != GameStatusCompleted {
 		return nil, ErrResultsNotReady
 	}
@@ -895,7 +1131,7 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, gameID 
 // finalizeCompletedGame makes post-game projections retriable from every owned read.
 // The hook is idempotent, so a transient failure never strands a completed game.
 func (s *Service) finalizeCompletedGame(ctx context.Context, game *Game) error {
-	if game == nil || game.Status != GameStatusCompleted || s.completionHook == nil {
+	if game == nil || game.Status != GameStatusCompleted || s.completionHook == nil || IsProgressionNeutralMode(game.Mode) {
 		return nil
 	}
 	completedAt := s.clock.Now()
@@ -963,6 +1199,9 @@ func (s *Service) loadOwnedGame(ctx context.Context, sess *session.Context, game
 			return nil, nil, err
 		}
 		if player == nil || !ownerMatches(owner, *player) {
+			if game.Mode == GameModePractice {
+				return nil, nil, ErrGameNotFound
+			}
 			return nil, nil, ErrForbidden
 		}
 	}
@@ -1050,6 +1289,7 @@ func toGameDTO(game Game) GameDTO {
 		TotalScore:         game.TotalScore,
 		StartedAt:          game.StartedAt,
 		CompletedAt:        game.CompletedAt,
+		OpenEnded:          IsOpenEndedMode(game.Mode),
 	}
 }
 

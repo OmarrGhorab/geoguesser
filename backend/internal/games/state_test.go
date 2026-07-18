@@ -12,6 +12,7 @@ func TestIsMultiplayerModeIncludesMatchmadeModes(t *testing.T) {
 
 	multiplayer := []string{
 		games.GameModePrivateRoom,
+		games.GameModePartyLobby,
 		games.GameModeRanked,
 		games.GameModeCasualSolo,
 		games.GameModeCasualDuo,
@@ -25,10 +26,29 @@ func TestIsMultiplayerModeIncludesMatchmadeModes(t *testing.T) {
 			t.Fatalf("%q should be multiplayer", mode)
 		}
 	}
-	for _, mode := range []string{games.GameModeSolo, games.GameModeDaily, ""} {
+	for _, mode := range []string{games.GameModeSolo, games.GameModePractice, games.GameModeDaily, ""} {
 		if games.IsMultiplayerMode(mode) {
 			t.Fatalf("%q should not be multiplayer", mode)
 		}
+	}
+}
+
+func TestPartyLobbyPracticeModeHelpers(t *testing.T) {
+	t.Parallel()
+
+	if !games.IsPartyLobbyMode(games.GameModePartyLobby) || !games.IsPartyLobbyMode(games.GameModePrivateRoom) {
+		t.Fatal("canonical and legacy hosted room modes must share party lobby semantics")
+	}
+	if !games.IsOpenEndedMode(games.GameModePractice) {
+		t.Fatal("practice must be open ended")
+	}
+	for _, mode := range []string{games.GameModePartyLobby, games.GameModePrivateRoom, games.GameModePractice} {
+		if !games.IsProgressionNeutralMode(mode) {
+			t.Fatalf("%q must be progression neutral", mode)
+		}
+	}
+	if games.IsProgressionNeutralMode(games.GameModeRankedSolo) {
+		t.Fatal("ranked must not be progression neutral")
 	}
 }
 

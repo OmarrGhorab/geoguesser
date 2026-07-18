@@ -57,6 +57,20 @@ type RoomDTO struct {
 	ReadyPlayerIDs  []uuid.UUID          `json:"ready_player_ids"`
 	CurrentRound    *RoomCurrentRoundDTO `json:"current_round,omitempty"`
 	GuessProgress   *RoomGuessProgress   `json:"guess_progress,omitempty"`
+	Mode            string               `json:"mode"`
+	Standings       []PartyLobbyStanding `json:"standings,omitempty"`
+}
+
+// PartyLobbyStanding is a bounded individual free-for-all projection.
+type PartyLobbyStanding struct {
+	Placement           int       `json:"placement"`
+	PlayerID            uuid.UUID `json:"player_id"`
+	DisplayName         string    `json:"display_name"`
+	TotalScore          int       `json:"total_score"`
+	TotalDistanceMeters int       `json:"total_distance_meters"`
+	RoundsScored        int       `json:"rounds_scored"`
+	Tied                bool      `json:"tied"`
+	JoinedAt            time.Time `json:"-"`
 }
 
 type RoomPlayerDTO struct {
