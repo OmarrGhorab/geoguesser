@@ -23,12 +23,14 @@ func NewRepository(db *gorm.DB) *Repository {
 
 // FindActiveUser reports whether userID exists with status active.
 func (r *Repository) FindActiveUser(ctx context.Context, userID uuid.UUID) (bool, error) {
-	var id uuid.UUID
-	err := r.db.WithContext(ctx).Raw(`SELECT id FROM users WHERE id = ? AND status = 'active'`, userID).Scan(&id).Error
+	var row struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
+	err := r.db.WithContext(ctx).Raw(`SELECT id FROM users WHERE id = ? AND status = 'active'`, userID).Scan(&row).Error
 	if err != nil {
 		return false, fmt.Errorf("find active user: %w", err)
 	}
-	return id != uuid.Nil, nil
+	return row.ID != uuid.Nil, nil
 }
 
 func (r *Repository) EnsureGlobalLeaderboard(ctx context.Context) (*Leaderboard, error) {

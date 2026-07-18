@@ -456,12 +456,14 @@ func (r *Repository) FindMatchIDByGameID(ctx context.Context, gameID uuid.UUID) 
 	if r == nil || r.db == nil {
 		return uuid.Nil, ErrUnavailable
 	}
-	var matchID uuid.UUID
-	err := r.db.WithContext(ctx).Model(&Match{}).Select("id").Where("game_id = ?", gameID).Scan(&matchID).Error
+	var row struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
+	err := r.db.WithContext(ctx).Model(&Match{}).Select("id").Where("game_id = ?", gameID).Scan(&row).Error
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("find match by game: %w", err)
 	}
-	return matchID, nil
+	return row.ID, nil
 }
 
 // ListInactiveCasualMatches implements Store.
