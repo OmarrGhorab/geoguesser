@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/matches/{matchId}/leave",
+  "method": "POST",
+  "status": 204,
+  "body": null
+}

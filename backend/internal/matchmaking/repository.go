@@ -115,7 +115,8 @@ type FormationBundle struct {
 	Participants []MatchPlayer
 }
 
-// FormationInput is the complete ranked formation request for one PostgreSQL transaction.
+// FormationInput is the legacy 1v1 ranked formation request (ranked_standard pair path).
+// Prefer TeamFormationInput / CreateTeamFormationBundle for six-mode team rosters.
 type FormationInput struct {
 	FormationKey string
 	Mode         string
@@ -126,32 +127,94 @@ type FormationInput struct {
 	UserIDs      [2]uuid.UUID
 	LocationIDs  []uuid.UUID
 	MatchedAt    time.Time
+	// SeasonID is optional; when nil, the active competitive season is resolved for ranked.
+	SeasonID *uuid.UUID
 }
 
-// FormationResult is the durable assignment produced by CreateFormationBundle.
+// TeamFormationInput creates a match with two ordered equal rosters (1v1 / 2v2 / 4v4).
+type TeamFormationInput struct {
+	FormationKey string
+	// Mode is the matches.mode value (canonical six-mode or ranked_standard alias).
+	Mode       string
+	Playlist   string
+	Format     string
+	TeamSize   int
+	MapID      uuid.UUID
+	RoundCount int
+	// TimerSeconds is nil for casual (no deadline). Ranked typically sets 60.
+	TimerSeconds *int
+	StartDelay   time.Duration
+	// TeamOne / TeamTwo are ordered rosters; lengths must equal TeamSize and be disjoint.
+	TeamOne    []uuid.UUID
+	TeamTwo    []uuid.UUID
+	PartyOneID *uuid.UUID
+	PartyTwoID *uuid.UUID
+	// SeasonID is required for ranked (resolved from active season when nil).
+	SeasonID    *uuid.UUID
+	LocationIDs []uuid.UUID
+	MatchedAt   time.Time
+}
+
+// FormationResult is the durable assignment produced by formation.
 type FormationResult struct {
 	Match Match
 }
 
-// CreateFormationBundle creates the ranked game, players, rounds, match, and participants atomically.
+// CreateFormationBundle creates a legacy ranked_standard 1v1 match atomically.
 // On unique formation_key conflict it returns the existing match (idempotent replay).
+// Internally delegates to CreateTeamFormationBundle with solo rosters and games.mode='ranked'.
 func (r *Repository) CreateFormationBundle(ctx context.Context, input FormationInput) (*FormationResult, error) {
-	if r == nil || r.db == nil {
-		return nil, ErrUnavailable
-	}
-	if input.FormationKey == "" || input.MapID == uuid.Nil || len(input.LocationIDs) < input.RoundCount || input.RoundCount < 1 {
-		return nil, ErrContentUnavailable
-	}
 	if input.UserIDs[0] == uuid.Nil || input.UserIDs[1] == uuid.Nil || input.UserIDs[0] == input.UserIDs[1] {
 		return nil, ErrInvalidRequest
 	}
+	mode := input.Mode
+	if mode == "" {
+		mode = ModeRankedStandard
+	}
+	timer := input.TimerSeconds
+	return r.CreateTeamFormationBundle(ctx, TeamFormationInput{
+		FormationKey: input.FormationKey,
+		Mode:         mode,
+		Playlist:     PlaylistRanked,
+		Format:       FormatSolo,
+		TeamSize:     TeamSizeSolo,
+		MapID:        input.MapID,
+		RoundCount:   input.RoundCount,
+		TimerSeconds: &timer,
+		StartDelay:   input.StartDelay,
+		TeamOne:      []uuid.UUID{input.UserIDs[0]},
+		TeamTwo:      []uuid.UUID{input.UserIDs[1]},
+		SeasonID:     input.SeasonID,
+		LocationIDs:  input.LocationIDs,
+		MatchedAt:    input.MatchedAt,
+	})
+}
+
+// CreateTeamFormationBundle creates the game, slotted players, rounds, match, and
+// match_players atomically for two equal ordered rosters.
+// On unique formation_key conflict it returns the existing match (idempotent replay).
+func (r *Repository) CreateTeamFormationBundle(ctx context.Context, input TeamFormationInput) (*FormationResult, error) {
+	if r == nil || r.db == nil {
+		return nil, ErrUnavailable
+	}
+	if err := validateTeamFormationInput(input); err != nil {
+		return nil, err
+	}
+
+	parts, err := resolveFormationParts(input)
+	if err != nil {
+		return nil, err
+	}
 
 	// Stable lock order prevents deadlocks between concurrent formations.
-	users := []uuid.UUID{input.UserIDs[0], input.UserIDs[1]}
+	users := collectDistinctUsers(input.TeamOne, input.TeamTwo)
+	if len(users) != parts.TeamSize*2 {
+		return nil, ErrInvalidRequest
+	}
 	sort.Slice(users, func(i, j int) bool { return users[i].String() < users[j].String() })
 
 	var result FormationResult
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Replay path: unique formation key already committed.
 		var existing Match
 		if err := tx.Where("formation_key = ?", input.FormationKey).Take(&existing).Error; err == nil {
@@ -161,105 +224,75 @@ func (r *Repository) CreateFormationBundle(ctx context.Context, input FormationI
 			return err
 		}
 
-		// Lock both users in stable UUID order and revalidate active status.
-		// Lock users alone (no outer join) so FOR UPDATE is valid on PostgreSQL.
-		displayNames := make(map[uuid.UUID]string, 2)
-		for _, userID := range users {
-			var row struct {
-				ID     uuid.UUID `gorm:"column:id"`
-				Status string    `gorm:"column:status"`
-			}
-			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-				Table("users").
-				Select("id, status").
-				Where("id = ?", userID).
-				Take(&row).Error
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return ErrAccountIneligible
-				}
-				return err
-			}
-			if row.Status != "active" {
-				return ErrAccountIneligible
-			}
+		displayNames, err := lockAndValidateUsers(tx, users)
+		if err != nil {
+			return err
+		}
 
-			var displayName string
-			if err := tx.Table("user_profiles").
-				Select("display_name").
-				Where("user_id = ?", userID).
-				Limit(1).
-				Scan(&displayName).Error; err != nil {
-				return err
-			}
-			if displayName == "" {
-				displayName = "Player"
-			}
-			displayNames[userID] = displayName
-
-			var activeCount int64
-			if err := tx.Table("match_players").
-				Where("user_id = ? AND status IN ?", userID, []string{ParticipantStatusAssigned, ParticipantStatusActive}).
-				Count(&activeCount).Error; err != nil {
-				return err
-			}
-			if activeCount > 0 {
-				return ErrAlreadyAssigned
-			}
-
-			var conflictCount int64
-			if err := tx.Table("game_players AS gp").
-				Joins("JOIN games g ON g.id = gp.game_id").
-				Where("gp.user_id = ?", userID).
-				Where("gp.status IN ?", []string{"active", "disconnected"}).
-				Where("g.status IN ?", []string{"pending", "active"}).
-				Where("g.mode <> ?", "ranked").
-				Count(&conflictCount).Error; err != nil {
-				return err
-			}
-			if conflictCount > 0 {
-				return ErrActiveGameConflict
-			}
+		seasonID, err := resolveSeasonID(tx, parts.Playlist, input.SeasonID)
+		if err != nil {
+			return err
 		}
 
 		matchedAt := input.MatchedAt.UTC()
-		timerSeconds := input.TimerSeconds
+		if matchedAt.IsZero() {
+			matchedAt = time.Now().UTC()
+		}
 		startsAt := matchedAt.Add(input.StartDelay)
-		endsAt := startsAt.Add(time.Duration(timerSeconds) * time.Second)
 
-		// Ranked game is immediately playable with a scheduled first-round countdown.
+		gameMode := formationGameMode(input.Mode)
 		gameID := uuid.New()
-		if err := tx.Exec(`
-			INSERT INTO games (id, mode, status, map_id, round_count, timer_seconds, scoring_version, total_score, started_at, created_at, updated_at)
-			VALUES (?, 'ranked', 'active', ?, ?, ?, 1, 0, ?, ?, ?)
-		`, gameID, input.MapID, input.RoundCount, timerSeconds, matchedAt, matchedAt, matchedAt).Error; err != nil {
-			return fmt.Errorf("create ranked game: %w", err)
+		var timerArg any
+		var firstEnds any
+		if parts.Playlist == PlaylistCasual || input.TimerSeconds == nil {
+			timerArg = nil
+			firstEnds = nil
+		} else {
+			timerArg = *input.TimerSeconds
+			endsAt := startsAt.Add(time.Duration(*input.TimerSeconds) * time.Second)
+			firstEnds = endsAt
 		}
 
-		playerIDs := make(map[uuid.UUID]uuid.UUID, 2)
-		for _, userID := range []uuid.UUID{input.UserIDs[0], input.UserIDs[1]} {
-			playerID := uuid.New()
-			name := displayNames[userID]
-			if name == "" {
-				name = "Player"
+		if err := tx.Exec(`
+			INSERT INTO games (id, mode, status, map_id, round_count, timer_seconds, scoring_version, total_score, started_at, created_at, updated_at)
+			VALUES (?, ?, 'active', ?, ?, ?, 1, 0, ?, ?, ?)
+		`, gameID, gameMode, input.MapID, input.RoundCount, timerArg, matchedAt, matchedAt, matchedAt).Error; err != nil {
+			return fmt.Errorf("create formation game: %w", err)
+		}
+
+		playerIDs := make(map[uuid.UUID]uuid.UUID, len(users))
+		insertTeam := func(roster []uuid.UUID, slot int) error {
+			for _, userID := range roster {
+				playerID := uuid.New()
+				name := displayNames[userID]
+				if name == "" {
+					name = "Player"
+				}
+				if err := tx.Exec(`
+					INSERT INTO game_players (id, game_id, user_id, display_name, role, status, total_score, team_slot, joined_at)
+					VALUES (?, ?, ?, ?, 'player', 'active', 0, ?, ?)
+				`, playerID, gameID, userID, name, slot, matchedAt).Error; err != nil {
+					return fmt.Errorf("create game player: %w", err)
+				}
+				playerIDs[userID] = playerID
 			}
-			if err := tx.Exec(`
-				INSERT INTO game_players (id, game_id, user_id, display_name, role, status, total_score, joined_at)
-				VALUES (?, ?, ?, ?, 'player', 'active', 0, ?)
-			`, playerID, gameID, userID, name, matchedAt).Error; err != nil {
-				return fmt.Errorf("create game player: %w", err)
-			}
-			playerIDs[userID] = playerID
+			return nil
+		}
+		if err := insertTeam(input.TeamOne, 1); err != nil {
+			return err
+		}
+		if err := insertTeam(input.TeamTwo, 2); err != nil {
+			return err
 		}
 
 		for i := 0; i < input.RoundCount; i++ {
 			roundID := uuid.New()
 			status := "pending"
-			var roundStarts, roundEnds *time.Time
+			var roundStarts, roundEnds any
 			if i == 0 {
 				status = "active"
-				roundStarts = &startsAt
-				roundEnds = &endsAt
+				roundStarts = startsAt
+				roundEnds = firstEnds
 			}
 			if err := tx.Exec(`
 				INSERT INTO rounds (id, game_id, location_id, round_number, status, starts_at, ends_at, created_at)
@@ -269,35 +302,51 @@ func (r *Repository) CreateFormationBundle(ctx context.Context, input FormationI
 			}
 		}
 
-		// Ranked game is created already-active with a scheduled first round, so the
-		// durable match starts as active in the same transaction (lifecycle agreement).
 		matchID := uuid.New()
 		match := Match{
-			ID:           matchID,
-			FormationKey: input.FormationKey,
-			GameID:       gameID,
-			Mode:         input.Mode,
-			Status:       MatchStatusActive,
-			MatchedAt:    matchedAt,
-			StartedAt:    &matchedAt,
-			CreatedAt:    matchedAt,
-			UpdatedAt:    matchedAt,
+			ID:             matchID,
+			FormationKey:   input.FormationKey,
+			GameID:         gameID,
+			Mode:           input.Mode,
+			Playlist:       parts.Playlist,
+			Format:         parts.Format,
+			TeamSize:       parts.TeamSize,
+			SeasonID:       seasonID,
+			TeamOneScore:   0,
+			TeamTwoScore:   0,
+			Status:         MatchStatusActive,
+			MatchedAt:      matchedAt,
+			StartedAt:      &matchedAt,
+			LastActivityAt: matchedAt,
+			CreatedAt:      matchedAt,
+			UpdatedAt:      matchedAt,
 		}
 		if err := tx.Create(&match).Error; err != nil {
 			return fmt.Errorf("create match: %w", err)
 		}
 
-		for _, userID := range []uuid.UUID{input.UserIDs[0], input.UserIDs[1]} {
-			mp := MatchPlayer{
-				MatchID:      matchID,
-				UserID:       userID,
-				GamePlayerID: playerIDs[userID],
-				Status:       ParticipantStatusActive,
-				AssignedAt:   matchedAt,
+		insertMatchPlayers := func(roster []uuid.UUID, slot int, partyID *uuid.UUID) error {
+			for _, userID := range roster {
+				mp := MatchPlayer{
+					MatchID:      matchID,
+					UserID:       userID,
+					GamePlayerID: playerIDs[userID],
+					TeamSlot:     slot,
+					PartyID:      partyID,
+					Status:       ParticipantStatusActive,
+					AssignedAt:   matchedAt,
+				}
+				if err := tx.Create(&mp).Error; err != nil {
+					return fmt.Errorf("create match player: %w", err)
+				}
 			}
-			if err := tx.Create(&mp).Error; err != nil {
-				return fmt.Errorf("create match player: %w", err)
-			}
+			return nil
+		}
+		if err := insertMatchPlayers(input.TeamOne, 1, input.PartyOneID); err != nil {
+			return err
+		}
+		if err := insertMatchPlayers(input.TeamTwo, 2, input.PartyTwoID); err != nil {
+			return err
 		}
 
 		result.Match = match
@@ -307,6 +356,204 @@ func (r *Repository) CreateFormationBundle(ctx context.Context, input FormationI
 		return nil, err
 	}
 	return &result, nil
+}
+
+func validateTeamFormationInput(input TeamFormationInput) error {
+	if input.FormationKey == "" || input.MapID == uuid.Nil || input.RoundCount < 1 {
+		return ErrContentUnavailable
+	}
+	if len(input.LocationIDs) < input.RoundCount {
+		return ErrContentUnavailable
+	}
+	// Locations must be distinct for fair rounds.
+	seenLoc := make(map[uuid.UUID]struct{}, len(input.LocationIDs))
+	for i := 0; i < input.RoundCount; i++ {
+		id := input.LocationIDs[i]
+		if id == uuid.Nil {
+			return ErrContentUnavailable
+		}
+		if _, ok := seenLoc[id]; ok {
+			return ErrInvalidRequest
+		}
+		seenLoc[id] = struct{}{}
+	}
+	if len(input.TeamOne) == 0 || len(input.TeamTwo) == 0 {
+		return ErrInvalidRequest
+	}
+	if len(input.TeamOne) != len(input.TeamTwo) {
+		return ErrInvalidRequest
+	}
+	if input.TeamSize > 0 && len(input.TeamOne) != input.TeamSize {
+		return ErrInvalidRequest
+	}
+	return nil
+}
+
+func resolveFormationParts(input TeamFormationInput) (ModeParts, error) {
+	if input.Mode != "" {
+		parts, err := ParseMode(input.Mode)
+		if err != nil {
+			return ModeParts{}, err
+		}
+		// Allow ranked_standard raw mode while filling playlist/format from canonical parts.
+		if input.Playlist != "" && input.Playlist != parts.Playlist {
+			return ModeParts{}, ErrInvalidRequest
+		}
+		if input.Format != "" && input.Format != parts.Format {
+			return ModeParts{}, ErrInvalidRequest
+		}
+		if input.TeamSize > 0 && input.TeamSize != parts.TeamSize {
+			return ModeParts{}, ErrInvalidRequest
+		}
+		if len(input.TeamOne) != parts.TeamSize || len(input.TeamTwo) != parts.TeamSize {
+			return ModeParts{}, ErrInvalidRequest
+		}
+		// Preserve ranked_standard on the match when that was the requested mode.
+		if stringsEqual(input.Mode, ModeRankedStandard) {
+			parts.Raw = ModeRankedStandard
+		}
+		return parts, nil
+	}
+	if input.Playlist == "" || input.Format == "" {
+		return ModeParts{}, ErrInvalidRequest
+	}
+	mode, err := ModeFromParts(input.Playlist, input.Format)
+	if err != nil {
+		return ModeParts{}, err
+	}
+	parts, err := ParseMode(mode)
+	if err != nil {
+		return ModeParts{}, err
+	}
+	if input.TeamSize > 0 && input.TeamSize != parts.TeamSize {
+		return ModeParts{}, ErrInvalidRequest
+	}
+	if len(input.TeamOne) != parts.TeamSize || len(input.TeamTwo) != parts.TeamSize {
+		return ModeParts{}, ErrInvalidRequest
+	}
+	return parts, nil
+}
+
+func stringsEqual(a, b string) bool {
+	return a == b
+}
+
+func collectDistinctUsers(teamOne, teamTwo []uuid.UUID) []uuid.UUID {
+	seen := make(map[uuid.UUID]struct{}, len(teamOne)+len(teamTwo))
+	out := make([]uuid.UUID, 0, len(teamOne)+len(teamTwo))
+	for _, id := range append(append([]uuid.UUID{}, teamOne...), teamTwo...) {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func lockAndValidateUsers(tx *gorm.DB, users []uuid.UUID) (map[uuid.UUID]string, error) {
+	displayNames := make(map[uuid.UUID]string, len(users))
+	for _, userID := range users {
+		var row struct {
+			ID     uuid.UUID `gorm:"column:id"`
+			Status string    `gorm:"column:status"`
+		}
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Table("users").
+			Select("id, status").
+			Where("id = ?", userID).
+			Take(&row).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrAccountIneligible
+			}
+			return nil, err
+		}
+		if row.Status != "active" {
+			return nil, ErrAccountIneligible
+		}
+
+		var displayName string
+		if err := tx.Table("user_profiles").
+			Select("display_name").
+			Where("user_id = ?", userID).
+			Limit(1).
+			Scan(&displayName).Error; err != nil {
+			return nil, err
+		}
+		if displayName == "" {
+			displayName = "Player"
+		}
+		displayNames[userID] = displayName
+
+		var activeCount int64
+		if err := tx.Table("match_players").
+			Where("user_id = ? AND status IN ?", userID, []string{ParticipantStatusAssigned, ParticipantStatusActive}).
+			Count(&activeCount).Error; err != nil {
+			return nil, err
+		}
+		if activeCount > 0 {
+			return nil, ErrAlreadyAssigned
+		}
+
+		var conflictCount int64
+		if err := tx.Table("game_players AS gp").
+			Joins("JOIN games g ON g.id = gp.game_id").
+			Where("gp.user_id = ?", userID).
+			Where("gp.status IN ?", []string{"active", "disconnected"}).
+			Where("g.status IN ?", []string{"pending", "active"}).
+			Where("g.mode <> ?", "ranked").
+			Count(&conflictCount).Error; err != nil {
+			return nil, err
+		}
+		if conflictCount > 0 {
+			return nil, ErrActiveGameConflict
+		}
+	}
+	// Reject duplicate user across both teams (collectDistinctUsers shortens list).
+	return displayNames, nil
+}
+
+func resolveSeasonID(tx *gorm.DB, playlist string, provided *uuid.UUID) (*uuid.UUID, error) {
+	if playlist == PlaylistCasual {
+		return nil, nil
+	}
+	if provided != nil && *provided != uuid.Nil {
+		return provided, nil
+	}
+	var row struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
+	err := tx.Table("competitive_seasons").
+		Select("id").
+		Where("status = ?", "active").
+		Order("sequence ASC").
+		Limit(1).
+		Scan(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	if row.ID == uuid.Nil {
+		return nil, ErrContentUnavailable
+	}
+	return &row.ID, nil
+}
+
+// formationGameMode maps matchmaking mode to games.mode.
+// Ranked playlist uses legacy multiplayer games.mode='ranked' so existing
+// games_mode_check and ranked lifecycle hooks keep working; matches.mode still
+// stores ranked_standard / ranked_*.
+// Casual writes canonical casual_* game modes (null timer).
+func formationGameMode(mode string) string {
+	if IsCasual(mode) {
+		if canonical := NormalizeMode(mode); canonical != "" {
+			return canonical
+		}
+	}
+	return "ranked"
 }
 
 // TransitionMatch applies a guarded match lifecycle transition and mirrors participant status.

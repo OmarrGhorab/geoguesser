@@ -5,9 +5,12 @@ info:
   summary: REST API contract for the GeoGuess-style game.
   description: >
     Versioned API contract for authentication, profiles, maps, games, guesses,
-    rooms, matchmaking, leaderboards, billing placeholders, and health checks.
-    Exact location coordinates are never returned before a guess is locked or a
-    round is revealed.
+    rooms, parties, matchmaking, multiplayer matches, leaderboards, billing
+    placeholders, and health checks. Exact location coordinates are never
+    returned before a guess is locked or a multiplayer round is revealed.
+    Unknown request properties are rejected. Missing and unauthorized party or
+    match resources both return privacy-safe not_found where revealing existence
+    would leak information.
 servers:
   - url: http://localhost/api/v1
     description: Local development through Nginx
@@ -26,9 +29,27 @@ tags:
   - name: Maps
   - name: Games
   - name: Rooms
+  - name: Parties
+    description: Casual/Ranked duo and squad party formation, invites, and readiness.
   - name: Matchmaking
+    description: >
+      Solo and party queue for casual and ranked playlists. Legacy ranked_standard
+      join remains accepted as ranked solo.
+  - name: Matches
+    description: >
+      Authorized multiplayer match snapshot, round results, terminal results, leave,
+      team chat, mutes, and reports.
+  - name: Realtime
+    description: >
+      One-time WebSocket tickets for party and match channels. The ticket is offered
+      as a Sec-WebSocket-Protocol value ticket.{opaque} alongside geoguess.v1 and is
+      never placed in URLs or logs.
   - name: Friends
   - name: Leaderboards
+  - name: Competitive
+    description: >
+      Seasonal ranked profile, placement progress, 21 standard divisions, exclusive
+      World Legend top 500, rating history, and closed-season leaderboard snapshots.
   - name: Challenges
   - name: Missions
   - name: Streaks
@@ -652,7 +673,13 @@ paths:
     post:
       tags: [Games]
       summary: Submit a guess
-      description: Submits one server-scored guess for the current round and returns score plus revealed location. Repeating the same Idempotency-Key with the same coordinates returns the original result; reusing it with different coordinates returns conflict.
+      description: >
+        Submits one server-scored guess for the current round. Solo/daily responses
+        reveal the answer immediately. Multiplayer responses keep actual_location
+        null until the shared round closes (all eligible submissions or ranked
+        deadline). Repeating the same Idempotency-Key with the same coordinates
+        returns the original result; reusing it with different coordinates returns
+        conflict (idempotency_conflict).
       operationId: submitGuess
       security:
         - accessCookie: []
@@ -681,6 +708,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GuessResultResponse'
+              examples:
+                soloRevealed:
+                  summary: Solo/daily immediate reveal
+                  value:
+                    guess:
+                      id: 00000000-0000-4000-8000-0000000000a1
+                      latitude: 30.0444
+                      longitude: 31.2357
+                      distance_meters: 12345
+                      accuracy_score: 4020
+                      speed_bonus: 0
+                      score: 4020
+                      submitted_at: "2026-07-18T10:02:25Z"
+                      timed_out: false
+                    round_completed: true
+                    game_completed: false
+                    actual_location:
+                      latitude: 30.05
+                      longitude: 31.24
+                      country_code: EG
+                    max_score: 5000
+                    score_percent: 80
+                    max_accuracy_score: 5000
+                    max_speed_bonus: 250
+                    outcome: close
+                multiplayerDelayedReveal:
+                  summary: Multiplayer delayed reveal (round still open)
+                  value:
+                    guess:
+                      id: 00000000-0000-4000-8000-0000000000a2
+                      latitude: 48.8566
+                      longitude: 2.3522
+                      distance_meters: 5432
+                      accuracy_score: 4120
+                      speed_bonus: 0
+                      score: 4120
+                      submitted_at: "2026-07-18T10:02:25Z"
+                      timed_out: false
+                    round_completed: false
+                    game_completed: false
+                    submitted_count: 3
+                    eligible_count: 4
+                    actual_location: null
+                    max_score: 5000
+                    score_percent: 82
+                    max_accuracy_score: 5000
+                    max_speed_bonus: 250
+                    outcome: submitted
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -963,21 +1038,61 @@ paths:
   /matchmaking/queue:
     post:
       tags: [Matchmaking]
-      summary: Enter ranked matchmaking queue
+      summary: Enter matchmaking queue
       operationId: enterMatchmakingQueue
       description: |
-        Registered-only ranked join. First and concurrent joins for the same valid
-        searching entry preserve original search_started_at. A durable active
+        Registered-only join for casual or ranked playlists in solo, duo, or squad
+        format. Solo omits party_id and creates an implicit one-user ticket.
+        Duo/Squad require a complete ready party, caller as leader, and the
+        current party version. First and concurrent joins for the same valid
+        searching ticket preserve original search_started_at. A durable active
         assignment is returned as matched when present.
+
+        Ranked also requires an active competitive season, a standing (visible or
+        hidden placement rating) for every roster member, and no more than two
+        named-rank tiers between highest and lowest party members. Placement
+        players use hidden rating for the spread check and for team-average
+        matchmaking. Ranked search windows start at ±100 team-average rating,
+        expand by 50 every 30 seconds, and cap at ±400. Searching responses
+        include rating_window for Ranked (absent for Casual).
+
+        Legacy body `{ "mode": "ranked_standard" }` is accepted as ranked solo.
+        Supplying both legacy mode and canonical playlist/format is
+        invalid_mode_selection unless they are equivalent. Idempotency-Key is
+        required for create-style joins.
       security:
         - accessCookie: []
           csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EnterMatchmakingRequest'
+            examples:
+              casualSolo:
+                summary: Casual solo
+                value:
+                  playlist: casual
+                  format: solo
+              casualDuo:
+                summary: Casual duo with party
+                value:
+                  playlist: casual
+                  format: duo
+                  party_id: 00000000-0000-4000-8000-0000000000b1
+              rankedSquad:
+                summary: Ranked squad
+                value:
+                  playlist: ranked
+                  format: squad
+                  party_id: 00000000-0000-4000-8000-0000000000b2
+              legacyRankedStandard:
+                summary: Legacy ranked_standard (ranked solo)
+                value:
+                  mode: ranked_standard
       responses:
         '202':
           description: Search accepted or existing search/match returned.
@@ -985,6 +1100,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MatchmakingStatusResponse'
+              examples:
+                searching:
+                  $ref: '#/components/examples/MatchmakingSearching'
+                searchingRanked:
+                  $ref: '#/components/examples/MatchmakingSearchingRanked'
+                matched1v1:
+                  $ref: '#/components/examples/MatchmakingMatched1v1'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1001,11 +1123,14 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags: [Matchmaking]
-      summary: Leave ranked matchmaking queue
+      summary: Leave matchmaking queue
       operationId: leaveMatchmakingQueue
       description: |
-        Idempotent leave for searching players. Returns 409 when a pair claim is
-        in progress; clients should refresh status.
+        Idempotent leave for a solo caller or party leader with a searching ticket.
+        Returns 204 when the caller is not searching after the operation.
+        Returns 409 match_already_formed when a durable assignment already exists
+        (error details may include a safe match destination). Returns 409 while a
+        claim is in progress; clients should refresh status.
       security:
         - accessCookie: []
           csrfHeader: []
@@ -1024,11 +1149,14 @@ paths:
   /matchmaking/status:
     get:
       tags: [Matchmaking]
-      summary: Get ranked matchmaking status
+      summary: Get matchmaking status
       operationId: getMatchmakingStatus
       description: |
-        Durable-first status. Searching renews the activity lease without changing
-        queue priority. Never includes opponent identity or hidden game data.
+        Durable-first status for the caller (and shared party ticket when queued
+        as duo/squad). Searching renews the activity lease without changing queue
+        priority. Never includes opponent identity or hidden game data.
+        Legacy response fields mode, match_id, game_id, formed_at, and destination
+        remain for compatible consumers; playlist/format/ticket_id/party_id are additive.
       security:
         - accessCookie: []
       responses:
@@ -1038,6 +1166,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MatchmakingStatusResponse'
+              examples:
+                notQueued:
+                  summary: Not queued
+                  value:
+                    status: not_queued
+                    queue: null
+                    match: null
+                searching:
+                  $ref: '#/components/examples/MatchmakingSearching'
+                matched2v2:
+                  $ref: '#/components/examples/MatchmakingMatched2v2'
+                matched4v4:
+                  $ref: '#/components/examples/MatchmakingMatched4v4'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -1045,6 +1186,770 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
+  /parties:
+    post:
+      tags: [Parties]
+      summary: Create a forming party
+      description: >
+        Creates a forming Duo or Squad party led by the caller. Solo does not use
+        durable parties. Requires Idempotency-Key. Errors include active_party_conflict,
+        active_queue_or_match, and unsupported_format.
+      operationId: createParty
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePartyRequest'
+            examples:
+              duo:
+                value:
+                  format: duo
+              squad:
+                value:
+                  format: squad
+      responses:
+        '201':
+          description: Party created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyResponse'
+              examples:
+                duo:
+                  $ref: '#/components/examples/PartyDuoForming'
+                squad:
+                  $ref: '#/components/examples/PartySquadForming'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /parties/current:
+    get:
+      tags: [Parties]
+      summary: Get current active party
+      description: >
+        Returns the caller's current active party, or party set to null when none.
+      operationId: getCurrentParty
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: Current party or null.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPartyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /parties/{partyId}:
+    get:
+      tags: [Parties]
+      summary: Get party snapshot
+      description: >
+        Returns an authorized current party snapshot. Active members only.
+        Missing and unauthorized parties both return privacy-safe not_found.
+      operationId: getParty
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+      responses:
+        '200':
+          description: Party snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      tags: [Parties]
+      summary: Disband a forming party
+      description: >
+        Leader closes a forming party and revokes invites. Queue must be left first;
+        an active match must be terminal. Returns 409 party_locked when the party
+        is queued or in a match.
+      operationId: disbandParty
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+      responses:
+        '204':
+          description: Party closed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /parties/{partyId}/invites:
+    post:
+      tags: [Parties]
+      summary: Invite a friend to the party
+      description: >
+        Leader creates a 15-minute invitation to an accepted friend. Privacy-safe
+        friend_unavailable covers missing, inactive, not-friend, and blocked targets.
+        Requires Idempotency-Key.
+      operationId: createPartyInvite
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePartyInviteRequest'
+            examples:
+              default:
+                value:
+                  user_id: 00000000-0000-4000-8000-000000000002
+      responses:
+        '201':
+          description: Invitation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyInviteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /parties/{partyId}/readiness/me:
+    put:
+      tags: [Parties]
+      summary: Set own readiness
+      description: Updates the caller's ready flag while the party is forming.
+      operationId: setPartyReadiness
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPartyReadinessRequest'
+            examples:
+              ready:
+                value:
+                  ready: true
+      responses:
+        '200':
+          description: Updated party snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /parties/{partyId}/members/me:
+    delete:
+      tags: [Parties]
+      summary: Leave a forming party
+      description: >
+        Leave a forming party. Leadership transfers when the leader leaves.
+        Queue or in-match states return 409 party_locked.
+      operationId: leaveParty
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+      responses:
+        '204':
+          description: Left the party.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /parties/{partyId}/members/{userId}:
+    delete:
+      tags: [Parties]
+      summary: Kick a party member
+      description: Leader removes another member from a forming party.
+      operationId: kickPartyMember
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: Member removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /party-invites:
+    get:
+      tags: [Parties]
+      summary: List pending party invitations
+      description: Lists the caller's pending incoming invitations. Expired invites are omitted.
+      operationId: listPartyInvites
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: Pending invitations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyInviteListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /party-invites/{inviteId}/accept:
+    post:
+      tags: [Parties]
+      summary: Accept a party invitation
+      description: >
+        Accepts atomically and returns the party snapshot. Revalidates friendship,
+        block, account, capacity, party version, and active membership.
+        Requires Idempotency-Key.
+      operationId: acceptPartyInvite
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Invitation accepted; party snapshot returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /party-invites/{inviteId}/decline:
+    post:
+      tags: [Parties]
+      summary: Decline a party invitation
+      description: Idempotently declines a pending invitation.
+      operationId: declinePartyInvite
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '204':
+          description: Invitation declined (or already declined).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /matches/{matchId}:
+    get:
+      tags: [Matches]
+      summary: Get match snapshot
+      description: >
+        Returns the caller-authorized canonical multiplayer match snapshot used for
+        first render and version-gap recovery. Before reveal, opponent individual
+        totals may be team-level only and no guess coordinates, distance, accuracy,
+        bonus, or answer fields are returned. After a round closes, snapshot may
+        include last_round_result. Missing and unauthorized matches both return
+        privacy-safe not_found.
+      operationId: getMatchSnapshot
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+      responses:
+        '200':
+          description: Authorized match snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchSnapshotResponse'
+              examples:
+                active2v2:
+                  $ref: '#/components/examples/MatchSnapshotActive2v2'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /matches/{matchId}/rounds/{roundId}/results:
+    get:
+      tags: [Matches]
+      summary: Get revealed round results
+      description: >
+        Available only after the round is completed and only to participants.
+        Returns answer, every participant's revealed guess/timeout, accuracy,
+        bonus, score, and both team totals. Returns 409 round_not_revealed while
+        the round is still active.
+      operationId: getMatchRoundResults
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - $ref: '#/components/parameters/RoundId'
+      responses:
+        '200':
+          description: Revealed round results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchRoundResultsResponse'
+              examples:
+                revealed:
+                  $ref: '#/components/examples/MatchRoundResultsRevealed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /matches/{matchId}/results:
+    get:
+      tags: [Matches]
+      summary: Get terminal match results
+      description: >
+        Returns terminal match results including all revealed rounds and team
+        totals. Casual always returns progression.applied=false with reason
+        "casual". Ranked may return 202 progression_pending only during a
+        recoverable finalization retry; successful ranked reads include rating
+        deltas when applied.
+      operationId: getMatchTerminalResults
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+      responses:
+        '200':
+          description: Terminal match results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchTerminalResultResponse'
+              examples:
+                casualNoProgression:
+                  $ref: '#/components/examples/MatchTerminalCasual'
+                rankedApplied:
+                  $ref: '#/components/examples/MatchTerminalRanked'
+                rankedAbandonApplied:
+                  $ref: '#/components/examples/MatchTerminalRankedAbandon'
+        '202':
+          description: Ranked progression still pending recoverable finalization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                progressionPending:
+                  value:
+                    error:
+                      code: progression_pending
+                      message: Competitive progression is still being finalized.
+                      request_id: req_01EXAMPLE
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /matches/{matchId}/leave:
+    post:
+      tags: [Matches]
+      summary: Leave or abandon a match
+      description: >
+        Explicitly leave/abandon. Active Casual forfeits the caller's team without
+        rating changes. Active Ranked forfeits the caller's team: only the quitter
+        receives abandon facts and the eventual extra -15 penalty; teammates are
+        not marked abandoned; opponents receive a normal win (winner_team_slot set)
+        with base Elo only. Disconnect past the 90s reconnect grace uses the same
+        forfeit path with abandon_reason disconnect_timeout. Terminal replay is
+        idempotent 204 (no mutation of winner or abandon facts). Ranked progression
+        remains pending until competitive finalization applies rating changes.
+        Idempotency-Key is recommended for retries.
+      operationId: leaveMatch
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveMatchRequest'
+      responses:
+        '204':
+          description: Left the match (or already terminal).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /matches/{matchId}/messages:
+    get:
+      tags: [Matches]
+      summary: List team chat messages
+      description: >
+        Returns same-team messages in ascending sequence, excluding authors the
+        caller has muted. Available during the match and for 15 minutes after
+        terminal completion. Attachment metadata never includes storage keys or
+        raw URLs.
+      operationId: listMatchMessages
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+          description: Return messages with sequence strictly greater than this value.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Team message page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMessageListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      tags: [Matches]
+      summary: Send a team chat message
+      description: >
+        Creates a team-private text and/or single ready team-chat attachment message.
+        Requires Idempotency-Key via client_message_id. Duo/Squad only.
+      operationId: sendMatchMessage
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendTeamMessageRequest'
+      responses:
+        '200':
+          description: Idempotent replay of an existing message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMessage'
+        '201':
+          description: Message created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMessage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /matches/{matchId}/messages/{messageId}/attachment:
+    get:
+      tags: [Matches]
+      summary: Get a private signed URL for a team chat attachment
+      description: >
+        Same-team access only. Returns a short-lived private signed URL to the
+        sanitized derivative (never the raw upload or a public URL).
+      operationId: getMatchMessageAttachment
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Signed attachment URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMessageAttachmentURL'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /matches/{matchId}/mutes/{userId}:
+    put:
+      tags: [Matches]
+      summary: Mute a teammate in match chat
+      operationId: muteMatchTeammate
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Muted (idempotent).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Matches]
+      summary: Unmute a teammate in match chat
+      operationId: unmuteMatchTeammate
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Unmuted (idempotent).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /matches/{matchId}/messages/{messageId}/report:
+    post:
+      tags: [Matches]
+      summary: Report a team chat message
+      description: Idempotent per reporter/message. The target is not notified.
+      operationId: reportMatchMessage
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportTeamMessageRequest'
+      responses:
+        '202':
+          description: Report accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTeamMessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /realtime/tickets:
+    post:
+      tags: [Realtime]
+      summary: Issue a one-time WebSocket connection ticket
+      description: >
+        After membership authorization for the party or match channel, returns a
+        short-lived one-time ticket. The browser offers geoguess.v1 and
+        ticket.{opaque} in Sec-WebSocket-Protocol; the server consumes the ticket
+        atomically and selects only geoguess.v1. Tickets never appear in URLs or
+        logs and are not refreshable.
+      operationId: issueRealtimeTicket
+      security:
+        - accessCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RealtimeTicketRequest'
+      responses:
+        '201':
+          description: Ticket issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeTicketResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
   /challenges/daily:
     get:
@@ -1694,6 +2599,267 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /competitive/profile:
+    get:
+      tags: [Competitive]
+      summary: Get active-season competitive profile
+      description: >
+        Returns the caller's active-season standing. While placements are incomplete,
+        rating and rank are null and only placement progress is shown. World Legend
+        overlays the standard division when the caller holds an eligible top-500 position.
+      operationId: getCompetitiveProfile
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: Active competitive profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitiveProfileResponse'
+              examples:
+                placed:
+                  summary: Ranked with World Legend overlay
+                  value:
+                    season:
+                      id: "019f511f-0000-7000-8000-000000000001"
+                      sequence: 3
+                      name: "Season 3"
+                      starts_at: "2026-07-18T00:00:00Z"
+                      ends_at: "2026-10-10T00:00:00Z"
+                      reset: { anchor: 800, factor_percent: 50 }
+                      top500_min_matches: 25
+                    profile:
+                      rating: 2034
+                      placements_completed: 5
+                      placements_required: 5
+                      rank: { code: world_legend, name_key: worldLegend, division: null }
+                      standard_rank: { code: geo_master_1, name_key: geoMaster1, division: 1 }
+                      division_progress: 34
+                      matches_played: 52
+                      wins: 31
+                      losses: 18
+                      draws: 3
+                      abandons: 0
+                      peak_rating: 2050
+                      top500_position: 412
+                      last_change: { match_id: "019f511f-1111-7111-8111-111111111111", delta: 14 }
+                placements:
+                  summary: During placement matches
+                  value:
+                    season:
+                      id: "019f511f-0000-7000-8000-000000000001"
+                      sequence: 3
+                      name: "Season 3"
+                      starts_at: "2026-07-18T00:00:00Z"
+                      ends_at: "2026-10-10T00:00:00Z"
+                      reset: { anchor: 800, factor_percent: 50 }
+                      top500_min_matches: 25
+                    profile:
+                      rating: null
+                      placements_completed: 2
+                      placements_required: 5
+                      rank: null
+                      standard_rank: null
+                      division_progress: null
+                      matches_played: 2
+                      wins: 1
+                      losses: 1
+                      draws: 0
+                      abandons: 0
+                      peak_rating: null
+                      top500_position: null
+                      placement: { completed: 2, required: 5 }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /competitive/leaderboard:
+    get:
+      tags: [Competitive]
+      summary: Get active-season top-500 eligible leaderboard
+      description: >
+        Eligible standings ordered by rating DESC, wins DESC, rating_reached_at ASC,
+        user_id ASC. Positions 1–500 receive world_legend. Default limit 50, max 100.
+        Response includes the viewer entry separately.
+      operationId: getCompetitiveLeaderboard
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Active eligible leaderboard page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitiveLeaderboardResponse'
+              examples:
+                top500_cutoff:
+                  summary: Positions near World Legend cutoff
+                  value:
+                    season:
+                      id: "019f511f-0000-7000-8000-000000000001"
+                      sequence: 3
+                      name: "Season 3"
+                      starts_at: "2026-07-18T00:00:00Z"
+                      ends_at: "2026-10-10T00:00:00Z"
+                      reset: { anchor: 800, factor_percent: 50 }
+                      top500_min_matches: 25
+                    data:
+                      - position: 500
+                        player: { user_id: "019f511f-aaaa-7aaa-8aaa-aaaaaaaaaaaa", display_name: "Cutoff" }
+                        rating: 2010
+                        wins: 40
+                        matches_played: 80
+                        standard_rank: { code: geo_master_1, name_key: geoMaster1, division: 1 }
+                        world_legend: true
+                        rank: { code: world_legend, name_key: worldLegend, division: null }
+                    viewer:
+                      position: 501
+                      eligible: true
+                      rating: 2005
+                      wins: 39
+                      matches_played: 79
+                      placements_completed: 5
+                      placements_required: 5
+                      standard_rank: { code: geo_master_1, name_key: geoMaster1, division: 1 }
+                      world_legend: false
+                      rank: { code: geo_master_1, name_key: geoMaster1, division: 1 }
+                    page: { limit: 50 }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /competitive/history:
+    get:
+      tags: [Competitive]
+      summary: Get caller's rating change history
+      description: Newest-first rating history with match playlist/format, outcome, deltas, and rank transitions. Placement matches redact rating numbers.
+      operationId: getCompetitiveHistory
+      security:
+        - accessCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Rating history page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitiveHistoryResponse'
+              examples:
+                promotion:
+                  summary: Promotion into Navigator III
+                  value:
+                    data:
+                      - id: "019f511f-bbbb-7bbb-8bbb-bbbbbbbbbbbb"
+                        match_id: "019f511f-cccc-7ccc-8ccc-cccccccccccc"
+                        season_id: "019f511f-0000-7000-8000-000000000001"
+                        playlist: ranked
+                        format: solo
+                        outcome: win
+                        old_rating: 890
+                        new_rating: 906
+                        base_delta: 16
+                        abandon_penalty: 0
+                        total_delta: 16
+                        old_rank: { code: trailblazer_1 }
+                        new_rank: { code: navigator_3 }
+                        created_at: "2026-07-18T12:00:00Z"
+                    page: { limit: 20 }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /competitive/seasons:
+    get:
+      tags: [Competitive]
+      summary: List competitive seasons
+      description: Active and closed season summaries. Closed entries include the caller's ending/peak rank and final position when frozen.
+      operationId: listCompetitiveSeasons
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: Season list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitiveSeasonsResponse'
+              examples:
+                closed_season:
+                  summary: Closed season with frozen ranks
+                  value:
+                    data:
+                      - season:
+                          id: "019f511f-0000-7000-8000-000000000001"
+                          sequence: 2
+                          name: "Season 2"
+                          status: closed
+                          starts_at: "2026-04-25T00:00:00Z"
+                          ends_at: "2026-07-18T00:00:00Z"
+                          closed_at: "2026-07-18T00:00:05Z"
+                          reset: { anchor: 800, factor_percent: 50 }
+                          top500_min_matches: 25
+                        final_position: 412
+                        ending_rank: { code: world_legend, name_key: worldLegend, division: null }
+                        peak_rank: { code: world_legend, name_key: worldLegend, division: null }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /competitive/seasons/{seasonId}/leaderboard:
+    get:
+      tags: [Competitive]
+      summary: Get frozen closed-season top-500 leaderboard
+      description: >
+        Frozen final positions 1–500 for a closed season. Active season IDs are served
+        with the live eligible leaderboard shape.
+      operationId: getCompetitiveSeasonLeaderboard
+      security:
+        - accessCookie: []
+      parameters:
+        - name: seasonId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Closed-season top-500 page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitiveLeaderboardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /billing/entitlements:
     get:
       tags: [Billing]
@@ -1937,6 +3103,27 @@ components:
       schema:
         type: string
         format: uuid
+    PartyId:
+      name: partyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     Limit:
       name: limit
       in: query
@@ -1960,6 +3147,316 @@ components:
         type: string
         minLength: 16
         maxLength: 128
+
+  examples:
+    PartyDuoForming:
+      summary: Forming duo party
+      value:
+        party:
+          id: 00000000-0000-4000-8000-0000000000b1
+          format: duo
+          capacity: 2
+          status: forming
+          version: 1
+          leader_user_id: 00000000-0000-4000-8000-000000000001
+          active_match_id: null
+          members:
+            - user_id: 00000000-0000-4000-8000-000000000001
+              display_name: Raven
+              avatar_url: null
+              ready: true
+              is_leader: true
+              joined_at: "2026-07-18T10:00:00Z"
+          created_at: "2026-07-18T10:00:00Z"
+          updated_at: "2026-07-18T10:00:00Z"
+    PartySquadForming:
+      summary: Forming squad party (partial roster)
+      value:
+        party:
+          id: 00000000-0000-4000-8000-0000000000b2
+          format: squad
+          capacity: 4
+          status: forming
+          version: 3
+          leader_user_id: 00000000-0000-4000-8000-000000000001
+          active_match_id: null
+          members:
+            - user_id: 00000000-0000-4000-8000-000000000001
+              display_name: Raven
+              avatar_url: null
+              ready: true
+              is_leader: true
+              joined_at: "2026-07-18T10:00:00Z"
+            - user_id: 00000000-0000-4000-8000-000000000002
+              display_name: Falcon
+              avatar_url: null
+              ready: false
+              is_leader: false
+              joined_at: "2026-07-18T10:00:30Z"
+          created_at: "2026-07-18T10:00:00Z"
+          updated_at: "2026-07-18T10:00:30Z"
+    MatchmakingSearching:
+      summary: Searching casual duo
+      value:
+        status: searching
+        queue:
+          ticket_id: tkt_opaque_casual_duo_01
+          playlist: casual
+          format: duo
+          mode: casual_duo
+          party_id: 00000000-0000-4000-8000-0000000000b1
+          search_started_at: "2026-07-18T10:00:00Z"
+          lease_expires_at: "2026-07-18T10:00:30Z"
+        match: null
+    MatchmakingSearchingRanked:
+      summary: Searching ranked duo with expanding rating window
+      value:
+        status: searching
+        queue:
+          ticket_id: tkt_opaque_ranked_duo_01
+          playlist: ranked
+          format: duo
+          mode: ranked_duo
+          party_id: 00000000-0000-4000-8000-0000000000b1
+          search_started_at: "2026-07-18T10:00:00Z"
+          lease_expires_at: "2026-07-18T10:00:30Z"
+          rating_window:
+            minimum: 900
+            maximum: 1100
+        match: null
+    MatchmakingMatched1v1:
+      summary: Matched casual 1v1
+      value:
+        status: matched
+        queue: null
+        match:
+          match_id: 00000000-0000-4000-8000-0000000000c1
+          game_id: 00000000-0000-4000-8000-0000000000d1
+          playlist: casual
+          format: solo
+          mode: casual_solo
+          formed_at: "2026-07-18T10:01:00Z"
+          destination: /matches/00000000-0000-4000-8000-0000000000c1
+    MatchmakingMatched2v2:
+      summary: Matched casual 2v2
+      value:
+        status: matched
+        queue: null
+        match:
+          match_id: 00000000-0000-4000-8000-0000000000c2
+          game_id: 00000000-0000-4000-8000-0000000000d2
+          playlist: casual
+          format: duo
+          mode: casual_duo
+          formed_at: "2026-07-18T10:01:00Z"
+          destination: /matches/00000000-0000-4000-8000-0000000000c2
+    MatchmakingMatched4v4:
+      summary: Matched casual 4v4
+      value:
+        status: matched
+        queue: null
+        match:
+          match_id: 00000000-0000-4000-8000-0000000000c4
+          game_id: 00000000-0000-4000-8000-0000000000d4
+          playlist: casual
+          format: squad
+          mode: casual_squad
+          formed_at: "2026-07-18T10:01:00Z"
+          destination: /matches/00000000-0000-4000-8000-0000000000c4
+    MatchSnapshotActive2v2:
+      summary: Active casual 2v2 snapshot
+      value:
+        match:
+          id: 00000000-0000-4000-8000-0000000000c2
+          game_id: 00000000-0000-4000-8000-0000000000d2
+          playlist: casual
+          format: duo
+          status: active
+          result: null
+          team_size: 2
+          viewer:
+            user_id: 00000000-0000-4000-8000-000000000001
+            game_player_id: 00000000-0000-4000-8000-0000000000e1
+            team_slot: 1
+            submitted: true
+            can_chat: true
+            allowed_spectate_player_ids:
+              - 00000000-0000-4000-8000-0000000000e2
+          teams:
+            - slot: 1
+              score: 8200
+              players:
+                - game_player_id: 00000000-0000-4000-8000-0000000000e1
+                  user_id: 00000000-0000-4000-8000-000000000001
+                  display_name: Raven
+                  status: active
+                  submitted: true
+                  total_score: 4100
+                - game_player_id: 00000000-0000-4000-8000-0000000000e2
+                  user_id: 00000000-0000-4000-8000-000000000002
+                  display_name: Falcon
+                  status: active
+                  submitted: false
+                  total_score: 4100
+            - slot: 2
+              score: 7900
+              players:
+                - game_player_id: 00000000-0000-4000-8000-0000000000e3
+                  user_id: 00000000-0000-4000-8000-000000000003
+                  display_name: Hawk
+                  status: active
+                  submitted: true
+                - game_player_id: 00000000-0000-4000-8000-0000000000e4
+                  user_id: 00000000-0000-4000-8000-000000000004
+                  display_name: Owl
+                  status: active
+                  submitted: false
+          round:
+            id: 00000000-0000-4000-8000-0000000000f2
+            number: 2
+            status: active
+            starts_at: "2026-07-18T10:02:00Z"
+            ends_at: null
+            media:
+              type: panorama
+              panorama_id: safe-provider-ref
+            submitted_count: 2
+            eligible_count: 4
+          team_markers: []
+          realtime_version: 42
+          formed_at: "2026-07-18T10:00:00Z"
+    MatchRoundResultsRevealed:
+      summary: Revealed multiplayer round
+      value:
+        result:
+          round_id: 00000000-0000-4000-8000-0000000000f1
+          round_number: 1
+          actual_location:
+            latitude: 48.8566
+            longitude: 2.3522
+            country_code: FR
+            region: Île-de-France
+            locality: Paris
+          guesses:
+            - game_player_id: 00000000-0000-4000-8000-0000000000e1
+              user_id: 00000000-0000-4000-8000-000000000001
+              team_slot: 1
+              latitude: 48.86
+              longitude: 2.35
+              distance_meters: 420
+              accuracy_score: 4800
+              speed_bonus: 0
+              score: 4800
+              timed_out: false
+              submitted_at: "2026-07-18T10:01:12Z"
+            - game_player_id: 00000000-0000-4000-8000-0000000000e3
+              user_id: 00000000-0000-4000-8000-000000000003
+              team_slot: 2
+              latitude: 48.87
+              longitude: 2.33
+              distance_meters: 1800
+              accuracy_score: 4200
+              speed_bonus: 0
+              score: 4200
+              timed_out: false
+              submitted_at: "2026-07-18T10:01:18Z"
+          teams:
+            - slot: 1
+              score: 4800
+            - slot: 2
+              score: 4200
+    MatchTerminalCasual:
+      summary: Casual terminal results (no progression)
+      value:
+        result: team_one_win
+        winner_team_slot: 1
+        teams:
+          - slot: 1
+            score: 21050
+            players:
+              - game_player_id: 00000000-0000-4000-8000-0000000000e1
+                user_id: 00000000-0000-4000-8000-000000000001
+                display_name: Raven
+                status: active
+                submitted: true
+                total_score: 10525
+              - game_player_id: 00000000-0000-4000-8000-0000000000e2
+                user_id: 00000000-0000-4000-8000-000000000002
+                display_name: Falcon
+                status: active
+                submitted: true
+                total_score: 10525
+          - slot: 2
+            score: 19800
+            players:
+              - game_player_id: 00000000-0000-4000-8000-0000000000e3
+                user_id: 00000000-0000-4000-8000-000000000003
+                display_name: Hawk
+                status: active
+                submitted: true
+                total_score: 9900
+              - game_player_id: 00000000-0000-4000-8000-0000000000e4
+                user_id: 00000000-0000-4000-8000-000000000004
+                display_name: Owl
+                status: active
+                submitted: true
+                total_score: 9900
+        rounds: []
+        progression:
+          applied: false
+          reason: casual
+    MatchTerminalRanked:
+      summary: Ranked terminal results with rating applied
+      value:
+        result: team_one_win
+        winner_team_slot: 1
+        teams:
+          - slot: 1
+            score: 42100
+            players: []
+          - slot: 2
+            score: 38900
+            players: []
+        progression:
+          applied: true
+          old_rating: 980
+          base_delta: 17
+          abandon_penalty: 0
+          total_delta: 17
+          new_rating: 997
+          old_rank:
+            code: navigator_3
+          new_rank:
+            code: navigator_3
+          placement: null
+          placements_completed: null
+          placements_required: null
+          top500_position: null
+    MatchTerminalRankedAbandon:
+      summary: Ranked terminal results after quitter abandon (applied)
+      value:
+        result: forfeit
+        winner_team_slot: 2
+        teams:
+          - slot: 1
+            score: 5000
+            players: []
+          - slot: 2
+            score: 4800
+            players: []
+        progression:
+          applied: true
+          old_rating: 1000
+          base_delta: -16
+          abandon_penalty: -15
+          total_delta: -31
+          new_rating: 969
+          old_rank:
+            code: navigator_2
+          new_rank:
+            code: navigator_3
+          placement: null
+          top500_position: null
 
   responses:
     BadRequest:
@@ -2667,22 +4164,60 @@ components:
           maximum: 180
     GuessResultResponse:
       type: object
-      required: [guess, actual_location, max_score, score_percent, outcome]
+      required: [guess, max_score, score_percent, outcome]
+      description: >
+        Solo/daily always populate actual_location after accept. Multiplayer keeps
+        actual_location null while round_completed is false. Compatibility aliases
+        max_score and score_percent remain until solo clients migrate to
+        max_accuracy_score / accuracy fields.
       properties:
         guess:
           $ref: '#/components/schemas/GuessResult'
         actual_location:
-          $ref: '#/components/schemas/RevealedLocation'
+          anyOf:
+            - $ref: '#/components/schemas/RevealedLocation'
+            - type: 'null'
+          description: Null for multiplayer until the shared round closes.
         max_score:
           type: integer
           const: 5000
+          description: Legacy alias for max accuracy score (solo/daily compatibility).
         score_percent:
           type: integer
           minimum: 0
           maximum: 100
+        max_accuracy_score:
+          type: integer
+          minimum: 0
+          maximum: 5000
+          description: Maximum accuracy points per round (typically 5000).
+        max_speed_bonus:
+          type: integer
+          minimum: 0
+          maximum: 250
+          description: Maximum speed bonus per round (0 for casual; up to 250 ranked).
         outcome:
           type: string
-          enum: [perfect, close, miss, timed_out]
+          description: >
+            Solo outcomes include perfect/close/miss/timed_out. Multiplayer may
+            return submitted while the shared round remains open.
+          enum: [perfect, close, miss, timed_out, submitted]
+        round_completed:
+          type: boolean
+          description: True when the accepted guess closes the shared or solo round.
+        game_completed:
+          type: boolean
+        submitted_count:
+          type: integer
+          minimum: 0
+          description: Multiplayer aggregate of locked guesses for the current round.
+        eligible_count:
+          type: integer
+          minimum: 0
+          description: Multiplayer count of eligible participants for the current round.
+        next_round_number:
+          type: integer
+          minimum: 1
     GuessResult:
       type: object
       required: [id, latitude, longitude, distance_meters, score, submitted_at, timed_out]
@@ -2697,10 +4232,21 @@ components:
         distance_meters:
           type: integer
           minimum: 0
-        score:
+        accuracy_score:
           type: integer
           minimum: 0
           maximum: 5000
+          description: Distance-based accuracy points before speed bonus.
+        speed_bonus:
+          type: integer
+          minimum: 0
+          maximum: 250
+          description: Ranked remaining-time bonus; zero for casual.
+        score:
+          type: integer
+          minimum: 0
+          maximum: 5250
+          description: Accuracy plus speed bonus for this guess.
         submitted_at:
           type: string
           format: date-time
@@ -3305,22 +4851,74 @@ components:
             type: string
             format: uuid
 
+    Playlist:
+      type: string
+      enum: [casual, ranked]
+      description: Match playlist.
+    PartyFormat:
+      type: string
+      enum: [solo, duo, squad]
+      description: Team size format. Solo is queue-only (no durable party).
+    MatchMode:
+      type: string
+      description: >
+        Canonical six-mode value. Legacy ranked_standard is accepted on join and
+        normalized to ranked_solo in responses.
+      enum:
+        - casual_solo
+        - casual_duo
+        - casual_squad
+        - ranked_solo
+        - ranked_duo
+        - ranked_squad
+        - ranked_standard
+    PartyStatus:
+      type: string
+      enum: [forming, queued, in_match, closed]
+    MatchStatus:
+      type: string
+      enum: [matched, active, completed, cancelled, failed_to_start]
+    MatchResult:
+      type: string
+      enum: [team_one_win, team_two_win, draw, forfeit, abandoned, cancelled]
+    QueueStatus:
+      type: string
+      enum: [not_queued, searching, matched, temporarily_unavailable]
+
     EnterMatchmakingRequest:
       type: object
-      required: [mode]
       additionalProperties: false
+      description: >
+        Prefer playlist + format (+ party_id for duo/squad). Legacy mode
+        ranked_standard maps to ranked solo. Supplying both legacy and canonical
+        fields is allowed only when they resolve to the same mode.
       properties:
         mode:
           type: string
-          enum: [ranked_standard]
+          description: Deprecated single-field mode. ranked_standard maps to ranked_solo.
+          enum:
+            - ranked_standard
+            - casual_solo
+            - casual_duo
+            - casual_squad
+            - ranked_solo
+            - ranked_duo
+            - ranked_squad
+        playlist:
+          $ref: '#/components/schemas/Playlist'
+        format:
+          $ref: '#/components/schemas/PartyFormat'
+        party_id:
+          type: [string, 'null']
+          format: uuid
+          description: Required for duo/squad; must be null/omitted for solo.
     MatchmakingStatusResponse:
       type: object
       required: [status, queue, match]
       additionalProperties: false
       properties:
         status:
-          type: string
-          enum: [not_queued, searching, matched, temporarily_unavailable]
+          $ref: '#/components/schemas/QueueStatus'
         queue:
           anyOf:
             - $ref: '#/components/schemas/MatchmakingQueue'
@@ -3333,20 +4931,52 @@ components:
       type: object
       required: [mode, search_started_at, lease_expires_at]
       additionalProperties: false
+      description: >
+        Searching payload. Legacy fields mode/search_started_at/lease_expires_at
+        always present; ticket/playlist/format/party_id/rating_window are additive.
       properties:
-        mode:
+        ticket_id:
           type: string
-          enum: [ranked_standard]
+          description: Opaque v2 ticket identifier.
+        playlist:
+          $ref: '#/components/schemas/Playlist'
+        format:
+          $ref: '#/components/schemas/PartyFormat'
+        mode:
+          $ref: '#/components/schemas/MatchMode'
+        party_id:
+          type: [string, 'null']
+          format: uuid
         search_started_at:
           type: string
           format: date-time
         lease_expires_at:
           type: string
           format: date-time
+        rating_window:
+          anyOf:
+            - $ref: '#/components/schemas/MatchmakingRatingWindow'
+            - type: 'null'
+          description: Present for ranked search; absent/null for casual.
+    MatchmakingRatingWindow:
+      type: object
+      required: [minimum, maximum]
+      additionalProperties: false
+      properties:
+        minimum:
+          type: integer
+          minimum: 0
+        maximum:
+          type: integer
+          minimum: 0
     MatchmakingMatch:
       type: object
       required: [match_id, game_id, mode, formed_at, destination]
       additionalProperties: false
+      description: >
+        Matched payload without opponent data. Legacy fields remain; playlist and
+        format are additive. Destination may be /games/{game_id} (legacy) or
+        /matches/{match_id} (match-centric clients).
       properties:
         match_id:
           type: string
@@ -3354,22 +4984,992 @@ components:
         game_id:
           type: string
           format: uuid
+        playlist:
+          $ref: '#/components/schemas/Playlist'
+        format:
+          $ref: '#/components/schemas/PartyFormat'
         mode:
-          type: string
-          enum: [ranked_standard]
+          $ref: '#/components/schemas/MatchMode'
         formed_at:
           type: string
           format: date-time
         destination:
           type: string
-          description: Locale-independent application path such as /games/{game_id}.
-          example: /games/00000000-0000-0000-0000-000000000001
-        # Ranked game behavior notes (Phase 9):
-        # - Destination is a direct games.mode=ranked multiplayer game (not a private room).
-        # - Exactly two registered participants share one game destination.
-        # - Round 1 uses a server-controlled starts_at countdown; guesses before starts_at are rejected.
-        # - Rounds advance when both eligible players submit or the deadline expires.
-        # - Status payloads never include opponent identity, hidden location IDs, or coordinates.
+          description: Locale-independent application path such as /matches/{match_id} or /games/{game_id}.
+          example: /matches/00000000-0000-4000-8000-0000000000c1
+
+    CreatePartyRequest:
+      type: object
+      required: [format]
+      additionalProperties: false
+      properties:
+        format:
+          type: string
+          enum: [duo, squad]
+          description: Solo does not create a durable party.
+    SetPartyReadinessRequest:
+      type: object
+      required: [ready]
+      additionalProperties: false
+      properties:
+        ready:
+          type: boolean
+    CreatePartyInviteRequest:
+      type: object
+      required: [user_id]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+    PartyMember:
+      type: object
+      required: [user_id, display_name, ready, is_leader, joined_at]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        avatar_url:
+          type: [string, 'null']
+        ready:
+          type: boolean
+        is_leader:
+          type: boolean
+        joined_at:
+          type: string
+          format: date-time
+    Party:
+      type: object
+      required:
+        - id
+        - format
+        - capacity
+        - status
+        - version
+        - leader_user_id
+        - members
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum: [duo, squad]
+        capacity:
+          type: integer
+          enum: [2, 4]
+        status:
+          $ref: '#/components/schemas/PartyStatus'
+        version:
+          type: integer
+          minimum: 1
+        leader_user_id:
+          type: string
+          format: uuid
+        active_match_id:
+          type: [string, 'null']
+          format: uuid
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartyMember'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PartyResponse:
+      type: object
+      required: [party]
+      additionalProperties: false
+      properties:
+        party:
+          $ref: '#/components/schemas/Party'
+    CurrentPartyResponse:
+      type: object
+      required: [party]
+      additionalProperties: false
+      properties:
+        party:
+          anyOf:
+            - $ref: '#/components/schemas/Party'
+            - type: 'null'
+    PartyInvite:
+      type: object
+      required: [id, party_id, format, capacity, expires_at, created_at, inviter]
+      additionalProperties: false
+      description: Invitation projection. Never reveals block ownership or private account data.
+      properties:
+        id:
+          type: string
+          format: uuid
+        party_id:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum: [duo, squad]
+        capacity:
+          type: integer
+          enum: [2, 4]
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        inviter:
+          type: object
+          required: [user_id, display_name]
+          additionalProperties: false
+          properties:
+            user_id:
+              type: string
+              format: uuid
+            display_name:
+              type: string
+            avatar_url:
+              type: [string, 'null']
+    PartyInviteResponse:
+      type: object
+      required: [invite]
+      additionalProperties: false
+      properties:
+        invite:
+          $ref: '#/components/schemas/PartyInvite'
+    PartyInviteListResponse:
+      type: object
+      required: [invites]
+      additionalProperties: false
+      properties:
+        invites:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartyInvite'
+
+    MatchViewer:
+      type: object
+      required: [user_id, game_player_id, team_slot, submitted, can_chat, allowed_spectate_player_ids]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        game_player_id:
+          type: string
+          format: uuid
+        team_slot:
+          type: integer
+          enum: [1, 2]
+        submitted:
+          type: boolean
+        can_chat:
+          type: boolean
+        allowed_spectate_player_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    MatchParticipant:
+      type: object
+      required: [game_player_id, user_id, display_name, status, submitted]
+      additionalProperties: false
+      description: >
+        Roster entry. total_score may be omitted for opponents before round reveal.
+      properties:
+        game_player_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [active, disconnected, left]
+        submitted:
+          type: boolean
+        total_score:
+          type: integer
+          minimum: 0
+    MatchTeam:
+      type: object
+      required: [slot, score, players]
+      additionalProperties: false
+      properties:
+        slot:
+          type: integer
+          enum: [1, 2]
+        score:
+          type: integer
+          minimum: 0
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchParticipant'
+    MatchRoundMedia:
+      type: object
+      required: [type]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [panorama, image]
+        panorama_id:
+          type: string
+          description: Provider-safe panorama reference (never raw storage keys).
+        url:
+          type: string
+        attribution:
+          type: [string, 'null']
+    MatchRound:
+      type: object
+      required: [id, number, status, submitted_count, eligible_count]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [pending, active, completed]
+        starts_at:
+          type: [string, 'null']
+          format: date-time
+        ends_at:
+          type: [string, 'null']
+          format: date-time
+          description: Null for casual (no timer); set for ranked 60-second rounds.
+        media:
+          anyOf:
+            - $ref: '#/components/schemas/MatchRoundMedia'
+            - type: 'null'
+        submitted_count:
+          type: integer
+          minimum: 0
+        eligible_count:
+          type: integer
+          minimum: 0
+    MatchTeamMarker:
+      type: object
+      required: [user_id, latitude, longitude, version]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+        longitude:
+          type: number
+        version:
+          type: integer
+          format: int64
+    MatchTeamScore:
+      type: object
+      required: [slot, score]
+      additionalProperties: false
+      properties:
+        slot:
+          type: integer
+          enum: [1, 2]
+        score:
+          type: integer
+          minimum: 0
+    RevealedGuess:
+      type: object
+      required:
+        - game_player_id
+        - user_id
+        - team_slot
+        - accuracy_score
+        - speed_bonus
+        - score
+        - timed_out
+      additionalProperties: false
+      properties:
+        game_player_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        team_slot:
+          type: integer
+          enum: [1, 2]
+        latitude:
+          type: [number, 'null']
+        longitude:
+          type: [number, 'null']
+        distance_meters:
+          type: [integer, 'null']
+          minimum: 0
+        accuracy_score:
+          type: integer
+          minimum: 0
+        speed_bonus:
+          type: integer
+          minimum: 0
+        score:
+          type: integer
+          minimum: 0
+        timed_out:
+          type: boolean
+        submitted_at:
+          type: string
+          format: date-time
+    RevealedRoundResult:
+      type: object
+      required: [round_id, round_number, actual_location, guesses, teams]
+      additionalProperties: false
+      properties:
+        round_id:
+          type: string
+          format: uuid
+        round_number:
+          type: integer
+          minimum: 1
+        actual_location:
+          $ref: '#/components/schemas/RevealedLocation'
+        guesses:
+          type: array
+          items:
+            $ref: '#/components/schemas/RevealedGuess'
+        teams:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/MatchTeamScore'
+    MatchSnapshot:
+      type: object
+      required:
+        - id
+        - game_id
+        - playlist
+        - format
+        - status
+        - team_size
+        - viewer
+        - teams
+        - team_markers
+        - realtime_version
+        - formed_at
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        game_id:
+          type: string
+          format: uuid
+        playlist:
+          $ref: '#/components/schemas/Playlist'
+        format:
+          $ref: '#/components/schemas/PartyFormat'
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        result:
+          anyOf:
+            - $ref: '#/components/schemas/MatchResult'
+            - type: 'null'
+        team_size:
+          type: integer
+          enum: [1, 2, 4]
+        viewer:
+          $ref: '#/components/schemas/MatchViewer'
+        teams:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/MatchTeam'
+        round:
+          anyOf:
+            - $ref: '#/components/schemas/MatchRound'
+            - type: 'null'
+        last_round_result:
+          anyOf:
+            - $ref: '#/components/schemas/RevealedRoundResult'
+            - type: 'null'
+        team_markers:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchTeamMarker'
+        realtime_version:
+          type: integer
+          format: int64
+          minimum: 0
+        formed_at:
+          type: string
+          format: date-time
+        timer_seconds:
+          type: [integer, 'null']
+          description: >
+            Authoritative round timer in seconds for Ranked (typically 60).
+            Null/omitted for Casual (no scoring timer). Clients should prefer
+            round.ends_at for countdown sync when present.
+          example: 60
+    MatchSnapshotResponse:
+      type: object
+      required: [match]
+      additionalProperties: false
+      properties:
+        match:
+          $ref: '#/components/schemas/MatchSnapshot'
+    SendTeamMessageRequest:
+      type: object
+      required: [client_message_id]
+      additionalProperties: false
+      properties:
+        client_message_id:
+          type: string
+          format: uuid
+        text:
+          type: [string, 'null']
+          maxLength: 500
+        file_id:
+          type: [string, 'null']
+          format: uuid
+    TeamMessageAuthor:
+      type: object
+      required: [user_id, display_name]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+    TeamMessageAttachment:
+      type: object
+      required: [file_id, content_type, size_bytes]
+      additionalProperties: false
+      properties:
+        file_id:
+          type: string
+          format: uuid
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 0
+    TeamMessage:
+      type: object
+      required: [id, sequence, author, status, created_at]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        author:
+          $ref: '#/components/schemas/TeamMessageAuthor'
+        text:
+          type: [string, 'null']
+        attachment:
+          anyOf:
+            - $ref: '#/components/schemas/TeamMessageAttachment'
+            - type: 'null'
+        status:
+          type: string
+          enum: [active, removed]
+        created_at:
+          type: string
+          format: date-time
+    TeamMessageListResponse:
+      type: object
+      required: [data, page]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMessage'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    TeamMessageAttachmentURL:
+      type: object
+      required: [url, expires_at]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+    ReportTeamMessageRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 64
+    ReportTeamMessageResponse:
+      type: object
+      required: [accepted]
+      additionalProperties: false
+      properties:
+        accepted:
+          type: boolean
+    RealtimeTicketRequest:
+      type: object
+      required: [channel_kind, channel_id]
+      additionalProperties: false
+      properties:
+        channel_kind:
+          type: string
+          enum: [party, match]
+        channel_id:
+          type: string
+          format: uuid
+    RealtimeTicketResponse:
+      type: object
+      required: [ticket, expires_at, websocket_url]
+      additionalProperties: false
+      properties:
+        ticket:
+          type: string
+          description: Opaque one-time value; never logged; offer as ticket.{value} subprotocol.
+        expires_at:
+          type: string
+          format: date-time
+        websocket_url:
+          type: string
+          description: Absolute or host-relative WebSocket path for the authorized channel.
+    MatchRoundResultsResponse:
+      type: object
+      required: [result]
+      additionalProperties: false
+      properties:
+        result:
+          $ref: '#/components/schemas/RevealedRoundResult'
+    RankCode:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          examples: [navigator_3, geo_master_1, world_legend]
+    RankDetail:
+      type: object
+      required: [code, name_key]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          examples: [scout_3, trailblazer_1, geo_master_1, world_legend]
+        name_key:
+          type: string
+          description: Stable localization key (client owns visible wording).
+          examples: [scout3, trailblazer1, geoMaster1, worldLegend]
+        division:
+          type: [integer, 'null']
+          enum: [1, 2, 3, null]
+          description: Standard division III/II/I; null for World Legend.
+    CompetitiveSeasonSummary:
+      type: object
+      required: [id, sequence, name, starts_at, ends_at, reset, top500_min_matches]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          minimum: 1
+        slug:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, active, closed]
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+        reset:
+          type: object
+          required: [anchor, factor_percent]
+          additionalProperties: false
+          properties:
+            anchor:
+              type: integer
+              minimum: 0
+            factor_percent:
+              type: integer
+              minimum: 0
+              maximum: 100
+        top500_min_matches:
+          type: integer
+          minimum: 1
+    CompetitiveProfileBody:
+      type: object
+      required: [placements_completed, placements_required, matches_played, wins, losses, draws, abandons]
+      additionalProperties: false
+      properties:
+        rating:
+          type: [integer, 'null']
+          minimum: 0
+        placements_completed:
+          type: integer
+          minimum: 0
+          maximum: 5
+        placements_required:
+          type: integer
+          enum: [5]
+        rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankDetail'
+            - type: 'null'
+        standard_rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankDetail'
+            - type: 'null'
+        division_progress:
+          type: [integer, 'null']
+          minimum: 0
+        matches_played:
+          type: integer
+          minimum: 0
+        wins:
+          type: integer
+          minimum: 0
+        losses:
+          type: integer
+          minimum: 0
+        draws:
+          type: integer
+          minimum: 0
+        abandons:
+          type: integer
+          minimum: 0
+        peak_rating:
+          type: [integer, 'null']
+          minimum: 0
+        top500_position:
+          type: [integer, 'null']
+          minimum: 1
+        last_change:
+          type: object
+          additionalProperties: false
+          properties:
+            match_id:
+              type: string
+              format: uuid
+            delta:
+              type: integer
+        placement:
+          type: object
+          additionalProperties: false
+          properties:
+            completed:
+              type: integer
+              minimum: 0
+              maximum: 5
+            required:
+              type: integer
+              enum: [5]
+    CompetitiveProfileResponse:
+      type: object
+      required: [season, profile]
+      additionalProperties: false
+      properties:
+        season:
+          $ref: '#/components/schemas/CompetitiveSeasonSummary'
+        profile:
+          $ref: '#/components/schemas/CompetitiveProfileBody'
+    CompetitiveLeaderboardEntry:
+      type: object
+      required: [position, player, rating, wins, matches_played, standard_rank, world_legend, rank]
+      additionalProperties: false
+      properties:
+        position:
+          type: integer
+          minimum: 1
+        player:
+          type: object
+          required: [user_id, display_name]
+          additionalProperties: false
+          properties:
+            user_id:
+              type: string
+              format: uuid
+            display_name:
+              type: string
+        rating:
+          type: integer
+          minimum: 0
+        wins:
+          type: integer
+          minimum: 0
+        matches_played:
+          type: integer
+          minimum: 0
+        standard_rank:
+          $ref: '#/components/schemas/RankDetail'
+        world_legend:
+          type: boolean
+        rank:
+          $ref: '#/components/schemas/RankDetail'
+    CompetitiveViewerEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        position:
+          type: [integer, 'null']
+          minimum: 1
+        eligible:
+          type: boolean
+        rating:
+          type: [integer, 'null']
+          minimum: 0
+        wins:
+          type: integer
+          minimum: 0
+        matches_played:
+          type: integer
+          minimum: 0
+        placements_completed:
+          type: integer
+          minimum: 0
+          maximum: 5
+        placements_required:
+          type: integer
+          enum: [5]
+        standard_rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankDetail'
+            - type: 'null'
+        world_legend:
+          type: boolean
+        rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankDetail'
+            - type: 'null'
+        placement:
+          type: object
+          additionalProperties: false
+          properties:
+            completed:
+              type: integer
+            required:
+              type: integer
+    CompetitiveLeaderboardResponse:
+      type: object
+      required: [season, data, page]
+      additionalProperties: false
+      properties:
+        season:
+          $ref: '#/components/schemas/CompetitiveSeasonSummary'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompetitiveLeaderboardEntry'
+        viewer:
+          $ref: '#/components/schemas/CompetitiveViewerEntry'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    CompetitiveHistoryEntry:
+      type: object
+      required: [id, match_id, season_id, playlist, format, outcome, created_at]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        match_id:
+          type: string
+          format: uuid
+        season_id:
+          type: string
+          format: uuid
+        playlist:
+          type: string
+        format:
+          type: string
+        outcome:
+          type: string
+          enum: [win, loss, draw]
+        old_rating:
+          type: [integer, 'null']
+        new_rating:
+          type: [integer, 'null']
+        base_delta:
+          type: [integer, 'null']
+        abandon_penalty:
+          type: [integer, 'null']
+        total_delta:
+          type: [integer, 'null']
+        old_rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankCode'
+            - type: 'null'
+        new_rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankCode'
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+        placement:
+          type: object
+          additionalProperties: false
+          properties:
+            completed:
+              type: integer
+            required:
+              type: integer
+    CompetitiveHistoryResponse:
+      type: object
+      required: [data, page]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompetitiveHistoryEntry'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    CompetitiveSeasonsResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [season]
+            additionalProperties: false
+            properties:
+              season:
+                $ref: '#/components/schemas/CompetitiveSeasonSummary'
+              final_position:
+                type: [integer, 'null']
+                minimum: 1
+              ending_rank:
+                anyOf:
+                  - $ref: '#/components/schemas/RankDetail'
+                  - type: 'null'
+              peak_rank:
+                anyOf:
+                  - $ref: '#/components/schemas/RankDetail'
+                  - type: 'null'
+    MatchProgression:
+      type: object
+      required: [applied]
+      additionalProperties: false
+      description: >
+        Competitive impact for the caller. Casual always returns applied=false
+        with reason "casual". Ranked includes old/new rating, base_delta,
+        abandon_penalty (0 or -15 for the quitter only), total_delta, optional
+        rank codes, placement progress while still placing, and top500_position
+        when applicable. While Ranked finalization is still retrying, the
+        results endpoint returns 202 progression_pending instead of this body
+        (defensive projections may use reason progression_pending).
+      properties:
+        applied:
+          type: boolean
+        reason:
+          type: string
+          enum: [casual, progression_pending]
+          description: >
+            Present when applied is false. "casual" for non-competitive playlists;
+            "progression_pending" only in defensive non-202 projections.
+        old_rating:
+          type: integer
+          minimum: 0
+        base_delta:
+          type: integer
+        abandon_penalty:
+          type: integer
+          description: >
+            0 for non-quitters; -15 for the single abandoner on a Ranked forfeit.
+            Never applied to teammates.
+        total_delta:
+          type: integer
+        new_rating:
+          type: integer
+          minimum: 0
+        old_rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankCode'
+            - type: 'null'
+        new_rank:
+          anyOf:
+            - $ref: '#/components/schemas/RankCode'
+            - type: 'null'
+        placement:
+          type: [integer, 'null']
+          minimum: 1
+          description: 1-based placement match number after this result while still placing.
+        placements_completed:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 5
+          description: Placement matches completed after this result (0–5).
+        placements_required:
+          type: [integer, 'null']
+          enum: [5]
+          description: Always 5 when placement fields are present.
+        top500_position:
+          type: [integer, 'null']
+          minimum: 1
+    MatchTerminalResultResponse:
+      type: object
+      required: [result, teams, progression]
+      additionalProperties: false
+      properties:
+        result:
+          $ref: '#/components/schemas/MatchResult'
+        winner_team_slot:
+          type: [integer, 'null']
+          enum: [1, 2]
+        teams:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/MatchTeam'
+        rounds:
+          type: array
+          items:
+            $ref: '#/components/schemas/RevealedRoundResult'
+        progression:
+          $ref: '#/components/schemas/MatchProgression'
+    LeaveMatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 128
+          description: Optional client context; server authority uses explicit_leave.
 
     CreateFriendRequest:
       type: object

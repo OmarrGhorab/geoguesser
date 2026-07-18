@@ -1,0 +1,18 @@
+{
+  "path": "/api/v1/matchmaking/status",
+  "method": "GET",
+  "status": 200,
+  "body": {
+    "status": "matched",
+    "queue": null,
+    "match": {
+      "match_id": "00000000-0000-4000-8000-0000000000c4",
+      "game_id": "00000000-0000-4000-8000-0000000000d4",
+      "playlist": "casual",
+      "format": "squad",
+      "mode": "casual_squad",
+      "formed_at": "2026-07-18T10:01:00Z",
+      "destination": "/matches/00000000-0000-4000-8000-0000000000c4"
+    }
+  }
+}

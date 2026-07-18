@@ -61,6 +61,26 @@ func TestIsMultiplayerModeIncludesRanked(t *testing.T) {
 	if IsMultiplayerMode(GameModeSolo) {
 		t.Fatal("solo should not be multiplayer")
 	}
+	if !IsMultiplayerMode(GameModeCasualDuo) {
+		t.Fatal("casual_duo should be multiplayer")
+	}
+}
+
+func TestSumTeamTotalsAndDecideResult(t *testing.T) {
+	t.Parallel()
+	one, two := TeamSlotOne, TeamSlotTwo
+	players := []GamePlayer{
+		{TeamSlot: &one, TotalScore: 10},
+		{TeamSlot: &two, TotalScore: 10},
+	}
+	totals := SumTeamTotals(players)
+	if totals.TeamOneScore != 10 || totals.TeamTwoScore != 10 {
+		t.Fatalf("totals=%+v", totals)
+	}
+	result, winner := DecideTeamResult(totals.TeamOneScore, totals.TeamTwoScore)
+	if result != ResultDraw || winner != nil {
+		t.Fatalf("result=%s winner=%v", result, winner)
+	}
 }
 
 func TestCanGuessBeforeStart_RankedCountdown(t *testing.T) {

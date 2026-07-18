@@ -1,0 +1,43 @@
+groups:
+  - name: geoguess-casual-ranked
+    rules:
+      - alert: GeoGuessRealtimeSlowConsumers
+        expr: sum(rate(realtime_slow_consumers_total[10m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Realtime clients are being dropped as slow consumers
+          runbook: Check API saturation, Redis Pub/Sub latency, and outbound queue pressure.
+      - alert: GeoGuessMatchEventPublishFailures
+        expr: sum(rate(matchplay_event_publish_total{outcome="error"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Match lifecycle events are failing to publish
+          runbook: Check Redis connectivity and API logs before enabling additional matchmaking traffic.
+      - alert: GeoGuessRankedDeadlineWorkerErrors
+        expr: increase(game_round_close_total{mode_class="ranked",outcome="worker_error"}[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ranked round deadline worker cannot process expired rounds
+          runbook: Check PostgreSQL availability, lock contention, and worker error logs.
+      - alert: GeoGuessMatchLifecycleSweepErrors
+        expr: increase(matchplay_sweep_total{outcome="error"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Match reconnect or inactivity sweep is failing
+          runbook: Check PostgreSQL and Redis reconnect-window health.
+      - alert: GeoGuessCompetitiveProgressionBacklogFailures
+        expr: increase(competitive_progression_worker_matches_total{outcome="failed"}[15m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Competitive progression retry worker is still failing matches
+          runbook: Inspect rating finalization errors and season state before manual replay.

@@ -15,18 +15,20 @@ type MetricsRecorder interface {
 	ObserveStaleEntry()
 	ObserveDependencyFailure(dependency string)
 	ObserveRateLimited(route string)
+	ObserveRankedFormation(playlist, format, outcome string, duration time.Duration)
 }
 
 // NoopMetrics is a no-op MetricsRecorder.
 type NoopMetrics struct{}
 
-func (NoopMetrics) ObserveCommand(_, _ string, _ time.Duration) {}
-func (NoopMetrics) ObserveStatus(_ string)                      {}
-func (NoopMetrics) ObserveFormation(_ string, _ time.Duration)  {}
-func (NoopMetrics) ObserveRecovery(_ string)                    {}
-func (NoopMetrics) ObserveStaleEntry()                          {}
-func (NoopMetrics) ObserveDependencyFailure(_ string)           {}
-func (NoopMetrics) ObserveRateLimited(_ string)                 {}
+func (NoopMetrics) ObserveCommand(_, _ string, _ time.Duration)            {}
+func (NoopMetrics) ObserveStatus(_ string)                                 {}
+func (NoopMetrics) ObserveFormation(_ string, _ time.Duration)             {}
+func (NoopMetrics) ObserveRecovery(_ string)                               {}
+func (NoopMetrics) ObserveStaleEntry()                                     {}
+func (NoopMetrics) ObserveDependencyFailure(_ string)                      {}
+func (NoopMetrics) ObserveRateLimited(_ string)                            {}
+func (NoopMetrics) ObserveRankedFormation(_, _, _ string, _ time.Duration) {}
 
 // Metrics holds Prometheus instruments for matchmaking.
 type Metrics struct {
@@ -39,6 +41,8 @@ type Metrics struct {
 	StaleEntriesTotal      prometheus.Counter
 	DependencyFailures     *prometheus.CounterVec
 	RateLimitedTotal       *prometheus.CounterVec
+	// RankedFormationDuration is a histogram for ranked ticket formation by format/outcome.
+	RankedFormationDuration *prometheus.HistogramVec
 }
 
 // NewMetrics registers matchmaking metrics against reg.
@@ -83,6 +87,11 @@ func NewMetrics(reg prometheus.Registerer) (*Metrics, error) {
 			Name: "matchmaking_rate_limited_total",
 			Help: "Matchmaking requests rejected by rate limiting.",
 		}, []string{"route"}),
+		RankedFormationDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "matchmaking_ranked_formation_duration_seconds",
+			Help:    "Ranked match formation duration by format and outcome (no user IDs).",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"playlist", "format", "outcome"}),
 	}
 
 	for _, c := range []prometheus.Collector{
@@ -95,6 +104,7 @@ func NewMetrics(reg prometheus.Registerer) (*Metrics, error) {
 		m.StaleEntriesTotal,
 		m.DependencyFailures,
 		m.RateLimitedTotal,
+		m.RankedFormationDuration,
 	} {
 		if err := reg.Register(c); err != nil {
 			return nil, err
@@ -167,6 +177,24 @@ func (m *Metrics) ObserveRateLimited(route string) {
 		return
 	}
 	m.RateLimitedTotal.WithLabelValues(route).Inc()
+}
+
+// ObserveRankedFormation records ranked formation latency with bounded labels.
+func (m *Metrics) ObserveRankedFormation(playlist, format, outcome string, duration time.Duration) {
+	if m == nil || m.RankedFormationDuration == nil {
+		return
+	}
+	if playlist == "" {
+		playlist = PlaylistRanked
+	}
+	if format == "" {
+		format = FormatSolo
+	}
+	if duration > 0 {
+		m.RankedFormationDuration.WithLabelValues(playlist, format, outcome).Observe(duration.Seconds())
+	} else {
+		m.RankedFormationDuration.WithLabelValues(playlist, format, outcome).Observe(0)
+	}
 }
 
 // RecordRateLimited is a handler-friendly observer for middleware hooks.

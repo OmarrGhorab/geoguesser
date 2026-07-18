@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/competitive/seasons",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"data\":[{\"season\":{\"id\":\"019f511f-0000-7000-8000-000000000002\",\"sequence\":2,\"slug\":\"season-2\",\"name\":\"Season 2\",\"status\":\"closed\",\"starts_at\":\"2026-04-25T00:00:00Z\",\"ends_at\":\"2026-07-18T00:00:00Z\",\"closed_at\":\"2026-07-18T00:00:05Z\",\"reset\":{\"anchor\":800,\"factor_percent\":50},\"top500_min_matches\":25},\"final_position\":412,\"ending_rank\":{\"code\":\"world_legend\",\"name_key\":\"worldLegend\",\"division\":null},\"peak_rank\":{\"code\":\"world_legend\",\"name_key\":\"worldLegend\",\"division\":null}}]}"
+}

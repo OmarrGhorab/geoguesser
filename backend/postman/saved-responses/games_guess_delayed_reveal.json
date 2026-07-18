@@ -1,0 +1,28 @@
+{
+  "path": "/api/v1/games/{gameId}/rounds/{roundId}/guesses",
+  "method": "POST",
+  "status": 200,
+  "body": {
+    "guess": {
+      "id": "00000000-0000-4000-8000-0000000000a2",
+      "latitude": 48.8566,
+      "longitude": 2.3522,
+      "distance_meters": 5432,
+      "accuracy_score": 4120,
+      "speed_bonus": 0,
+      "score": 4120,
+      "submitted_at": "2026-07-18T10:02:25Z",
+      "timed_out": false
+    },
+    "round_completed": false,
+    "game_completed": false,
+    "submitted_count": 3,
+    "eligible_count": 4,
+    "actual_location": null,
+    "max_score": 5000,
+    "score_percent": 82,
+    "max_accuracy_score": 5000,
+    "max_speed_bonus": 250,
+    "outcome": "submitted"
+  }
+}

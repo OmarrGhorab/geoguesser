@@ -83,13 +83,41 @@ jobs:
         env:
           DATABASE_URL: postgres://geoguess:geoguess@localhost:5432/geoguess_test?sslmode=disable
           REDIS_URL: redis://localhost:6379/15
-        run: go test -p 1 ./internal/friends/ ./internal/leaderboards/ ./internal/matchmaking/ ./internal/games/ ./internal/platform/redis/ ./internal/app/
+        run: >-
+          go test -p 1
+          ./internal/friends/
+          ./internal/leaderboards/
+          ./internal/parties/
+          ./internal/matchmaking/
+          ./internal/games/
+          ./internal/matchplay/
+          ./internal/competitive/
+          ./internal/realtime/
+          ./internal/uploads/
+          ./internal/platform/redis/
+          ./internal/platform/storage/
+          ./internal/platform/workers/
+          ./internal/app/
 
-      - name: Race tests (friends + leaderboards + matchmaking + games)
+      - name: Race tests (parties + matchmaking + matchplay + competitive + realtime + uploads + storage + workers + games)
         env:
           DATABASE_URL: postgres://geoguess:geoguess@localhost:5432/geoguess_test?sslmode=disable
           REDIS_URL: redis://localhost:6379/15
-        run: go test -p 1 -race ./internal/friends/ ./internal/leaderboards/ ./internal/matchmaking/ ./internal/games/ ./internal/platform/redis/ ./internal/app/
+        run: >-
+          go test -p 1 -race
+          ./internal/friends/
+          ./internal/leaderboards/
+          ./internal/parties/
+          ./internal/matchmaking/
+          ./internal/games/
+          ./internal/matchplay/
+          ./internal/competitive/
+          ./internal/realtime/
+          ./internal/uploads/
+          ./internal/platform/redis/
+          ./internal/platform/storage/
+          ./internal/platform/workers/
+          ./internal/app/
 
       - name: Build
         run: go build ./cmd/api

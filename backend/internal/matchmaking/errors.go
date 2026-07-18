@@ -69,6 +69,8 @@ func MapError(err error) error {
 		return apphttp.NewAPIError(http.StatusServiceUnavailable, CodeUnavailable, MsgUnavailable).WithCause(err)
 	case errors.Is(err, ErrInvalidJSON):
 		return apphttp.ErrInvalidJSON
+	case errors.Is(err, ErrInvalidModeSelection):
+		return apphttp.NewAPIError(http.StatusUnprocessableEntity, "invalid_mode_selection", MsgInvalidRequest).WithCause(err)
 	case errors.Is(err, ErrInvalidRequest):
 		return apphttp.NewAPIError(http.StatusBadRequest, apphttp.ErrCodeValidationFailed, MsgInvalidRequest).WithCause(err)
 	default:

@@ -1,0 +1,60 @@
+{
+  "path": "/api/v1/matches/{matchId}/results",
+  "method": "GET",
+  "status": 200,
+  "body": {
+    "result": "team_one_win",
+    "winner_team_slot": 1,
+    "teams": [
+      {
+        "slot": 1,
+        "score": 21050,
+        "players": [
+          {
+            "game_player_id": "00000000-0000-4000-8000-0000000000e1",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "display_name": "Raven",
+            "status": "active",
+            "submitted": true,
+            "total_score": 10525
+          },
+          {
+            "game_player_id": "00000000-0000-4000-8000-0000000000e2",
+            "user_id": "00000000-0000-4000-8000-000000000002",
+            "display_name": "Falcon",
+            "status": "active",
+            "submitted": true,
+            "total_score": 10525
+          }
+        ]
+      },
+      {
+        "slot": 2,
+        "score": 19800,
+        "players": [
+          {
+            "game_player_id": "00000000-0000-4000-8000-0000000000e3",
+            "user_id": "00000000-0000-4000-8000-000000000003",
+            "display_name": "Hawk",
+            "status": "active",
+            "submitted": true,
+            "total_score": 9900
+          },
+          {
+            "game_player_id": "00000000-0000-4000-8000-0000000000e4",
+            "user_id": "00000000-0000-4000-8000-000000000004",
+            "display_name": "Owl",
+            "status": "active",
+            "submitted": true,
+            "total_score": 9900
+          }
+        ]
+      }
+    ],
+    "rounds": [],
+    "progression": {
+      "applied": false,
+      "reason": "casual"
+    }
+  }
+}

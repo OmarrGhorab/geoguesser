@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/competitive/seasons/{seasonId}/leaderboard",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"season\":{\"id\":\"019f511f-0000-7000-8000-000000000002\",\"sequence\":2,\"slug\":\"season-2\",\"name\":\"Season 2\",\"status\":\"closed\",\"starts_at\":\"2026-04-25T00:00:00Z\",\"ends_at\":\"2026-07-18T00:00:00Z\",\"closed_at\":\"2026-07-18T00:00:05Z\",\"reset\":{\"anchor\":800,\"factor_percent\":50},\"top500_min_matches\":25},\"data\":[{\"position\":1,\"player\":{\"user_id\":\"019f511f-dddd-7ddd-8ddd-dddddddddddd\",\"display_name\":\"Champion\"},\"rating\":2400,\"wins\":90,\"matches_played\":120,\"standard_rank\":{\"code\":\"geo_master_1\",\"name_key\":\"geoMaster1\",\"division\":1},\"world_legend\":true,\"rank\":{\"code\":\"world_legend\",\"name_key\":\"worldLegend\",\"division\":null}}],\"page\":{\"limit\":50}}"
+}

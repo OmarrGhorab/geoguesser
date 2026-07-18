@@ -1,0 +1,18 @@
+{
+  "path": "/api/v1/matchmaking/status",
+  "method": "GET",
+  "status": 200,
+  "body": {
+    "status": "searching",
+    "queue": {
+      "ticket_id": "tkt_opaque_casual_duo_01",
+      "playlist": "casual",
+      "format": "duo",
+      "mode": "casual_duo",
+      "party_id": "00000000-0000-4000-8000-0000000000b1",
+      "search_started_at": "2026-07-18T10:00:00Z",
+      "lease_expires_at": "2026-07-18T10:00:30Z"
+    },
+    "match": null
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "path": "/api/v1/parties",
+  "method": "POST",
+  "status": 201,
+  "body": {
+    "party": {
+      "id": "00000000-0000-4000-8000-0000000000b1",
+      "format": "duo",
+      "capacity": 2,
+      "status": "forming",
+      "version": 1,
+      "leader_user_id": "00000000-0000-4000-8000-000000000001",
+      "active_match_id": null,
+      "members": [
+        {
+          "user_id": "00000000-0000-4000-8000-000000000001",
+          "display_name": "Raven",
+          "avatar_url": null,
+          "ready": true,
+          "is_leader": true,
+          "joined_at": "2026-07-18T10:00:00Z"
+        }
+      ],
+      "created_at": "2026-07-18T10:00:00Z",
+      "updated_at": "2026-07-18T10:00:00Z"
+    }
+  }
+}

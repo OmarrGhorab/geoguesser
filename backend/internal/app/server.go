@@ -6,6 +6,7 @@ import (
 
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/challenges"
+	"github.com/raven/geoguess/backend/internal/competitive"
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
@@ -15,7 +16,9 @@ import (
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
 	"github.com/raven/geoguess/backend/internal/matchmaking"
+	"github.com/raven/geoguess/backend/internal/matchplay"
 	appmiddleware "github.com/raven/geoguess/backend/internal/middleware"
+	"github.com/raven/geoguess/backend/internal/parties"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
 	"github.com/raven/geoguess/backend/internal/profiles"
 	"github.com/raven/geoguess/backend/internal/realtime"
@@ -23,10 +26,10 @@ import (
 	"github.com/raven/geoguess/backend/internal/uploads"
 )
 
-func NewServer(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler, matchmakingHandler *matchmaking.Handler, friendsHandler *friends.Handler, homeHandler *home.Handler) *http.Server {
+func NewServer(cfg config.Config, logger *slog.Logger, obs *observability.Observability, rateLimiter appmiddleware.RateLimiter, healthHandler *health.Handler, authHandler *auth.Handler, profilesHandler *profiles.Handler, uploadsHandler *uploads.Handler, mapsHandler *maps.Handler, locationsHandler *locations.Handler, gamesHandler *games.Handler, challengesHandler *challenges.Handler, leaderboardsHandler *leaderboards.Handler, roomsHandler *rooms.Handler, realtimeHandler *realtime.Handler, matchmakingHandler *matchmaking.Handler, friendsHandler *friends.Handler, homeHandler *home.Handler, partiesHandler *parties.Handler, matchplayHandler *matchplay.Handler, competitiveHandler *competitive.Handler) *http.Server {
 	return &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      NewRouter(cfg, logger, obs, rateLimiter, healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler, friendsHandler, homeHandler),
+		Handler:      NewRouter(cfg, logger, obs, rateLimiter, healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler, friendsHandler, homeHandler, partiesHandler, matchplayHandler, competitiveHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,

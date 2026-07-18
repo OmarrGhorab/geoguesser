@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/competitive/profile",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"season\":{\"id\":\"019f511f-0000-7000-8000-000000000001\",\"sequence\":3,\"slug\":\"season-3\",\"name\":\"Season 3\",\"status\":\"active\",\"starts_at\":\"2026-07-18T00:00:00Z\",\"ends_at\":\"2026-10-10T00:00:00Z\",\"reset\":{\"anchor\":800,\"factor_percent\":50},\"top500_min_matches\":25},\"profile\":{\"rating\":2034,\"placements_completed\":5,\"placements_required\":5,\"rank\":{\"code\":\"world_legend\",\"name_key\":\"worldLegend\",\"division\":null},\"standard_rank\":{\"code\":\"geo_master_1\",\"name_key\":\"geoMaster1\",\"division\":1},\"division_progress\":34,\"matches_played\":52,\"wins\":31,\"losses\":18,\"draws\":3,\"abandons\":0,\"peak_rating\":2050,\"top500_position\":412,\"last_change\":{\"match_id\":\"019f511f-1111-7111-8111-111111111111\",\"delta\":14}}}"
+}

@@ -27,6 +27,7 @@ type ServiceAPI interface {
 	SubmitGuess(rctx context.Context, sess *session.Context, gameID, roundID, idempotencyKey string, req SubmitGuessRequest) (*GuessResultResponse, error)
 	ExpireRound(rctx context.Context, sess *session.Context, gameID, roundID string) (*GuessResultResponse, error)
 	GetResults(rctx context.Context, sess *session.Context, gameID string) (*GameResultsResponse, error)
+	GetSharedRoundResults(rctx context.Context, sess *session.Context, gameID, roundID string) (*SharedRoundResultsResponse, error)
 }
 
 // NewHandler returns a new handler.
@@ -43,6 +44,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		g.Get("/{gameId}/rounds/current", h.GetCurrentRound)
 		g.Post("/{gameId}/rounds/{roundId}/guesses", h.SubmitGuess)
 		g.Post("/{gameId}/rounds/{roundId}/timeout", h.ExpireRound)
+		g.Get("/{gameId}/rounds/{roundId}/results", h.GetSharedRoundResults)
 		g.Get("/{gameId}/results", h.GetResults)
 	})
 }
@@ -123,6 +125,26 @@ func (h *Handler) GetResults(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.service.GetResults(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "gameId"))
 	if err != nil {
 		h.mapError(w, r, err)
+		return
+	}
+	apphttp.OK(w, r, resp)
+}
+
+// GetSharedRoundResults handles GET /games/{gameId}/rounds/{roundId}/results.
+// Multiplayer only; returns answer and all guesses after the shared round closes.
+func (h *Handler) GetSharedRoundResults(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.service.GetSharedRoundResults(
+		r.Context(),
+		appmiddleware.SessionFromContext(r.Context()),
+		chi.URLParam(r, "gameId"),
+		chi.URLParam(r, "roundId"),
+	)
+	if err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	if resp == nil {
+		apphttp.Error(w, r, h.logger, apphttp.ErrNotFound)
 		return
 	}
 	apphttp.OK(w, r, resp)

@@ -73,6 +73,39 @@ type Config struct {
 	MatchmakingRoundCount         int
 	MatchmakingTimerSeconds       int
 	MatchmakingCandidateScanLimit int
+
+	// Casual / Ranked team modes (012). Feature flags default false for safe rollout.
+	CasualMatchmakingEnabled bool
+	RankedTeamModesEnabled   bool
+	TeamChatImagesEnabled    bool
+
+	// Party / match timing.
+	PartyInviteTTL          time.Duration
+	MatchReconnectGrace     time.Duration
+	CasualInactivity        time.Duration
+	MatchSweepInterval      time.Duration
+	MatchClaimSweepInterval time.Duration
+
+	// Competitive constants.
+	CompetitiveSeasonDurationDays int
+	CompetitiveInitialRating      int
+	CompetitiveEloK               int
+	CompetitiveResetFactorBPS     int
+	CompetitiveAbandonPenalty     int
+	CompetitiveTop500MinMatches   int
+
+	// Realtime limits.
+	RealtimeTicketTTL         time.Duration
+	RealtimeAllowedOrigins    []string
+	RealtimeOutboundQueueSize int
+
+	// Team chat retention and image limits.
+	TeamChatRetentionDays       int
+	TeamChatReportRetentionDays int
+	TeamChatImageMaxBytes       int64
+	TeamChatImageMaxPixels      int
+	TeamChatImageMaxDimension   int
+	TeamChatCleanupInterval     time.Duration
 }
 
 func Load() (Config, error) {
@@ -142,6 +175,35 @@ func Load() (Config, error) {
 		MatchmakingRoundCount:         intEnv("MATCHMAKING_ROUND_COUNT", 5),
 		MatchmakingTimerSeconds:       intEnv("MATCHMAKING_TIMER_SECONDS", 60),
 		MatchmakingCandidateScanLimit: intEnv("MATCHMAKING_CANDIDATE_SCAN_LIMIT", 20),
+
+		// Casual / Ranked team modes — disabled by default until migration and rollout.
+		CasualMatchmakingEnabled: boolEnv("CASUAL_MATCHMAKING_ENABLED", false),
+		RankedTeamModesEnabled:   boolEnv("RANKED_TEAM_MODES_ENABLED", false),
+		TeamChatImagesEnabled:    boolEnv("TEAM_CHAT_IMAGES_ENABLED", false),
+
+		PartyInviteTTL:          durationSeconds("PARTY_INVITE_TTL_SECONDS", 900),
+		MatchReconnectGrace:     durationSeconds("MATCH_RECONNECT_GRACE_SECONDS", 90),
+		CasualInactivity:        durationSeconds("CASUAL_INACTIVITY_SECONDS", 600),
+		MatchSweepInterval:      durationSeconds("MATCH_SWEEP_INTERVAL_SECONDS", 5),
+		MatchClaimSweepInterval: durationSeconds("MATCH_CLAIM_SWEEP_INTERVAL_SECONDS", 5),
+
+		CompetitiveSeasonDurationDays: intEnv("COMPETITIVE_SEASON_DURATION_DAYS", 84),
+		CompetitiveInitialRating:      intEnvAllowZero("COMPETITIVE_INITIAL_RATING", 800),
+		CompetitiveEloK:               intEnv("COMPETITIVE_ELO_K", 32),
+		CompetitiveResetFactorBPS:     intEnvAllowZero("COMPETITIVE_RESET_FACTOR_BPS", 5000),
+		CompetitiveAbandonPenalty:     intEnvAllowZero("COMPETITIVE_ABANDON_PENALTY", 15),
+		CompetitiveTop500MinMatches:   intEnv("COMPETITIVE_TOP500_MIN_MATCHES", 25),
+
+		RealtimeTicketTTL:         durationSeconds("REALTIME_TICKET_TTL_SECONDS", 30),
+		RealtimeAllowedOrigins:    csvEnv("REALTIME_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+		RealtimeOutboundQueueSize: intEnv("REALTIME_OUTBOUND_QUEUE_SIZE", 128),
+
+		TeamChatRetentionDays:       intEnv("TEAM_CHAT_RETENTION_DAYS", 30),
+		TeamChatReportRetentionDays: intEnv("TEAM_CHAT_REPORT_RETENTION_DAYS", 180),
+		TeamChatImageMaxBytes:       int64Env("TEAM_CHAT_IMAGE_MAX_BYTES", 5*1024*1024),
+		TeamChatImageMaxPixels:      intEnv("TEAM_CHAT_IMAGE_MAX_PIXELS", 20_000_000),
+		TeamChatImageMaxDimension:   intEnv("TEAM_CHAT_IMAGE_MAX_DIMENSION", 2048),
+		TeamChatCleanupInterval:     durationSeconds("TEAM_CHAT_CLEANUP_INTERVAL_SECONDS", 900),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -222,6 +284,73 @@ func (c Config) Validate() error {
 		if _, err := parseUUID(mapID); err != nil {
 			return errors.New("MATCHMAKING_DEFAULT_MAP_ID must be a valid UUID when set")
 		}
+	}
+
+	// Casual / Ranked team mode bounds.
+	if c.PartyInviteTTL <= 0 {
+		return errors.New("PARTY_INVITE_TTL_SECONDS must be positive")
+	}
+	if c.MatchReconnectGrace <= 0 {
+		return errors.New("MATCH_RECONNECT_GRACE_SECONDS must be positive")
+	}
+	if c.CasualInactivity <= 0 {
+		return errors.New("CASUAL_INACTIVITY_SECONDS must be positive")
+	}
+	if c.MatchSweepInterval <= 0 {
+		return errors.New("MATCH_SWEEP_INTERVAL_SECONDS must be positive")
+	}
+	if c.MatchClaimSweepInterval <= 0 {
+		return errors.New("MATCH_CLAIM_SWEEP_INTERVAL_SECONDS must be positive")
+	}
+	if c.CompetitiveSeasonDurationDays < 1 || c.CompetitiveSeasonDurationDays > 365 {
+		return errors.New("COMPETITIVE_SEASON_DURATION_DAYS must be between 1 and 365")
+	}
+	if c.CompetitiveInitialRating < 0 {
+		return errors.New("COMPETITIVE_INITIAL_RATING must be non-negative")
+	}
+	if c.CompetitiveEloK < 1 || c.CompetitiveEloK > 128 {
+		return errors.New("COMPETITIVE_ELO_K must be between 1 and 128")
+	}
+	if c.CompetitiveResetFactorBPS < 0 || c.CompetitiveResetFactorBPS > 10000 {
+		return errors.New("COMPETITIVE_RESET_FACTOR_BPS must be between 0 and 10000")
+	}
+	if c.CompetitiveAbandonPenalty < 0 {
+		return errors.New("COMPETITIVE_ABANDON_PENALTY must be non-negative")
+	}
+	if c.CompetitiveTop500MinMatches < 1 {
+		return errors.New("COMPETITIVE_TOP500_MIN_MATCHES must be positive")
+	}
+	if c.RealtimeTicketTTL <= 0 {
+		return errors.New("REALTIME_TICKET_TTL_SECONDS must be positive")
+	}
+	if c.RealtimeOutboundQueueSize < 1 || c.RealtimeOutboundQueueSize > 4096 {
+		return errors.New("REALTIME_OUTBOUND_QUEUE_SIZE must be between 1 and 4096")
+	}
+	if len(c.RealtimeAllowedOrigins) == 0 {
+		return errors.New("REALTIME_ALLOWED_ORIGINS must include at least one origin")
+	}
+	for _, origin := range c.RealtimeAllowedOrigins {
+		if strings.TrimSpace(origin) == "" {
+			return errors.New("REALTIME_ALLOWED_ORIGINS entries must be non-empty")
+		}
+	}
+	if c.TeamChatRetentionDays < 1 {
+		return errors.New("TEAM_CHAT_RETENTION_DAYS must be positive")
+	}
+	if c.TeamChatReportRetentionDays < c.TeamChatRetentionDays {
+		return errors.New("TEAM_CHAT_REPORT_RETENTION_DAYS must be >= TEAM_CHAT_RETENTION_DAYS")
+	}
+	if c.TeamChatImageMaxBytes < 1 {
+		return errors.New("TEAM_CHAT_IMAGE_MAX_BYTES must be positive")
+	}
+	if c.TeamChatImageMaxPixels < 1 {
+		return errors.New("TEAM_CHAT_IMAGE_MAX_PIXELS must be positive")
+	}
+	if c.TeamChatImageMaxDimension < 1 {
+		return errors.New("TEAM_CHAT_IMAGE_MAX_DIMENSION must be positive")
+	}
+	if c.TeamChatCleanupInterval <= 0 {
+		return errors.New("TEAM_CHAT_CLEANUP_INTERVAL_SECONDS must be positive")
 	}
 
 	return nil
@@ -306,6 +435,44 @@ func int64Env(key string, fallback int64) int64 {
 		return fallback
 	}
 	return n
+}
+
+func boolEnv(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func csvEnv(key string, fallback []string) []string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		out := make([]string, len(fallback))
+		copy(out, fallback)
+		return out
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	if len(out) == 0 {
+		out := make([]string, len(fallback))
+		copy(out, fallback)
+		return out
+	}
+	return out
 }
 
 func (c Config) String() string {

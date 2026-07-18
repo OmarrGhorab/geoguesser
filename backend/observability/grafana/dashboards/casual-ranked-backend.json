@@ -1,0 +1,67 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum by (channel_kind) (rate(realtime_sockets_opened_total[5m]))", "legendFormat": "{{channel_kind}}"}],
+      "title": "Realtime socket opens",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "sum by (reason) (rate(realtime_sockets_closed_total[5m]))", "legendFormat": "{{reason}}"}],
+      "title": "Realtime socket closes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "targets": [{"expr": "sum by (event_type, outcome) (rate(matchplay_event_publish_total[5m]))", "legendFormat": "{{event_type}} {{outcome}}"}],
+      "title": "Match event fanout",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "id": 4,
+      "targets": [{"expr": "sum by (kind, outcome) (rate(matchplay_sweep_total[5m]))", "legendFormat": "{{kind}} {{outcome}}"}],
+      "title": "Lifecycle sweeps",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "sum by (mode_class, outcome) (rate(game_round_close_total[5m]))", "legendFormat": "{{mode_class}} {{outcome}}"}],
+      "title": "Round deadline closes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "id": 6,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, command) (rate(matchplay_command_duration_seconds_bucket[5m])))", "legendFormat": "{{command}}"}],
+      "title": "Match command p95",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["geoguess", "casual", "ranked", "backend"],
+  "templating": {"list": [{"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"}]},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "GeoGuess Casual & Ranked Backend",
+  "uid": "geoguess-casual-ranked-backend",
+  "version": 1
+}

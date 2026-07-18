@@ -39,15 +39,24 @@ type RankedLifecycleHook interface {
 }
 
 type Service struct {
-	repo           *Repository
-	selector       LocationSelector
-	media          LocationMediaProvider
-	clock          clock.Clock
-	logger         *slog.Logger
-	idempotency    IdempotencyStore
-	metrics        MetricsRecorder
-	completionHook GameCompletionHook
-	rankedHook     RankedLifecycleHook
+	repo              *Repository
+	selector          LocationSelector
+	media             LocationMediaProvider
+	clock             clock.Clock
+	logger            *slog.Logger
+	idempotency       IdempotencyStore
+	metrics           MetricsRecorder
+	completionHook    GameCompletionHook
+	rankedHook        RankedLifecycleHook
+	matchHook         MatchLifecycleHook
+	multiplayerEvents MultiplayerEventSink
+	revealPolicy      RoundRevealPolicy
+}
+
+// WithMultiplayerEvents attaches post-commit round/match realtime fanout.
+func (s *Service) WithMultiplayerEvents(events MultiplayerEventSink) *Service {
+	s.multiplayerEvents = events
+	return s
 }
 
 // NewService returns a solo game service.
@@ -68,13 +77,72 @@ func NewServiceWithHook(repo *Repository, selector LocationSelector, media Locat
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{repo: repo, selector: selector, media: media, clock: clk, logger: logger, idempotency: idempotency, metrics: metrics, completionHook: completionHook}
+	return &Service{
+		repo:           repo,
+		selector:       selector,
+		media:          media,
+		clock:          clk,
+		logger:         logger,
+		idempotency:    idempotency,
+		metrics:        metrics,
+		completionHook: completionHook,
+		revealPolicy:   DelayedRevealPolicy{},
+	}
 }
 
 // WithRankedLifecycle attaches a ranked match lifecycle callback (no games→matchmaking import).
 func (s *Service) WithRankedLifecycle(hook RankedLifecycleHook) *Service {
 	s.rankedHook = hook
 	return s
+}
+
+// WithMatchLifecycle attaches match lifecycle hooks used for team terminal results.
+func (s *Service) WithMatchLifecycle(hook MatchLifecycleHook) *Service {
+	s.matchHook = hook
+	return s
+}
+
+// WithRevealPolicy overrides the multiplayer answer reveal policy (defaults to delayed).
+func (s *Service) WithRevealPolicy(policy RoundRevealPolicy) *Service {
+	if policy != nil {
+		s.revealPolicy = policy
+	}
+	return s
+}
+
+// SweepExpiredRankedRounds closes a bounded batch of server-authoritative
+// deadlines even when no client polls or submits after expiry.
+func (s *Service) SweepExpiredRankedRounds(ctx context.Context, limit int) error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	now := s.clock.Now()
+	gameIDs, err := s.repo.ListExpiredRankedGameIDs(ctx, now, limit)
+	if err != nil {
+		s.observeRoundClose("ranked", "worker_error")
+		return err
+	}
+	for _, gameID := range gameIDs {
+		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooks())
+		if closeErr == nil || errors.Is(closeErr, ErrRoundClosed) || errors.Is(closeErr, ErrGameNotActive) {
+			if closeErr == nil {
+				s.publishMultiplayerOutcome(ctx, gameID, outcome)
+				s.observeRoundClose("ranked", "worker_closed")
+			}
+			continue
+		}
+		return fmt.Errorf("close expired ranked round %s: %w", gameID, closeErr)
+	}
+	return nil
+}
+
+func (s *Service) observeRoundClose(modeClass, outcome string) {
+	type roundCloseMetrics interface {
+		ObserveRoundClose(modeClass, outcome string)
+	}
+	if metrics, ok := s.metrics.(roundCloseMetrics); ok {
+		metrics.ObserveRoundClose(modeClass, outcome)
+	}
 }
 
 // CreateGame creates a pending solo game.
@@ -216,9 +284,11 @@ func (s *Service) GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID
 	}
 	now := s.clock.Now()
 	if state != nil && state.Status == RoundStatusActive && state.EndsAt != nil && !now.Before(*state.EndsAt) {
-		if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooks()); err != nil && !errors.Is(err, ErrRoundClosed) {
-			return nil, err
+		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, gameID, now, s.multiplayerTxHooks())
+		if closeErr != nil && !errors.Is(closeErr, ErrRoundClosed) {
+			return nil, closeErr
 		}
+		s.publishMultiplayerOutcome(ctx, gameID, outcome)
 		state, err = s.repo.GetMultiplayerRoundState(ctx, gameID)
 		if err != nil {
 			return nil, err
@@ -268,9 +338,11 @@ func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, ga
 			return nil, err
 		}
 		if row != nil && row.EndsAt != nil && !now.Before(*row.EndsAt) {
-			if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks()); err != nil && !errors.Is(err, ErrRoundClosed) {
-				return nil, err
+			outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks())
+			if closeErr != nil && !errors.Is(closeErr, ErrRoundClosed) {
+				return nil, closeErr
 			}
+			s.publishMultiplayerOutcome(ctx, game.ID, outcome)
 			// Game may have completed via deadline; re-check.
 			game, err = s.repo.GetGameByID(ctx, game.ID)
 			if err != nil {
@@ -291,22 +363,65 @@ func (s *Service) GetCurrentRound(ctx context.Context, sess *session.Context, ga
 	if row == nil {
 		return nil, ErrRoundNotFound
 	}
-	return &CurrentRoundResponse{Round: s.toRoundDTO(*row)}, nil
+	dto := s.toRoundDTO(*row)
+	// Multiplayer progress fields (submitted/eligible) for Casual and Ranked clients.
+	if IsMultiplayerMode(game.Mode) {
+		if state, err := s.repo.GetMultiplayerRoundState(ctx, game.ID); err == nil && state != nil && state.RoundID == row.RoundID {
+			submitted := state.SubmittedCount
+			eligible := state.EligibleCount
+			dto.SubmittedCount = &submitted
+			dto.EligibleCount = &eligible
+		}
+	}
+	return &CurrentRoundResponse{Round: dto}, nil
 }
 
 func (s *Service) multiplayerTxHooks() MultiplayerTxHooks {
 	hooks := MultiplayerTxHooks{}
-	if s.rankedHook == nil {
-		return hooks
+	if s.rankedHook != nil {
+		hooks.OnMatchActive = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+			return s.rankedHook.ApplyStartedInTx(ctx, tx, gameID, now)
+		}
+		hooks.OnGameCompleted = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+			return s.rankedHook.ApplyCompletedInTx(ctx, tx, gameID, now)
+		}
+		hooks.OnGameCancelled = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time, failureCode string) error {
+			return s.rankedHook.ApplyCancelledInTx(ctx, tx, gameID, now, failureCode)
+		}
 	}
-	hooks.OnMatchActive = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
-		return s.rankedHook.ApplyStartedInTx(ctx, tx, gameID, now)
-	}
-	hooks.OnGameCompleted = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
-		return s.rankedHook.ApplyCompletedInTx(ctx, tx, gameID, now)
-	}
-	hooks.OnGameCancelled = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time, failureCode string) error {
-		return s.rankedHook.ApplyCancelledInTx(ctx, tx, gameID, now, failureCode)
+	if s.matchHook != nil {
+		// Prefer MatchLifecycleHook for terminal completion when present.
+		hooks.OnGameCompleted = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+			// When terminal result was already applied via OnTerminalResult, this is idempotent.
+			if s.rankedHook != nil {
+				if err := s.rankedHook.ApplyCompletedInTx(ctx, tx, gameID, now); err != nil {
+					return err
+				}
+			}
+			return s.matchHook.ApplyGameCompletedInTx(ctx, tx, gameID, now)
+		}
+		hooks.OnGameCancelled = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time, failureCode string) error {
+			if s.rankedHook != nil {
+				if err := s.rankedHook.ApplyCancelledInTx(ctx, tx, gameID, now, failureCode); err != nil {
+					return err
+				}
+			}
+			return s.matchHook.ApplyGameCancelledInTx(ctx, tx, gameID, now, failureCode)
+		}
+		hooks.OnMatchActive = func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error {
+			if s.rankedHook != nil {
+				if err := s.rankedHook.ApplyStartedInTx(ctx, tx, gameID, now); err != nil {
+					return err
+				}
+			}
+			return s.matchHook.ApplyMatchActiveInTx(ctx, tx, gameID, now)
+		}
+		// Wire terminal team-result finalization when the adapter supports it.
+		if applier, ok := s.matchHook.(TerminalResultApplier); ok {
+			hooks.OnTerminalResult = func(ctx context.Context, tx *gorm.DB, result TerminalMatchResult) error {
+				return applier.ApplyTerminalResultInTx(ctx, tx, result)
+			}
+		}
 	}
 	return hooks
 }
@@ -525,22 +640,8 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 			}
 		}
 	}
-	// Recalculate score from actual coordinates before returning if repository used full answer.
-	return &GuessResultResponse{
-		Guess: GuessResult{
-			ID:             saved.ID,
-			Latitude:       saved.Latitude,
-			Longitude:      saved.Longitude,
-			DistanceMeters: saved.DistanceMeters,
-			Score:          saved.Score,
-			SubmittedAt:    saved.SubmittedAt,
-			TimedOut:       saved.TimedOut,
-		},
-		ActualLocation: toRevealedLocation(*actual),
-		MaxScore:       5000,
-		ScorePercent:   saved.Score * 100 / 5000,
-		Outcome:        guessOutcome(saved.Score, saved.TimedOut),
-	}, nil
+	loc := toRevealedLocation(*actual)
+	return soloGuessResponse(*saved, &loc, true, completedGame), nil
 }
 
 // ExpireRound advances an elapsed daily round with a zero-score timeout.
@@ -583,13 +684,8 @@ func (s *Service) ExpireRound(ctx context.Context, sess *session.Context, gameID
 			return nil, fmt.Errorf("finalize timed-out game: %w", err)
 		}
 	}
-	return &GuessResultResponse{
-		Guess:          GuessResult{ID: saved.ID, Latitude: saved.Latitude, Longitude: saved.Longitude, DistanceMeters: 0, Score: 0, SubmittedAt: saved.SubmittedAt, TimedOut: true},
-		ActualLocation: toRevealedLocation(*actual),
-		MaxScore:       5000,
-		ScorePercent:   0,
-		Outcome:        "timed_out",
-	}, nil
+	loc := toRevealedLocation(*actual)
+	return soloGuessResponse(*saved, &loc, true, completed), nil
 }
 
 func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player *GamePlayer, roundID, idempotencyKey string, req SubmitGuessRequest) (*GuessResultResponse, error) {
@@ -610,9 +706,12 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 	}
 	if current.EndsAt != nil && now.After(*current.EndsAt) {
 		// Advance expired multiplayer deadline, then reject this late guess.
-		if _, err := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks()); err != nil && !errors.Is(err, ErrRoundClosed) {
-			return nil, err
+		// Casual has no ends_at, so this path is ranked/private_room only.
+		outcome, closeErr := s.repo.CloseExpiredMultiplayerRound(ctx, game.ID, now, s.multiplayerTxHooks())
+		if closeErr != nil && !errors.Is(closeErr, ErrRoundClosed) {
+			return nil, closeErr
 		}
+		s.publishMultiplayerOutcome(ctx, game.ID, outcome)
 		return nil, ErrRoundClosed
 	}
 	key := strings.TrimSpace(idempotencyKey)
@@ -626,7 +725,7 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 			if existing.RoundID != parsedRoundID || existing.Latitude != req.Latitude || existing.Longitude != req.Longitude {
 				return nil, ErrIdempotencyConflict
 			}
-			return s.guessReplayResponse(ctx, *existing)
+			return s.multiplayerGuessReplayResponse(ctx, game, *existing)
 		}
 		guess.IdempotencyKey = &key
 	}
@@ -635,6 +734,7 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 		return nil, err
 	}
 	if existing != nil {
+		// Locked guesses: cannot resubmit or move.
 		return nil, ErrAlreadyGuessed
 	}
 	// Match becomes active on first accepted multiplayer guess (same TX as score write).
@@ -646,28 +746,60 @@ func (s *Service) submitPrivateRoomGuess(ctx context.Context, game *Game, player
 	if saved == nil || actual == nil {
 		return nil, ErrRoundNotFound
 	}
+	s.publishMultiplayerOutcome(ctx, game.ID, saved)
 	if saved.GameCompleted {
 		if s.completionHook != nil {
 			if err := s.completionHook.OnGameCompleted(ctx, game.ID, now); err != nil {
 				return nil, fmt.Errorf("finalize multiplayer game: %w", err)
 			}
 		}
+		if s.matchHook != nil {
+			// Best-effort post-commit path (tx path already ran inside hooks when configured).
+			_ = s.matchHook.OnGameCompleted(ctx, game.ID, now)
+		}
 	}
-	return &GuessResultResponse{
-		Guess: GuessResult{
-			ID:             saved.Guess.ID,
-			Latitude:       saved.Guess.Latitude,
-			Longitude:      saved.Guess.Longitude,
-			DistanceMeters: saved.Guess.DistanceMeters,
-			Score:          saved.Guess.Score,
-			SubmittedAt:    saved.Guess.SubmittedAt,
-			TimedOut:       saved.Guess.TimedOut,
-		},
-		ActualLocation: toRevealedLocation(*actual),
-		MaxScore:       5000,
-		ScorePercent:   saved.Guess.Score * 100 / 5000,
-		Outcome:        guessOutcome(saved.Guess.Score, saved.Guess.TimedOut),
-	}, nil
+	return s.multiplayerGuessResponse(game.Mode, saved, actual), nil
+}
+
+func (s *Service) publishMultiplayerOutcome(ctx context.Context, gameID uuid.UUID, outcome *MultiplayerGuessOutcome) {
+	if s == nil || s.multiplayerEvents == nil || outcome == nil || !outcome.RoundCompleted {
+		return
+	}
+	if err := s.multiplayerEvents.PublishMultiplayerOutcome(ctx, gameID, *outcome); err != nil {
+		s.logger.WarnContext(ctx, "multiplayer event publish failed", slog.String("game_id", gameID.String()), slog.Any("error", err))
+	}
+}
+
+// GetSharedRoundResults returns revealed multiplayer round results after the shared round closes.
+func (s *Service) GetSharedRoundResults(ctx context.Context, sess *session.Context, gameID, roundID string) (*SharedRoundResultsResponse, error) {
+	game, _, err := s.loadOwnedGame(ctx, sess, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if !IsMultiplayerMode(game.Mode) {
+		return nil, ErrResultsNotReady
+	}
+	parsedRoundID, err := uuid.Parse(roundID)
+	if err != nil {
+		return nil, ErrRoundNotFound
+	}
+	return s.repo.LoadSharedRoundResults(ctx, game.ID, parsedRoundID)
+}
+
+// CreateTeamGame creates a matchmade Casual/Ranked team game (formation entrypoint for matchmaking).
+func (s *Service) CreateTeamGame(ctx context.Context, input TeamGameFormationInput) (*TeamGameFormationResult, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrInvalidGameRequest
+	}
+	if input.ScoringVersion == 0 {
+		input.ScoringVersion = ScoringVersionV1
+	}
+	if input.RoundCount == 0 {
+		input.RoundCount = 5
+	}
+	// Ranked: enforce 60s default; Casual: force null timer (no deadline / no speed bonus).
+	input.TimerSeconds = ApplyRankedTimerDefaults(input.Mode, input.TimerSeconds)
+	return s.repo.CreateTeamGameBundle(ctx, input)
 }
 
 // IdempotencyStore stores short-lived in-flight idempotency claims.
@@ -742,11 +874,22 @@ func (s *Service) GetResults(ctx context.Context, sess *session.Context, gameID 
 	for i, player := range players {
 		playerDTOs[i] = toGamePlayerDTO(player)
 	}
-	return &GameResultsResponse{
+	resp := &GameResultsResponse{
 		Game:    toGameDTO(*loadedGame),
 		Players: playerDTOs,
 		Rounds:  rounds,
-	}, nil
+	}
+	// Matchmade team totals / exact draws for terminal casual & ranked games.
+	if IsCasualMode(loadedGame.Mode) || IsRankedMode(loadedGame.Mode) {
+		totals := SumTeamTotals(players)
+		one, two := totals.TeamOneScore, totals.TeamTwoScore
+		resp.TeamOneScore = &one
+		resp.TeamTwoScore = &two
+		result, winner := DecideTeamResult(one, two)
+		resp.Result = &result
+		resp.WinnerTeam = winner
+	}
+	return resp, nil
 }
 
 // finalizeCompletedGame makes post-game projections retriable from every owned read.
@@ -917,6 +1060,7 @@ func toGamePlayerDTO(player GamePlayer) GamePlayerDTO {
 		DisplayName: player.DisplayName,
 		Role:        player.Role,
 		Status:      player.Status,
+		TeamSlot:    player.TeamSlot,
 		TotalScore:  player.TotalScore,
 	}
 }
@@ -931,6 +1075,61 @@ func toRevealedLocation(location answerLocation) RevealedLocation {
 	}
 }
 
+func soloGuessResponse(guess Guess, actual *RevealedLocation, roundCompleted, gameCompleted bool) *GuessResultResponse {
+	return &GuessResultResponse{
+		Guess:            toGuessResult(guess),
+		ActualLocation:   actual,
+		MaxScore:         MaxAccuracyScore(),
+		ScorePercent:     accuracyPercent(guess.AccuracyScore, guess.Score),
+		MaxAccuracyScore: MaxAccuracyScore(),
+		MaxSpeedBonus:    0,
+		Outcome:          guessOutcome(guess.AccuracyScore, guess.TimedOut),
+		RoundCompleted:   roundCompleted,
+		GameCompleted:    gameCompleted,
+	}
+}
+
+func (s *Service) multiplayerGuessResponse(mode string, out *MultiplayerGuessOutcome, actual *answerLocation) *GuessResultResponse {
+	if out == nil {
+		return nil
+	}
+	policy := s.revealPolicy
+	if policy == nil {
+		policy = DelayedRevealPolicy{}
+	}
+	mayReveal := policy.MayRevealAnswer(mode, "", out.RoundCompleted)
+	var loc *RevealedLocation
+	if mayReveal && actual != nil {
+		revealed := toRevealedLocation(*actual)
+		loc = &revealed
+	}
+	submitted := out.SubmittedCount
+	eligible := out.EligibleCount
+	outcome := "submitted"
+	if out.RoundCompleted {
+		outcome = guessOutcome(out.Guess.AccuracyScore, out.Guess.TimedOut)
+	}
+	// Ranked advertises the 250-point speed-bonus cap; Casual/private_room stay at 0.
+	maxBonus := 0
+	if IsRankedMode(mode) {
+		maxBonus = MaxSpeedBonusPoints()
+	}
+	return &GuessResultResponse{
+		Guess:            toGuessResult(out.Guess),
+		ActualLocation:   loc, // nil until shared round closes (delayed reveal)
+		MaxScore:         MaxAccuracyScore(),
+		ScorePercent:     accuracyPercent(out.Guess.AccuracyScore, out.Guess.Score),
+		MaxAccuracyScore: MaxAccuracyScore(),
+		MaxSpeedBonus:    maxBonus,
+		Outcome:          outcome,
+		RoundCompleted:   out.RoundCompleted,
+		GameCompleted:    out.GameCompleted,
+		SubmittedCount:   &submitted, // progress: how many active players have locked guesses
+		EligibleCount:    &eligible,
+		NextRoundNumber:  out.NextRoundNumber,
+	}
+}
+
 func (s *Service) guessReplayResponse(ctx context.Context, guess Guess) (*GuessResultResponse, error) {
 	answer, err := s.repo.GetAnswerForRound(ctx, guess.RoundID)
 	if err != nil {
@@ -939,31 +1138,60 @@ func (s *Service) guessReplayResponse(ctx context.Context, guess Guess) (*GuessR
 	if answer == nil {
 		return nil, ErrRoundNotFound
 	}
-	return &GuessResultResponse{
-		Guess: GuessResult{
-			ID:             guess.ID,
-			Latitude:       guess.Latitude,
-			Longitude:      guess.Longitude,
-			DistanceMeters: guess.DistanceMeters,
-			Score:          guess.Score,
-			SubmittedAt:    guess.SubmittedAt,
-			TimedOut:       guess.TimedOut,
-		},
-		ActualLocation: toRevealedLocation(*answer),
-		MaxScore:       5000,
-		ScorePercent:   guess.Score * 100 / 5000,
-		Outcome:        guessOutcome(guess.Score, guess.TimedOut),
-	}, nil
+	loc := toRevealedLocation(*answer)
+	return soloGuessResponse(guess, &loc, true, false), nil
 }
 
-func guessOutcome(score int, timedOut bool) string {
+func (s *Service) multiplayerGuessReplayResponse(ctx context.Context, game *Game, guess Guess) (*GuessResultResponse, error) {
+	// Determine whether the round has closed so delayed reveal can apply.
+	round, err := s.repo.GetRoundByID(ctx, guess.RoundID)
+	if err != nil {
+		return nil, err
+	}
+	if round == nil {
+		return s.multiplayerGuessResponse(game.Mode, &MultiplayerGuessOutcome{Guess: guess}, nil), nil
+	}
+	roundCompleted := round.Status == RoundStatusCompleted
+	var actual *answerLocation
+	if roundCompleted {
+		actual, err = s.repo.GetAnswerForRound(ctx, guess.RoundID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Best-effort progress counts for replay payloads.
+	state, _ := s.repo.GetMultiplayerRoundState(ctx, game.ID)
+	out := &MultiplayerGuessOutcome{
+		Guess:          guess,
+		RoundCompleted: roundCompleted,
+		GameCompleted:  game.Status == GameStatusCompleted,
+	}
+	if state != nil {
+		out.SubmittedCount = state.SubmittedCount
+		out.EligibleCount = state.EligibleCount
+	}
+	return s.multiplayerGuessResponse(game.Mode, out, actual), nil
+}
+
+func accuracyPercent(accuracy, score int) int {
+	base := accuracy
+	if base == 0 && score > 0 && score <= MaxAccuracyScore() {
+		base = score
+	}
+	if base <= 0 {
+		return 0
+	}
+	return base * 100 / MaxAccuracyScore()
+}
+
+func guessOutcome(accuracyScore int, timedOut bool) string {
 	if timedOut {
 		return "timed_out"
 	}
-	if score == 5000 {
+	if accuracyScore == MaxAccuracyScore() {
 		return "perfect"
 	}
-	if score >= 4000 {
+	if accuracyScore >= 4000 {
 		return "close"
 	}
 	return "miss"

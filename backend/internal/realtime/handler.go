@@ -20,6 +20,10 @@ type Handler struct {
 	provider RoomStateProvider
 	logger   *slog.Logger
 	metrics  MetricsRecorder
+
+	// Optional party/match surfaces (US3). Nil when feature not wired.
+	tickets *TicketHandler
+	match   *MatchHandler
 }
 
 type RoomStateProvider interface {
@@ -39,6 +43,59 @@ func NewHandler(hub *Hub, provider RoomStateProvider, logger *slog.Logger, metri
 		metrics = NoopMetrics{}
 	}
 	return &Handler{hub: hub, provider: provider, logger: logger, metrics: metrics}
+}
+
+// WithTicket attaches the HTTP ticket issuer (POST /realtime/tickets).
+func (h *Handler) WithTicket(t *TicketHandler) *Handler {
+	if h != nil {
+		h.tickets = t
+	}
+	return h
+}
+
+// WithMatch attaches the party/match WebSocket handler.
+func (h *Handler) WithMatch(m *MatchHandler) *Handler {
+	if h != nil {
+		h.match = m
+	}
+	return h
+}
+
+// IssueTicket handles POST /api/v1/realtime/tickets when a TicketHandler is attached.
+func (h *Handler) IssueTicket(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.tickets == nil {
+		http.Error(w, "realtime tickets unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	h.tickets.Issue(w, r)
+}
+
+// MatchWS handles GET /realtime/matches/{matchId}.
+func (h *Handler) MatchWS(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.match == nil {
+		http.Error(w, "match realtime unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	h.match.Match(w, r)
+}
+
+// PartyWS handles GET /realtime/parties/{partyId}.
+func (h *Handler) PartyWS(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.match == nil {
+		http.Error(w, "party realtime unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	h.match.Party(w, r)
+}
+
+// HasMatchTransport reports whether party/match WS is configured.
+func (h *Handler) HasMatchTransport() bool {
+	return h != nil && h.match != nil
+}
+
+// HasTicketIssuer reports whether ticket HTTP issuance is configured.
+func (h *Handler) HasTicketIssuer() bool {
+	return h != nil && h.tickets != nil
 }
 
 func (h *Handler) Room(w http.ResponseWriter, r *http.Request) {
