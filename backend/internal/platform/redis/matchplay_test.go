@@ -116,7 +116,7 @@ func TestMatchLiveMarkerThrottleTwoPerSecond(t *testing.T) {
 			t.Fatalf("set %d: %v", i, err)
 		}
 	}
-	_, err := store.SetMarker(ctx, matchID, roundID, 1, userID, 99, 99, DefaultRoundLiveTTL)
+	_, err := store.SetMarker(ctx, matchID, roundID, 1, userID, 10, 10, DefaultRoundLiveTTL)
 	if err != ErrMarkerThrottled {
 		t.Fatalf("err = %v, want ErrMarkerThrottled", err)
 	}

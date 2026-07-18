@@ -250,6 +250,9 @@ func TestExtractEventID(t *testing.T) {
 	if got := extractEventID([]byte(`{"event_id":"e1","type":"x"}`)); got != "e1" {
 		t.Fatalf("event id = %q", got)
 	}
+	if got := extractEventID([]byte(`{"event":{"event_id":"nested-e1","type":"x"}}`)); got != "nested-e1" {
+		t.Fatalf("nested event id = %q", got)
+	}
 	if got := extractEventID([]byte(`not-json`)); got != "" {
 		t.Fatalf("non-json event id = %q", got)
 	}

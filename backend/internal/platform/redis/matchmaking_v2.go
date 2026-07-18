@@ -258,11 +258,17 @@ if existingTicketID ~= nil then
     end
   else
     if map['state'] == stateClaimed then
+      if map['mode'] ~= mode or map['user_ids'] ~= userIDsCSV then
+        return {'err_user_conflict'}
+      end
+      if (map['party_version'] or '0') ~= partyVersion then
+        return {'err_party_version'}
+      end
       return ticketResult(map, 'existing_claimed')
     end
     local lease = tonumber(map['lease_expires_at_ms'] or '0')
-    if map['state'] == stateSearching and lease >= nowMs and map['mode'] == mode then
-      if map['user_ids'] ~= userIDsCSV then
+    if map['state'] == stateSearching and lease >= nowMs then
+      if map['mode'] ~= mode or map['user_ids'] ~= userIDsCSV then
         return {'err_user_conflict'}
       end
       if (map['party_version'] or '0') ~= partyVersion then
@@ -270,7 +276,7 @@ if existingTicketID ~= nil then
       end
       return ticketResult(map, 'existing')
     end
-    -- Stale searching (expired lease or mode drift): cleanup and recreate.
+    -- Only stale/expired searching state may release user exclusivity.
     clearTicket(existingTicketID, map)
   end
 end
