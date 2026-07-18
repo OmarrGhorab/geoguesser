@@ -136,19 +136,21 @@ func (r *Repository) CreateParty(ctx context.Context, leaderID uuid.UUID, format
 
 // GetActivePartyForUser returns the caller's active party snapshot, or nil.
 func (r *Repository) GetActivePartyForUser(ctx context.Context, userID uuid.UUID) (*PartySnapshot, error) {
-	var partyID uuid.UUID
+	var row struct {
+		PartyID uuid.UUID `gorm:"column:party_id"`
+	}
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT party_id FROM party_members
 		WHERE user_id = ? AND status = 'active'
 		LIMIT 1
-	`, userID).Scan(&partyID).Error
+	`, userID).Scan(&row).Error
 	if err != nil {
 		return nil, fmt.Errorf("get active party for user: %w", err)
 	}
-	if partyID == uuid.Nil {
+	if row.PartyID == uuid.Nil {
 		return nil, nil
 	}
-	return r.LoadSnapshot(ctx, partyID)
+	return r.LoadSnapshot(ctx, row.PartyID)
 }
 
 // LoadSnapshot loads a versioned party with active members and public profiles.
@@ -927,19 +929,21 @@ func (r *Repository) listActiveMembersTx(tx *gorm.DB, partyID uuid.UUID) ([]Part
 }
 
 func (r *Repository) findActivePartyIDForUserTx(tx *gorm.DB, userID uuid.UUID) (*uuid.UUID, error) {
-	var partyID uuid.UUID
+	var row struct {
+		PartyID uuid.UUID `gorm:"column:party_id"`
+	}
 	err := tx.Raw(`
 		SELECT party_id FROM party_members
 		WHERE user_id = ? AND status = 'active'
 		LIMIT 1
-	`, userID).Scan(&partyID).Error
+	`, userID).Scan(&row).Error
 	if err != nil {
 		return nil, fmt.Errorf("find active party for user: %w", err)
 	}
-	if partyID == uuid.Nil {
+	if row.PartyID == uuid.Nil {
 		return nil, nil
 	}
-	return &partyID, nil
+	return &row.PartyID, nil
 }
 
 func (r *Repository) hasActiveMatchTx(tx *gorm.DB, userID uuid.UUID) (bool, error) {

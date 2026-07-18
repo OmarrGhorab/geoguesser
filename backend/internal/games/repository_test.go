@@ -208,7 +208,7 @@ func TestRepositoryGuessUniquenessAndIdempotencyConstraints(t *testing.T) {
 	if err := db.Create(&otherRound).Error; err != nil {
 		t.Fatalf("create other round failed: %v", err)
 	}
-	conflicting := games.Guess{RoundID: otherRound.ID, GamePlayerID: player.ID, Latitude: 3, Longitude: 3, DistanceMeters: 1, Score: 1, IdempotencyKey: &key, SubmittedAt: time.Now().UTC()}
+	conflicting := games.Guess{RoundID: otherRound.ID, GamePlayerID: player.ID, Latitude: 3, Longitude: 3, DistanceMeters: 1, AccuracyScore: 1, Score: 1, IdempotencyKey: &key, SubmittedAt: time.Now().UTC()}
 	if err := db.Create(&conflicting).Error; err == nil {
 		t.Fatal("duplicate idempotency key for same player should fail")
 	}
@@ -295,8 +295,9 @@ func TestCloseExpiredMultiplayerRoundAdvancesDeadline(t *testing.T) {
 	if err := db.Create(game).Error; err != nil {
 		t.Fatalf("create game: %v", err)
 	}
-	pA := &games.GamePlayer{GameID: game.ID, UserID: &userA, DisplayName: "A", Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive}
-	pB := &games.GamePlayer{GameID: game.ID, UserID: &userB, DisplayName: "B", Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive}
+	slotOne, slotTwo := games.TeamSlotOne, games.TeamSlotTwo
+	pA := &games.GamePlayer{GameID: game.ID, UserID: &userA, DisplayName: "A", Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive, TeamSlot: &slotOne}
+	pB := &games.GamePlayer{GameID: game.ID, UserID: &userB, DisplayName: "B", Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive, TeamSlot: &slotTwo}
 	if err := db.Create(pA).Error; err != nil {
 		t.Fatalf("player A: %v", err)
 	}
@@ -443,9 +444,11 @@ func TestMultiplayerLifecycleHooks_CommitAndRollback(t *testing.T) {
 	if err := db.Create(&round).Error; err != nil {
 		t.Fatalf("round: %v", err)
 	}
+	seasonID := activeSeasonID(t, db)
 	match := &matchmaking.Match{
 		FormationKey: "lifecycle-" + uuid.NewString(), GameID: game.ID, Mode: matchmaking.ModeRankedStandard,
-		Status: matchmaking.MatchStatusActive, MatchedAt: now, StartedAt: &started,
+		Playlist: matchmaking.PlaylistRanked, Format: matchmaking.FormatSolo, TeamSize: matchmaking.TeamSizeSolo, SeasonID: &seasonID,
+		Status: matchmaking.MatchStatusActive, MatchedAt: now, StartedAt: &started, LastActivityAt: now,
 	}
 	if err := db.Create(match).Error; err != nil {
 		t.Fatalf("create match: %v", err)
@@ -453,7 +456,7 @@ func TestMultiplayerLifecycleHooks_CommitAndRollback(t *testing.T) {
 	for _, player := range []*games.GamePlayer{pA, pB} {
 		participant := &matchmaking.MatchPlayer{
 			MatchID: match.ID, UserID: *player.UserID, GamePlayerID: player.ID,
-			Status: matchmaking.ParticipantStatusActive, AssignedAt: now,
+			TeamSlot: *player.TeamSlot, Status: matchmaking.ParticipantStatusActive, AssignedAt: now,
 		}
 		if err := db.Create(participant).Error; err != nil {
 			t.Fatalf("create match player: %v", err)
@@ -553,8 +556,9 @@ func TestCancelMultiplayerGameTx_HookCommitAndRollback(t *testing.T) {
 	for _, name := range []struct {
 		user uuid.UUID
 		n    string
-	}{{userA, "A"}, {userB, "B"}} {
-		p := &games.GamePlayer{GameID: game.ID, UserID: &name.user, DisplayName: name.n, Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive}
+		slot int
+	}{{userA, "A", games.TeamSlotOne}, {userB, "B", games.TeamSlotTwo}} {
+		p := &games.GamePlayer{GameID: game.ID, UserID: &name.user, DisplayName: name.n, Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive, TeamSlot: &name.slot}
 		if err := db.Create(p).Error; err != nil {
 			t.Fatalf("player: %v", err)
 		}
@@ -564,9 +568,11 @@ func TestCancelMultiplayerGameTx_HookCommitAndRollback(t *testing.T) {
 	if err := db.Create(&r).Error; err != nil {
 		t.Fatalf("round: %v", err)
 	}
+	seasonID := activeSeasonID(t, db)
 	match := &matchmaking.Match{
 		FormationKey: "cancel-" + uuid.NewString(), GameID: game.ID, Mode: matchmaking.ModeRankedStandard,
-		Status: matchmaking.MatchStatusActive, MatchedAt: now, StartedAt: &started,
+		Playlist: matchmaking.PlaylistRanked, Format: matchmaking.FormatSolo, TeamSize: matchmaking.TeamSizeSolo, SeasonID: &seasonID,
+		Status: matchmaking.MatchStatusActive, MatchedAt: now, StartedAt: &started, LastActivityAt: now,
 	}
 	if err := db.Create(match).Error; err != nil {
 		t.Fatalf("create match: %v", err)
@@ -578,7 +584,7 @@ func TestCancelMultiplayerGameTx_HookCommitAndRollback(t *testing.T) {
 	for i := range players {
 		participant := &matchmaking.MatchPlayer{
 			MatchID: match.ID, UserID: *players[i].UserID, GamePlayerID: players[i].ID,
-			Status: matchmaking.ParticipantStatusActive, AssignedAt: now,
+			TeamSlot: *players[i].TeamSlot, Status: matchmaking.ParticipantStatusActive, AssignedAt: now,
 		}
 		if err := db.Create(participant).Error; err != nil {
 			t.Fatalf("create match player: %v", err)
@@ -691,4 +697,18 @@ func seedGameMap(t *testing.T, db *gorm.DB, count int) (uuid.UUID, []uuid.UUID) 
 		ids[i] = loc.ID
 	}
 	return m.ID, ids
+}
+
+func activeSeasonID(t *testing.T, db *gorm.DB) uuid.UUID {
+	t.Helper()
+	var row struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
+	if err := db.Table("competitive_seasons").Select("id").Where("status = ?", "active").Order("sequence ASC").Limit(1).Scan(&row).Error; err != nil {
+		t.Fatalf("load active season: %v", err)
+	}
+	if row.ID == uuid.Nil {
+		t.Fatal("active competitive season is required")
+	}
+	return row.ID
 }

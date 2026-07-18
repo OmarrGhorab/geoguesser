@@ -54,12 +54,14 @@ func mustExec(t *testing.T, db *gorm.DB, sql string, args ...any) {
 
 func seedActiveSeasonID(t *testing.T, db *gorm.DB) uuid.UUID {
 	t.Helper()
-	var id uuid.UUID
-	err := db.Raw(`SELECT id FROM competitive_seasons WHERE status = 'active' LIMIT 1`).Scan(&id).Error
-	if err != nil || id == uuid.Nil {
+	var row struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
+	err := db.Raw(`SELECT id FROM competitive_seasons WHERE status = 'active' LIMIT 1`).Scan(&row).Error
+	if err != nil || row.ID == uuid.Nil {
 		t.Skip("no active competitive season seeded")
 	}
-	return id
+	return row.ID
 }
 
 func seedUser(t *testing.T, db *gorm.DB) uuid.UUID {

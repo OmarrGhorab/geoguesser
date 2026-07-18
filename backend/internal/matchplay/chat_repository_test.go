@@ -61,6 +61,7 @@ func seedChatUser(t *testing.T, db *gorm.DB) uuid.UUID {
 type chatFixture struct {
 	matchID uuid.UUID
 	gameID  uuid.UUID
+	mapID   uuid.UUID
 	team1   []uuid.UUID
 	team2   []uuid.UUID
 }
@@ -70,19 +71,29 @@ func seedChatMatch(t *testing.T, db *gorm.DB) chatFixture {
 	now := time.Now().UTC()
 	gameID := uuid.New()
 	matchID := uuid.New()
-	// Minimal games row if required by FK — matches.game_id may not enforce FK.
-	_ = db.Exec(`INSERT INTO games (id, mode, status, created_at, updated_at) VALUES (?, 'ranked_standard', 'active', ?, ?) ON CONFLICT DO NOTHING`,
-		gameID, now, now)
+	mapID := uuid.New()
+	if err := db.Exec(`
+		INSERT INTO maps (id, slug, name, visibility, access_tier, difficulty, status, created_at, updated_at)
+		VALUES (?, ?, ?, 'private', 'free', 'mixed', 'active', ?, ?)
+	`, mapID, "chat-"+mapID.String(), "Chat fixture", now, now).Error; err != nil {
+		t.Fatalf("seed map: %v", err)
+	}
+	if err := db.Exec(`
+		INSERT INTO games (id, mode, status, map_id, round_count, scoring_version, total_score, started_at, created_at, updated_at)
+		VALUES (?, 'casual_duo', 'active', ?, 1, 1, 0, ?, ?, ?)
+	`, gameID, mapID, now, now, now).Error; err != nil {
+		t.Fatalf("seed game: %v", err)
+	}
 
 	if err := db.Exec(`
 		INSERT INTO matches (
 			id, formation_key, game_id, mode, status, playlist, format, team_size,
-			team_one_score, team_two_score, last_activity_at, matched_at, created_at, updated_at
+			team_one_score, team_two_score, last_activity_at, matched_at, started_at, created_at, updated_at
 		) VALUES (
 			?, ?, ?, 'casual_duo', 'active', 'casual', 'duo', 2,
-			0, 0, ?, ?, ?, ?
+			0, 0, ?, ?, ?, ?, ?
 		)`,
-		matchID, "fk-"+matchID.String(), gameID, now, now, now, now,
+		matchID, "fk-"+matchID.String(), gameID, now, now, now, now, now,
 	).Error; err != nil {
 		// Fallback without newer columns if migration partial.
 		t.Fatalf("seed match: %v", err)
@@ -108,6 +119,7 @@ func seedChatMatch(t *testing.T, db *gorm.DB) chatFixture {
 	return chatFixture{
 		matchID: matchID,
 		gameID:  gameID,
+		mapID:   mapID,
 		team1:   users[:2],
 		team2:   users[2:],
 	}
@@ -122,6 +134,7 @@ func cleanupChatFixture(t *testing.T, db *gorm.DB, fx chatFixture) {
 	_ = db.Exec(`DELETE FROM matches WHERE id = ?`, fx.matchID)
 	_ = db.Exec(`DELETE FROM game_players WHERE game_id = ?`, fx.gameID)
 	_ = db.Exec(`DELETE FROM games WHERE id = ?`, fx.gameID)
+	_ = db.Exec(`DELETE FROM maps WHERE id = ?`, fx.mapID)
 	all := append(append([]uuid.UUID{}, fx.team1...), fx.team2...)
 	for _, uid := range all {
 		_ = db.Exec(`DELETE FROM user_profiles WHERE user_id = ?`, uid)

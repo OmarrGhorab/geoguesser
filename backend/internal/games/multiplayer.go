@@ -56,7 +56,7 @@ type MultiplayerRoundState struct {
 	Attribution        *string
 	SubmittedCount     int
 	EligibleCount      int
-	SubmittedPlayerIDs []uuid.UUID
+	SubmittedPlayerIDs []uuid.UUID `gorm:"-"`
 }
 
 // TeamRosterMember seeds one player on a team during matchmade formation.

@@ -1,6 +1,7 @@
 package matchmaking_test
 
 import (
+	"database/sql"
 	"errors"
 	"os"
 	"strings"
@@ -456,12 +457,12 @@ func TestTeamFormation_CasualNullTimer(t *testing.T) {
 	if timer != nil {
 		t.Fatalf("casual timer_seconds = %v, want NULL", *timer)
 	}
-	var endsAt *time.Time
+	var endsAt sql.NullTime
 	if err := db.Table("rounds").Select("ends_at").Where("game_id = ? AND round_number = 1", result.Match.GameID).Scan(&endsAt).Error; err != nil {
 		t.Fatalf("ends_at: %v", err)
 	}
-	if endsAt != nil {
-		t.Fatalf("casual first round ends_at = %v, want NULL", *endsAt)
+	if endsAt.Valid {
+		t.Fatalf("casual first round ends_at = %v, want NULL", endsAt.Time)
 	}
 }
 

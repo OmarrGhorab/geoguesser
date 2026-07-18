@@ -524,20 +524,22 @@ func resolveSeasonID(tx *gorm.DB, playlist string, provided *uuid.UUID) (*uuid.U
 	if provided != nil && *provided != uuid.Nil {
 		return provided, nil
 	}
-	var id uuid.UUID
+	var row struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
 	err := tx.Table("competitive_seasons").
 		Select("id").
 		Where("status = ?", "active").
 		Order("sequence ASC").
 		Limit(1).
-		Scan(&id).Error
+		Scan(&row).Error
 	if err != nil {
 		return nil, err
 	}
-	if id == uuid.Nil {
+	if row.ID == uuid.Nil {
 		return nil, ErrContentUnavailable
 	}
-	return &id, nil
+	return &row.ID, nil
 }
 
 // formationGameMode maps matchmaking mode to games.mode.
