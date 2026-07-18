@@ -166,3 +166,7 @@ func (f *fakeServiceAPI) ExpireRound(context.Context, *session.Context, string, 
 func (f *fakeServiceAPI) GetResults(context.Context, *session.Context, string) (*GameResultsResponse, error) {
 	return f.results, nil
 }
+
+func (f *fakeServiceAPI) GetSharedRoundResults(context.Context, *session.Context, string, string) (*SharedRoundResultsResponse, error) {
+	return nil, nil
+}

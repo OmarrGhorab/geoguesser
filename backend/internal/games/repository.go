@@ -244,7 +244,10 @@ func (r *Repository) SubmitGuessTx(ctx context.Context, gameID, roundID, playerI
 			return err
 		}
 		guess.DistanceMeters = DistanceMeters(guess.Latitude, guess.Longitude, answer.Latitude, answer.Longitude)
-		guess.Score = ScoreV1(guess.DistanceMeters)
+		accuracy, bonus, total := ComposeGuessScores(GameModeSolo, ScoreV1(guess.DistanceMeters), 0, 0)
+		guess.AccuracyScore = accuracy
+		guess.SpeedBonus = bonus
+		guess.Score = total
 		guess.RoundID = roundID
 		guess.GamePlayerID = playerID
 		guess.SubmittedAt = now
@@ -318,7 +321,12 @@ func (r *Repository) ExpireSoloRoundTx(ctx context.Context, gameID, roundID, pla
 		if err := tx.Raw(`SELECT id, latitude, longitude, country_code, region, locality FROM locations WHERE id = ?`, round.LocationID).Scan(&answer).Error; err != nil {
 			return err
 		}
-		saved = Guess{RoundID: roundID, GamePlayerID: playerID, Latitude: 0, Longitude: 0, DistanceMeters: 0, Score: 0, SubmittedAt: now, TimedOut: true}
+		saved = Guess{
+			RoundID: roundID, GamePlayerID: playerID,
+			Latitude: 0, Longitude: 0, DistanceMeters: 0,
+			AccuracyScore: 0, SpeedBonus: 0, Score: 0,
+			SubmittedAt: now, TimedOut: true,
+		}
 		if err := tx.Create(&saved).Error; err != nil {
 			return err
 		}
@@ -353,12 +361,14 @@ func (r *Repository) ExpireSoloRoundTx(ctx context.Context, gameID, roundID, pla
 	return &saved, &answer, completedGame, nil
 }
 
-// MultiplayerTxHooks run inside the multiplayer game transaction so ranked match
+// MultiplayerTxHooks run inside the multiplayer game transaction so ranked/match
 // lifecycle stays atomic with game/round state changes.
 type MultiplayerTxHooks struct {
 	OnMatchActive   func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error
 	OnGameCompleted func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time) error
 	OnGameCancelled func(ctx context.Context, tx *gorm.DB, gameID uuid.UUID, now time.Time, failureCode string) error
+	// OnTerminalResult receives computed team totals/draw result when a matchmade game ends.
+	OnTerminalResult func(ctx context.Context, tx *gorm.DB, result TerminalMatchResult) error
 }
 
 func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, roundID, playerID uuid.UUID, guess Guess, now time.Time, hooks MultiplayerTxHooks) (*MultiplayerGuessOutcome, *answerLocation, error) {
@@ -393,19 +403,24 @@ func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, round
 			return err
 		}
 		guess.DistanceMeters = DistanceMeters(guess.Latitude, guess.Longitude, answer.Latitude, answer.Longitude)
-		guess.Score = ScoreV1(guess.DistanceMeters)
+		// Atomic accuracy/speed/total: computed and written with the player total in one TX.
+		accuracy, bonus, total := ScoreWithSpeedBonus(game.Mode, ScoreV1(guess.DistanceMeters), round.StartsAt, round.EndsAt, now)
+		guess.AccuracyScore = accuracy
+		guess.SpeedBonus = bonus
+		guess.Score = total
 		guess.RoundID = roundID
 		guess.GamePlayerID = playerID
 		guess.SubmittedAt = now
 		if err := tx.Create(&guess).Error; err != nil {
 			return err
 		}
+		// total_score accumulates accuracy + speed bonus (score column) for team standings.
 		if err := tx.Model(&GamePlayer{}).Where("id = ?", playerID).UpdateColumn("total_score", gorm.Expr("total_score + ?", guess.Score)).Error; err != nil {
 			return err
 		}
 		out.Guess = guess
-		// First accepted multiplayer guess activates the ranked match record.
-		if game.Mode == GameModeRanked && hooks.OnMatchActive != nil {
+		// First accepted multiplayer guess activates the ranked match record (legacy + canonical).
+		if IsRankedMode(game.Mode) && hooks.OnMatchActive != nil {
 			if err := hooks.OnMatchActive(ctx, tx, gameID, now); err != nil {
 				return err
 			}
@@ -417,7 +432,7 @@ func (r *Repository) SubmitMultiplayerGuessTx(ctx context.Context, gameID, round
 		out.SubmittedCount = submitted
 		out.EligibleCount = eligible
 		if eligible > 0 && submitted >= eligible {
-			return completeMultiplayerRound(ctx, tx, gameID, round.ID, now, game.TimerSeconds, out, hooks)
+			return completeMultiplayerRound(ctx, tx, game, round.ID, now, out, hooks)
 		}
 		return nil
 	})
@@ -527,6 +542,10 @@ func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uu
 		if !IsMultiplayerMode(game.Mode) || game.Status != GameStatusActive {
 			return ErrGameNotActive
 		}
+		// Casual modes have no gameplay deadline; never auto-close on timer.
+		if IsCasualMode(game.Mode) {
+			return ErrRoundClosed
+		}
 		var round Round
 		if err := tx.Clauses(lockingClause()).First(&round, "game_id = ? AND status = ?", gameID, RoundStatusActive).Error; err != nil {
 			return err
@@ -534,13 +553,17 @@ func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uu
 		if round.EndsAt == nil || now.Before(*round.EndsAt) {
 			return ErrRoundClosed
 		}
+		// Insert zero scores for players who never submitted before closing.
+		if err := insertMissingMultiplayerGuesses(tx, game.ID, round.ID, now); err != nil {
+			return err
+		}
 		submitted, eligible, err := multiplayerProgress(tx, gameID, round.ID)
 		if err != nil {
 			return err
 		}
 		out.SubmittedCount = submitted
 		out.EligibleCount = eligible
-		return completeMultiplayerRound(ctx, tx, gameID, round.ID, now, game.TimerSeconds, out, hooks)
+		return completeMultiplayerRound(ctx, tx, game, round.ID, now, out, hooks)
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
@@ -549,6 +572,243 @@ func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uu
 		return nil, fmt.Errorf("close expired multiplayer round: %w", err)
 	}
 	return out, nil
+}
+
+// ListExpiredRankedGameIDs returns a bounded ordered batch whose active round
+// deadline has elapsed. CloseExpiredMultiplayerRound re-locks and revalidates
+// every row, making concurrent worker instances safe and idempotent.
+func (r *Repository) ListExpiredRankedGameIDs(ctx context.Context, now time.Time, limit int) ([]uuid.UUID, error) {
+	if r == nil || r.db == nil {
+		return nil, ErrGameNotFound
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	var ids []uuid.UUID
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT g.id
+		FROM games g
+		JOIN rounds r ON r.game_id = g.id
+		WHERE g.status = 'active'
+		  AND g.mode IN ('ranked_solo', 'ranked_duo', 'ranked_squad')
+		  AND r.status = 'active'
+		  AND r.ends_at IS NOT NULL
+		  AND r.ends_at <= ?
+		ORDER BY r.ends_at ASC, g.id ASC
+		LIMIT ?
+	`, now.UTC(), limit).Scan(&ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("list expired ranked games: %w", err)
+	}
+	return ids, nil
+}
+
+// CreateTeamGameBundle inserts a matchmade Casual/Ranked team game, slotted players,
+// and all rounds in one transaction. Casual uses TimerSeconds=nil and null first-round ends_at.
+// Exported for matchmaking formation (games ownership stays in games).
+func (r *Repository) CreateTeamGameBundle(ctx context.Context, input TeamGameFormationInput) (*TeamGameFormationResult, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("create team game: repository unavailable")
+	}
+	if !IsCasualMode(input.Mode) && !IsRankedMode(input.Mode) {
+		return nil, ErrInvalidGameRequest
+	}
+	if input.MapID == uuid.Nil || input.RoundCount < 1 || len(input.LocationIDs) < input.RoundCount {
+		return nil, ErrInvalidGameRequest
+	}
+	if len(input.TeamOne) == 0 || len(input.TeamTwo) == 0 {
+		return nil, ErrInvalidGameRequest
+	}
+	if len(input.TeamOne) != len(input.TeamTwo) {
+		return nil, ErrInvalidGameRequest
+	}
+	scoringVersion := input.ScoringVersion
+	if scoringVersion == 0 {
+		scoringVersion = ScoringVersionV1
+	}
+	startedAt := input.StartedAt.UTC()
+	roundStarts := input.RoundStartsAt.UTC()
+	if roundStarts.IsZero() {
+		roundStarts = startedAt
+	}
+	// Casual never persists a timer or first-round ends_at.
+	// Ranked defaults to the authoritative 60-second timer when unset.
+	var timerSeconds *int
+	var firstEndsAt *time.Time
+	if IsCasualMode(input.Mode) {
+		timerSeconds = nil
+		firstEndsAt = nil
+	} else {
+		timerSeconds = ApplyRankedTimerDefaults(input.Mode, input.TimerSeconds)
+		// ends_at is relative to RoundStartsAt so every player shares the same deadline.
+		if timerSeconds != nil {
+			v := roundStarts.Add(time.Duration(*timerSeconds) * time.Second)
+			firstEndsAt = &v
+		}
+	}
+
+	out := &TeamGameFormationResult{}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		game := Game{
+			Mode:           input.Mode,
+			Status:         GameStatusActive,
+			MapID:          input.MapID,
+			RoundCount:     input.RoundCount,
+			TimerSeconds:   timerSeconds,
+			ScoringVersion: scoringVersion,
+			StartedAt:      &startedAt,
+		}
+		if err := tx.Create(&game).Error; err != nil {
+			return fmt.Errorf("create team game: %w", err)
+		}
+		players := make([]GamePlayer, 0, len(input.TeamOne)+len(input.TeamTwo))
+		appendTeam := func(members []TeamRosterMember, slot int) error {
+			for _, m := range members {
+				if m.UserID == uuid.Nil {
+					return ErrInvalidGameRequest
+				}
+				name := m.DisplayName
+				if name == "" {
+					name = "Player"
+				}
+				uid := m.UserID
+				slotCopy := slot
+				p := GamePlayer{
+					GameID:      game.ID,
+					UserID:      &uid,
+					DisplayName: name,
+					Role:        PlayerRolePlayer,
+					Status:      PlayerStatusActive,
+					TeamSlot:    &slotCopy,
+					JoinedAt:    startedAt,
+				}
+				if err := tx.Create(&p).Error; err != nil {
+					return fmt.Errorf("create team player: %w", err)
+				}
+				players = append(players, p)
+			}
+			return nil
+		}
+		if err := appendTeam(input.TeamOne, TeamSlotOne); err != nil {
+			return err
+		}
+		if err := appendTeam(input.TeamTwo, TeamSlotTwo); err != nil {
+			return err
+		}
+
+		rounds := make([]Round, input.RoundCount)
+		for i := 0; i < input.RoundCount; i++ {
+			rounds[i] = Round{
+				GameID:      game.ID,
+				LocationID:  input.LocationIDs[i],
+				RoundNumber: i + 1,
+				Status:      RoundStatusPending,
+				CreatedAt:   startedAt,
+			}
+			if i == 0 {
+				rounds[i].Status = RoundStatusActive
+				rounds[i].StartsAt = &roundStarts
+				rounds[i].EndsAt = firstEndsAt
+			}
+		}
+		if err := tx.Create(&rounds).Error; err != nil {
+			return fmt.Errorf("create team rounds: %w", err)
+		}
+		out.Game = game
+		out.Players = players
+		out.Rounds = rounds
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListPlayers returns all game_players for a game ordered by join time.
+func (r *Repository) ListPlayers(ctx context.Context, gameID uuid.UUID) ([]GamePlayer, error) {
+	var players []GamePlayer
+	if err := r.db.WithContext(ctx).Where("game_id = ?", gameID).Order("joined_at ASC, id ASC").Find(&players).Error; err != nil {
+		return nil, fmt.Errorf("list players: %w", err)
+	}
+	return players, nil
+}
+
+// LoadSharedRoundResults returns answer + all guesses for a completed multiplayer round.
+func (r *Repository) LoadSharedRoundResults(ctx context.Context, gameID, roundID uuid.UUID) (*SharedRoundResultsResponse, error) {
+	var round Round
+	if err := r.db.WithContext(ctx).First(&round, "id = ? AND game_id = ?", roundID, gameID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load round: %w", err)
+	}
+	if round.Status != RoundStatusCompleted {
+		return nil, ErrResultsNotReady
+	}
+	answer, err := r.GetAnswerForRound(ctx, roundID)
+	if err != nil {
+		return nil, err
+	}
+	if answer == nil {
+		return nil, ErrRoundNotFound
+	}
+	players, err := r.ListPlayers(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	var guesses []Guess
+	if err := r.db.WithContext(ctx).Where("round_id = ?", roundID).Find(&guesses).Error; err != nil {
+		return nil, fmt.Errorf("load round guesses: %w", err)
+	}
+	guessByPlayer := make(map[uuid.UUID]Guess, len(guesses))
+	for _, g := range guesses {
+		guessByPlayer[g.GamePlayerID] = g
+	}
+	out := &SharedRoundResultsResponse{
+		RoundID:        round.ID,
+		RoundNumber:    round.RoundNumber,
+		ActualLocation: toRevealedLocation(*answer),
+		Guesses:        make([]PlayerGuessDTO, 0, len(players)),
+		SubmittedCount: len(guesses),
+		EligibleCount:  0,
+	}
+	for _, p := range players {
+		if p.Status == PlayerStatusActive || p.Status == PlayerStatusDisconnected {
+			out.EligibleCount++
+		}
+		g, ok := guessByPlayer[p.ID]
+		if !ok {
+			// Missing guess contributes zero (closure paths should already insert zeros).
+			g = Guess{
+				RoundID: roundID, GamePlayerID: p.ID,
+				AccuracyScore: 0, SpeedBonus: 0, Score: 0, TimedOut: true,
+			}
+		}
+		out.Guesses = append(out.Guesses, PlayerGuessDTO{
+			GamePlayerID: p.ID,
+			UserID:       p.UserID,
+			DisplayName:  p.DisplayName,
+			TeamSlot:     p.TeamSlot,
+			Guess:        toGuessResult(g),
+		})
+	}
+	totals := SumRoundTeamScores(players, guesses)
+	out.TeamOneScore = totals.TeamOneScore
+	out.TeamTwoScore = totals.TeamTwoScore
+	return out, nil
+}
+
+// GetRoundByID returns a round by id.
+func (r *Repository) GetRoundByID(ctx context.Context, roundID uuid.UUID) (*Round, error) {
+	var round Round
+	if err := r.db.WithContext(ctx).First(&round, "id = ?", roundID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get round: %w", err)
+	}
+	return &round, nil
 }
 
 // GetGuessByRoundPlayer returns the existing guess for one player in a round.
@@ -592,7 +852,7 @@ func (r *Repository) GetAnswerForRound(ctx context.Context, roundID uuid.UUID) (
 	return &answer, nil
 }
 
-// LoadResults loads final results in bounded batches.
+// LoadResults loads final results in bounded batches, grouping multiplayer guesses by round.
 func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, []GamePlayer, []RoundResult, error) {
 	game, err := r.GetGameByID(ctx, gameID)
 	if err != nil || game == nil {
@@ -614,6 +874,8 @@ func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, 
 		GuessLatitude  *float64
 		GuessLongitude *float64
 		DistanceMeters *int
+		AccuracyScore  *int
+		SpeedBonus     *int
 		Score          *int
 		SubmittedAt    *time.Time
 		TimedOut       *bool
@@ -631,43 +893,62 @@ func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, 
 			g.latitude AS guess_latitude,
 			g.longitude AS guess_longitude,
 			g.distance_meters,
+			g.accuracy_score,
+			g.speed_bonus,
 			g.score,
-			g.submitted_at
-			,g.timed_out
+			g.submitted_at,
+			g.timed_out
 		FROM rounds r
 		JOIN locations l ON l.id = r.location_id
 		LEFT JOIN guesses g ON g.round_id = r.id
 		WHERE r.game_id = ?
-		ORDER BY r.round_number ASC
+		ORDER BY r.round_number ASC, g.submitted_at ASC NULLS LAST
 	`, gameID).Scan(&rows).Error; err != nil {
 		return nil, nil, nil, fmt.Errorf("load round results: %w", err)
 	}
-	results := make([]RoundResult, 0, len(rows))
+	results := make([]RoundResult, 0)
+	indexByRound := make(map[uuid.UUID]int)
 	for _, row := range rows {
-		result := RoundResult{
-			RoundID:     row.RoundID,
-			RoundNumber: row.RoundNumber,
-			ActualLocation: RevealedLocation{
-				Latitude:    row.Latitude,
-				Longitude:   row.Longitude,
-				CountryCode: row.CountryCode,
-				Region:      row.Region,
-				Locality:    row.Locality,
-			},
-			Guesses: []GuessResult{},
+		idx, ok := indexByRound[row.RoundID]
+		if !ok {
+			results = append(results, RoundResult{
+				RoundID:     row.RoundID,
+				RoundNumber: row.RoundNumber,
+				ActualLocation: RevealedLocation{
+					Latitude:    row.Latitude,
+					Longitude:   row.Longitude,
+					CountryCode: row.CountryCode,
+					Region:      row.Region,
+					Locality:    row.Locality,
+				},
+				Guesses: []GuessResult{},
+			})
+			idx = len(results) - 1
+			indexByRound[row.RoundID] = idx
 		}
 		if row.GuessID != nil && row.GuessLatitude != nil && row.GuessLongitude != nil && row.DistanceMeters != nil && row.Score != nil && row.SubmittedAt != nil {
-			result.Guesses = append(result.Guesses, GuessResult{
+			acc := 0
+			if row.AccuracyScore != nil {
+				acc = *row.AccuracyScore
+			} else {
+				acc = *row.Score
+			}
+			bonus := 0
+			if row.SpeedBonus != nil {
+				bonus = *row.SpeedBonus
+			}
+			results[idx].Guesses = append(results[idx].Guesses, GuessResult{
 				ID:             *row.GuessID,
 				Latitude:       *row.GuessLatitude,
 				Longitude:      *row.GuessLongitude,
 				DistanceMeters: *row.DistanceMeters,
+				AccuracyScore:  acc,
+				SpeedBonus:     bonus,
 				Score:          *row.Score,
 				SubmittedAt:    *row.SubmittedAt,
 				TimedOut:       row.TimedOut != nil && *row.TimedOut,
 			})
 		}
-		results = append(results, result)
 	}
 	return game, players, results, nil
 }
@@ -684,7 +965,52 @@ func multiplayerProgress(tx *gorm.DB, gameID, roundID uuid.UUID) (int, int, erro
 	return int(submitted), int(eligible), nil
 }
 
-func completeMultiplayerRound(ctx context.Context, tx *gorm.DB, gameID, roundID uuid.UUID, now time.Time, timerSeconds *int, out *MultiplayerGuessOutcome, hooks MultiplayerTxHooks) error {
+// insertMissingMultiplayerGuesses records zero-score timed-out guesses for active
+// players who have not submitted when a timed round closes.
+func insertMissingMultiplayerGuesses(tx *gorm.DB, gameID, roundID uuid.UUID, now time.Time) error {
+	var players []GamePlayer
+	if err := tx.Where("game_id = ? AND status = ?", gameID, PlayerStatusActive).Find(&players).Error; err != nil {
+		return err
+	}
+	var submittedIDs []uuid.UUID
+	if err := tx.Model(&Guess{}).Where("round_id = ?", roundID).Pluck("game_player_id", &submittedIDs).Error; err != nil {
+		return err
+	}
+	submitted := make(map[uuid.UUID]struct{}, len(submittedIDs))
+	for _, id := range submittedIDs {
+		submitted[id] = struct{}{}
+	}
+	for _, p := range players {
+		if _, ok := submitted[p.ID]; ok {
+			continue
+		}
+		zero := Guess{
+			RoundID:        roundID,
+			GamePlayerID:   p.ID,
+			Latitude:       0,
+			Longitude:      0,
+			DistanceMeters: 0,
+			AccuracyScore:  0,
+			SpeedBonus:     0,
+			Score:          0,
+			TimedOut:       true,
+			SubmittedAt:    now,
+		}
+		if err := tx.Create(&zero).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func completeMultiplayerRound(ctx context.Context, tx *gorm.DB, game Game, roundID uuid.UUID, now time.Time, out *MultiplayerGuessOutcome, hooks MultiplayerTxHooks) error {
+	out.RoundID = roundID
+	// When closing via all-submitted, missing guesses should not exist; when closing
+	// via other paths that call insertMissing first, zeros are already present.
+	// Defensive zero-fill keeps team totals correct for any residual missing rows.
+	if err := insertMissingMultiplayerGuesses(tx, game.ID, roundID, now); err != nil {
+		return err
+	}
 	if err := tx.Model(&Round{}).Where("id = ?", roundID).Updates(map[string]any{
 		"status":      RoundStatusCompleted,
 		"revealed_at": now,
@@ -692,29 +1018,42 @@ func completeMultiplayerRound(ctx context.Context, tx *gorm.DB, gameID, roundID 
 		return err
 	}
 	out.RoundCompleted = true
+	// Refresh counts after zero-fill.
+	if submitted, eligible, err := multiplayerProgress(tx, game.ID, roundID); err == nil {
+		out.SubmittedCount = submitted
+		out.EligibleCount = eligible
+	}
 	var next Round
-	if err := tx.Where("game_id = ? AND status = ?", gameID, RoundStatusPending).Order("round_number ASC").First(&next).Error; err != nil {
+	if err := tx.Where("game_id = ? AND status = ?", game.ID, RoundStatusPending).Order("round_number ASC").First(&next).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			out.GameCompleted = true
-			if err := tx.Model(&Game{}).Where("id = ?", gameID).Updates(map[string]any{
+			if err := tx.Model(&Game{}).Where("id = ?", game.ID).Updates(map[string]any{
 				"status":       GameStatusCompleted,
 				"completed_at": now,
 				"updated_at":   now,
 			}).Error; err != nil {
 				return err
 			}
+			var players []GamePlayer
+			if err := tx.Where("game_id = ?", game.ID).Find(&players).Error; err != nil {
+				return err
+			}
+			terminal := BuildTerminalMatchResult(game.ID, game.Mode, players, now)
+			out.Terminal = &terminal
+			if hooks.OnTerminalResult != nil {
+				if err := hooks.OnTerminalResult(ctx, tx, terminal); err != nil {
+					return err
+				}
+			}
 			if hooks.OnGameCompleted != nil {
-				return hooks.OnGameCompleted(ctx, tx, gameID, now)
+				return hooks.OnGameCompleted(ctx, tx, game.ID, now)
 			}
 			return nil
 		}
 		return err
 	}
-	var endsAt *time.Time
-	if timerSeconds != nil {
-		v := now.Add(time.Duration(*timerSeconds) * time.Second)
-		endsAt = &v
-	}
+	// Casual: null ends_at. Ranked/private_room: timer-based deadline when configured.
+	endsAt := NextRoundEndsAt(game.Mode, game.TimerSeconds, now)
 	if err := tx.Model(&Round{}).Where("id = ?", next.ID).Updates(map[string]any{
 		"status":    RoundStatusActive,
 		"starts_at": now,
@@ -723,9 +1062,24 @@ func completeMultiplayerRound(ctx context.Context, tx *gorm.DB, gameID, roundID 
 		return err
 	}
 	out.NextRoundNumber = &next.RoundNumber
+	out.NextRoundID = &next.ID
 	return nil
 }
 
 func lockingClause() clause.Locking {
 	return clause.Locking{Strength: "UPDATE"}
+}
+
+func toGuessResult(g Guess) GuessResult {
+	return GuessResult{
+		ID:             g.ID,
+		Latitude:       g.Latitude,
+		Longitude:      g.Longitude,
+		DistanceMeters: g.DistanceMeters,
+		AccuracyScore:  g.AccuracyScore,
+		SpeedBonus:     g.SpeedBonus,
+		Score:          g.Score,
+		SubmittedAt:    g.SubmittedAt,
+		TimedOut:       g.TimedOut,
+	}
 }

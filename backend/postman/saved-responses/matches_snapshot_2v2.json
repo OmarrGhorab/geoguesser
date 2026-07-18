@@ -1,0 +1,86 @@
+{
+  "path": "/api/v1/matches/{matchId}",
+  "method": "GET",
+  "status": 200,
+  "body": {
+    "match": {
+      "id": "00000000-0000-4000-8000-0000000000c2",
+      "game_id": "00000000-0000-4000-8000-0000000000d2",
+      "playlist": "casual",
+      "format": "duo",
+      "status": "active",
+      "result": null,
+      "team_size": 2,
+      "viewer": {
+        "user_id": "00000000-0000-4000-8000-000000000001",
+        "game_player_id": "00000000-0000-4000-8000-0000000000e1",
+        "team_slot": 1,
+        "submitted": true,
+        "can_chat": true,
+        "allowed_spectate_player_ids": [
+          "00000000-0000-4000-8000-0000000000e2"
+        ]
+      },
+      "teams": [
+        {
+          "slot": 1,
+          "score": 8200,
+          "players": [
+            {
+              "game_player_id": "00000000-0000-4000-8000-0000000000e1",
+              "user_id": "00000000-0000-4000-8000-000000000001",
+              "display_name": "Raven",
+              "status": "active",
+              "submitted": true,
+              "total_score": 4100
+            },
+            {
+              "game_player_id": "00000000-0000-4000-8000-0000000000e2",
+              "user_id": "00000000-0000-4000-8000-000000000002",
+              "display_name": "Falcon",
+              "status": "active",
+              "submitted": false,
+              "total_score": 4100
+            }
+          ]
+        },
+        {
+          "slot": 2,
+          "score": 7900,
+          "players": [
+            {
+              "game_player_id": "00000000-0000-4000-8000-0000000000e3",
+              "user_id": "00000000-0000-4000-8000-000000000003",
+              "display_name": "Hawk",
+              "status": "active",
+              "submitted": true
+            },
+            {
+              "game_player_id": "00000000-0000-4000-8000-0000000000e4",
+              "user_id": "00000000-0000-4000-8000-000000000004",
+              "display_name": "Owl",
+              "status": "active",
+              "submitted": false
+            }
+          ]
+        }
+      ],
+      "round": {
+        "id": "00000000-0000-4000-8000-0000000000f2",
+        "number": 2,
+        "status": "active",
+        "starts_at": "2026-07-18T10:02:00Z",
+        "ends_at": null,
+        "media": {
+          "type": "panorama",
+          "panorama_id": "safe-provider-ref"
+        },
+        "submitted_count": 2,
+        "eligible_count": 4
+      },
+      "team_markers": [],
+      "realtime_version": 42,
+      "formed_at": "2026-07-18T10:00:00Z"
+    }
+  }
+}

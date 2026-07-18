@@ -23,7 +23,7 @@ func DistanceMeters(lat1, lng1, lat2, lng2 float64) int {
 	return int(math.Round(earthRadiusMeters * c))
 }
 
-// ScoreV1 returns the version 1 score for a distance in meters.
+// ScoreV1 returns the version 1 geography accuracy score for a distance in meters.
 func ScoreV1(distanceMeters int) int {
 	if distanceMeters <= fullScoreThresholdMeters {
 		return maxRoundScore
@@ -38,3 +38,6 @@ func ScoreV1(distanceMeters int) int {
 	}
 	return score
 }
+
+// MaxAccuracyScore is the maximum geography score for a single round.
+func MaxAccuracyScore() int { return maxRoundScore }

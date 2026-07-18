@@ -76,6 +76,26 @@ func (s *memoryStore) FindMatchByFormationKey(ctx context.Context, formationKey 
 }
 
 func (s *memoryStore) CreateFormationBundle(ctx context.Context, input matchmaking.FormationInput) (*matchmaking.FormationResult, error) {
+	timer := input.TimerSeconds
+	return s.CreateTeamFormationBundle(ctx, matchmaking.TeamFormationInput{
+		FormationKey: input.FormationKey,
+		Mode:         input.Mode,
+		Playlist:     matchmaking.PlaylistRanked,
+		Format:       matchmaking.FormatSolo,
+		TeamSize:     1,
+		MapID:        input.MapID,
+		RoundCount:   input.RoundCount,
+		TimerSeconds: &timer,
+		StartDelay:   input.StartDelay,
+		TeamOne:      []uuid.UUID{input.UserIDs[0]},
+		TeamTwo:      []uuid.UUID{input.UserIDs[1]},
+		SeasonID:     input.SeasonID,
+		LocationIDs:  input.LocationIDs,
+		MatchedAt:    input.MatchedAt,
+	})
+}
+
+func (s *memoryStore) CreateTeamFormationBundle(ctx context.Context, input matchmaking.TeamFormationInput) (*matchmaking.FormationResult, error) {
 	s.formationCalls++
 	if s.postgresDown {
 		return nil, matchmaking.ErrUnavailable
@@ -87,17 +107,27 @@ func (s *memoryStore) CreateFormationBundle(ctx context.Context, input matchmaki
 		return &matchmaking.FormationResult{Match: *existing}, nil
 	}
 	started := input.MatchedAt
+	playlist, format, teamSize := input.Playlist, input.Format, input.TeamSize
+	if playlist == "" || format == "" {
+		if parts, err := matchmaking.ParseMode(input.Mode); err == nil {
+			playlist, format, teamSize = parts.Playlist, parts.Format, parts.TeamSize
+		}
+	}
 	match := matchmaking.Match{
-		ID:           uuid.New(),
-		FormationKey: input.FormationKey,
-		GameID:       uuid.New(),
-		Mode:         input.Mode,
-		Status:       matchmaking.MatchStatusActive,
-		MatchedAt:    input.MatchedAt,
-		StartedAt:    &started,
+		ID:             uuid.New(),
+		FormationKey:   input.FormationKey,
+		GameID:         uuid.New(),
+		Mode:           input.Mode,
+		Playlist:       playlist,
+		Format:         format,
+		TeamSize:       teamSize,
+		Status:         matchmaking.MatchStatusActive,
+		MatchedAt:      input.MatchedAt,
+		StartedAt:      &started,
+		LastActivityAt: input.MatchedAt,
 	}
 	s.matchesByKey[input.FormationKey] = &match
-	for _, uid := range input.UserIDs {
+	for _, uid := range append(append([]uuid.UUID{}, input.TeamOne...), input.TeamTwo...) {
 		s.assignments[uid] = &matchmaking.ActiveAssignment{
 			MatchID:   match.ID,
 			GameID:    match.GameID,
@@ -941,6 +971,8 @@ func (*commandMetrics) ObserveRecovery(string)                 {}
 func (*commandMetrics) ObserveStaleEntry()                     {}
 func (*commandMetrics) ObserveDependencyFailure(string)        {}
 func (*commandMetrics) ObserveRateLimited(string)              {}
+func (*commandMetrics) ObserveRankedFormation(string, string, string, time.Duration) {
+}
 
 func TestCommandMetricsRecordExactlyOneOutcome(t *testing.T) {
 	metrics := &commandMetrics{}

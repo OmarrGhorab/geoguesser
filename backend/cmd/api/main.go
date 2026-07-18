@@ -16,6 +16,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/app"
 	"github.com/raven/geoguess/backend/internal/auth"
 	"github.com/raven/geoguess/backend/internal/challenges"
+	"github.com/raven/geoguess/backend/internal/competitive"
 	"github.com/raven/geoguess/backend/internal/config"
 	"github.com/raven/geoguess/backend/internal/friends"
 	"github.com/raven/geoguess/backend/internal/games"
@@ -25,6 +26,8 @@ import (
 	"github.com/raven/geoguess/backend/internal/locations"
 	"github.com/raven/geoguess/backend/internal/maps"
 	"github.com/raven/geoguess/backend/internal/matchmaking"
+	"github.com/raven/geoguess/backend/internal/matchplay"
+	"github.com/raven/geoguess/backend/internal/parties"
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/email"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
@@ -90,6 +93,16 @@ func main() {
 	leaderboardsRepo := leaderboards.NewRepository(db)
 	roomsRepo := rooms.NewRepository(db)
 	roomCoordinator := redisplatform.NewRoomCoordinator(redisClient)
+	friendsRepo := friends.NewRepository(db)
+
+	// Shared Redis infrastructure for matchmaking v2, parties, and matchplay.
+	v1Coord := redisplatform.NewMatchmakingCoordinator(redisClient)
+	v2Coord := redisplatform.NewMatchmakingV2Coordinator(redisClient)
+	matchmakingQueue := matchmaking.NewRedisQueueAdapterWithV2(v1Coord, v2Coord)
+	cmdIdem := redisplatform.NewCommandIdempotencyStore(redisClient)
+	realtimeStore := redisplatform.NewRealtimeStore(redisClient)
+	hub := realtime.NewHubWithQueueSize(cfg.RealtimeOutboundQueueSize)
+	var channelPub realtime.ChannelPublisher
 
 	hasher := auth.NewBCryptHasher()
 	tokenManager, err := auth.NewTokenManager(cfg.AccessTokenSecret, cfg.AccessTokenTTL)
@@ -149,7 +162,12 @@ func main() {
 	}
 	leaderboardsService := leaderboards.NewService(leaderboardsRepo, leaderboards.NewRedisPageCache(redisClient), clock.NewSystem(), logger, cfg.ChallengeResetHourUTC, challengesService).
 		WithMetrics(leaderboardsMetrics)
-	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), obs.Metrics, leaderboardsService)
+	gamesMetrics, err := games.NewPrometheusMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register games metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), gamesMetrics, leaderboardsService)
 	// Ranked lifecycle adapter is wired after matchmakingRepo is constructed below.
 
 	var storageProvider storage.Provider
@@ -168,7 +186,12 @@ func main() {
 		}
 	}
 
-	uploadsService := uploads.NewService(uploadsRepo, storageProvider, cfg)
+	uploadsMetrics, err := uploads.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register uploads metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	uploadsService := uploads.NewService(uploadsRepo, storageProvider, cfg).WithMetrics(uploadsMetrics)
 
 	authHandler := auth.NewHandler(authService, cfg, logger)
 	profilesHandler := profiles.NewHandler(profilesService, logger)
@@ -180,7 +203,55 @@ func main() {
 	leaderboardsHandler := leaderboards.NewHandler(leaderboardsService, logger).WithMetrics(leaderboardsMetrics)
 	roomsService := rooms.NewServiceWithGames(roomsRepo, roomCoordinator, gamesService, logger, nil)
 	roomsHandler := rooms.NewHandler(roomsService, logger)
-	realtimeHandler := realtime.NewHandler(realtime.NewHub(), roomsService, logger, nil)
+
+	// Realtime metrics + multi-instance Pub/Sub fanout for party/match channels.
+	realtimeMetrics, err := realtime.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register realtime metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	var fanoutPub *realtime.FanoutPublisher
+	realtimePubSub := redisplatform.NewRealtimePubSub(redisClient, func(kind, id string, payload []byte) {
+		if fanoutPub != nil {
+			fanoutPub.HandlePubSubMessage(kind, id, payload)
+		}
+	}).WithLogger(logger)
+	fanoutPub = realtime.NewFanoutPublisher(hub, realtimePubSub, logger)
+	channelPub = fanoutPub
+
+	// Share one hub between room realtime and matchplay event fanout.
+	realtimeHandler := realtime.NewHandler(hub, roomsService, logger, realtimeMetrics)
+
+	friendsMetrics, err := friends.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register friends metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	friendsService := friends.NewServiceWithLogger(friendsRepo, friendsMetrics, logger)
+	friendsHandler := friends.NewHandler(friendsService, logger)
+
+	// Parties depend on friends policy; construct after friendsRepo.
+	partiesMetrics, err := parties.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register parties metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	partiesRepo := parties.NewRepository(db)
+	partyPolicy := friends.NewPartyPolicy(friendsRepo)
+	// Enable party mutations when either casual or ranked team modes are staged on.
+	partyFeatureEnabled := cfg.CasualMatchmakingEnabled || cfg.RankedTeamModesEnabled
+	partiesService := parties.NewServiceWithOptions(
+		partiesRepo,
+		partyPolicy,
+		partiesMetrics,
+		app.NewPartyIdempotencyAdapter(cmdIdem),
+		parties.Config{
+			CasualEnabled: partyFeatureEnabled,
+			InviteTTL:     cfg.PartyInviteTTL,
+		},
+		logger,
+	).WithEvents(parties.NewEventPublisher(channelPub, logger))
+	partiesHandler := parties.NewHandler(partiesService, logger)
 
 	matchmakingMetrics, err := matchmaking.NewMetrics(obs.Metrics.Registry())
 	if err != nil {
@@ -188,7 +259,6 @@ func main() {
 		os.Exit(1)
 	}
 	matchmakingRepo := matchmaking.NewRepository(db)
-	matchmakingQueue := matchmaking.NewRedisQueueAdapter(redisplatform.NewMatchmakingCoordinator(redisClient))
 	var defaultMapID uuid.UUID
 	if cfg.MatchmakingDefaultMapID != "" {
 		parsed, parseErr := uuid.Parse(cfg.MatchmakingDefaultMapID)
@@ -198,28 +268,160 @@ func main() {
 		}
 		defaultMapID = parsed
 	}
-	rankedLifecycle := matchmaking.NewRankedLifecycleAdapter(matchmakingRepo)
-	gamesService.WithRankedLifecycle(rankedLifecycle)
-	matchmakingService := matchmaking.NewService(matchmakingRepo, matchmakingQueue, matchmaking.Config{
-		DefaultMapID:       defaultMapID,
-		QueueLease:         cfg.MatchmakingQueueLease,
-		ClaimTTL:           cfg.MatchmakingClaimTTL,
-		StartDelay:         cfg.MatchmakingStartDelay,
-		RoundCount:         cfg.MatchmakingRoundCount,
-		TimerSeconds:       cfg.MatchmakingTimerSeconds,
-		CandidateScanLimit: cfg.MatchmakingCandidateScanLimit,
-	}, logger, matchmakingMetrics).
-		WithLocations(matchmaking.NewMapsLocationSelector(mapsService))
-	matchmakingHandler := matchmaking.NewHandlerWithMetrics(matchmakingService, logger, matchmakingMetrics)
-
-	friendsMetrics, err := friends.NewMetrics(obs.Metrics.Registry())
+	// Competitive standings + Elo finalization (US2). Progression is applied by the
+	// background retry worker so match completion stays durable even if rating writes fail.
+	competitiveMetrics, err := competitive.NewMetrics(obs.Metrics.Registry())
 	if err != nil {
-		logger.Error("failed to register friends metrics", slog.Any("error", err))
+		logger.Error("failed to register competitive metrics", slog.Any("error", err))
 		os.Exit(1)
 	}
-	friendsRepo := friends.NewRepository(db)
-	friendsService := friends.NewServiceWithLogger(friendsRepo, friendsMetrics, logger)
-	friendsHandler := friends.NewHandler(friendsService, logger)
+	competitiveRepo := competitive.NewRepository(db)
+	competitiveService := competitive.NewService(competitiveRepo, competitive.Config{
+		EloK:             cfg.CompetitiveEloK,
+		AbandonPenalty:   cfg.CompetitiveAbandonPenalty,
+		InitialRating:    cfg.CompetitiveInitialRating,
+		WorkerBatchSize:  50,
+		SeasonDuration:   time.Duration(cfg.CompetitiveSeasonDurationDays) * 24 * time.Hour,
+		ResetFactorBPS:   cfg.CompetitiveResetFactorBPS,
+		Top500MinMatches: cfg.CompetitiveTop500MinMatches,
+	}, logger).
+		WithMetrics(competitiveMetrics).
+		WithCache(competitive.NewRedisPageCache(redisClient)).
+		WithRolloverConfig(competitive.RolloverConfig{
+			Duration:         time.Duration(cfg.CompetitiveSeasonDurationDays) * 24 * time.Hour,
+			InitialRating:    cfg.CompetitiveInitialRating,
+			ResetFactorBPS:   cfg.CompetitiveResetFactorBPS,
+			Top500MinMatches: cfg.CompetitiveTop500MinMatches,
+			EloK:             cfg.CompetitiveEloK,
+		})
+	competitiveHandler := competitive.NewHandler(competitiveService, logger).
+		WithFeatureEnabled(cfg.RankedTeamModesEnabled)
+
+	matchLifecycle := matchmaking.NewMatchLifecycleAdapter(matchmakingRepo).
+		WithLogger(logger).
+		WithMetrics(matchmakingMetrics)
+	gamesService.WithRankedLifecycle(matchLifecycle)
+	gamesService.WithMatchLifecycle(matchLifecycle)
+
+	matchmakingEvents := matchmaking.NewEventPublisherAdapter(channelPub, logger)
+	matchmakingService := matchmaking.NewService(matchmakingRepo, matchmakingQueue, matchmaking.Config{
+		DefaultMapID:             defaultMapID,
+		QueueLease:               cfg.MatchmakingQueueLease,
+		ClaimTTL:                 cfg.MatchmakingClaimTTL,
+		StartDelay:               cfg.MatchmakingStartDelay,
+		RoundCount:               cfg.MatchmakingRoundCount,
+		TimerSeconds:             cfg.MatchmakingTimerSeconds,
+		CandidateScanLimit:       cfg.MatchmakingCandidateScanLimit,
+		CasualMatchmakingEnabled: cfg.CasualMatchmakingEnabled,
+		RankedTeamModesEnabled:   cfg.RankedTeamModesEnabled,
+	}, logger, matchmakingMetrics).
+		WithLocations(matchmaking.NewMapsLocationSelector(mapsService)).
+		WithTickets(matchmakingQueue).
+		WithParties(partiesService).
+		WithCompetitive(competitiveService).
+		WithNotifier(matchmakingEvents).
+		WithEvents(matchmakingEvents)
+	matchmakingHandler := matchmaking.NewHandlerWithMetrics(matchmakingService, logger, matchmakingMetrics)
+
+	matchplayMetrics, err := matchplay.NewMetrics(obs.Metrics.Registry())
+	if err != nil {
+		logger.Error("failed to register matchplay metrics", slog.Any("error", err))
+		os.Exit(1)
+	}
+	matchplayRepo := matchplay.NewRepository(db)
+	matchLiveStore := redisplatform.NewMatchLiveStore(redisClient)
+	eventPublisher := matchplay.NewPublisher(channelPub, logger).WithMetrics(matchplayMetrics)
+	gamesService.WithMultiplayerEvents(app.NewGameOutcomeEventAdapter(matchplayRepo, eventPublisher, realtimeStore))
+	matchplayService := matchplay.NewService(matchplayRepo, logger, matchplayMetrics, matchplay.ServiceConfig{
+		ReconnectGrace:   cfg.MatchReconnectGrace,
+		CasualInactivity: cfg.CasualInactivity,
+	}).
+		WithPartyRestorer(partiesService).
+		WithVersionStore(app.NewMatchVersionAdapter(realtimeStore)).
+		WithPresence(app.NewMatchPresenceAdapter(realtimeStore)).
+		WithEvents(eventPublisher).
+		WithChatStore(matchplayRepo).
+		WithChatConfig(matchplay.ChatServiceConfig{
+			TeamChatImagesEnabled: cfg.TeamChatImagesEnabled,
+			RetentionDays:         cfg.TeamChatRetentionDays,
+			ReportRetentionDays:   cfg.TeamChatReportRetentionDays,
+		}).
+		WithAttachmentSigner(app.NewAttachmentSignerAdapter(storageProvider))
+	// Team-chat upload authorization against match participants.
+	uploadsService.WithMatchAccess(app.NewMatchUploadAccessAdapter(matchplayService))
+	matchplayHandler := matchplay.NewHandlerWithMetrics(matchplayService, logger, matchplayMetrics)
+
+	// Realtime ticket + party/match WebSocket transport (feature-gated with team modes).
+	realtimeFeatureEnabled := cfg.CasualMatchmakingEnabled || cfg.RankedTeamModesEnabled
+	ticketStore := app.NewRealtimeTicketStore(realtimeStore)
+	channelServices := app.RealtimeChannelServices{
+		Matchplay: matchplayService,
+		Parties:   partiesService,
+		Live:      matchLiveStore,
+		Metrics:   matchplayMetrics,
+	}
+	ticketHandler := realtime.NewTicketHandler(
+		ticketStore,
+		channelServices,
+		realtime.TicketHandlerConfig{
+			TTL:            cfg.RealtimeTicketTTL,
+			FeatureEnabled: realtimeFeatureEnabled,
+		},
+		logger,
+		realtimeMetrics,
+	)
+	liveCommands := app.NewLiveCommandAdapter(matchLiveStore, matchplayMetrics).WithMatchplay(matchplayService)
+	matchWSHandler := realtime.NewMatchHandler(
+		hub,
+		ticketStore,
+		channelServices,
+		channelServices,
+		liveCommands,
+		fanoutPub,
+		realtime.MatchHandlerConfig{
+			AllowedOrigins: cfg.RealtimeAllowedOrigins,
+			QueueSize:      cfg.RealtimeOutboundQueueSize,
+		},
+		logger,
+		realtimeMetrics,
+	).WithConnectionLifecycle(app.NewRealtimeConnectionLifecycle(realtimeStore, matchplayService, cfg.MatchReconnectGrace))
+	realtimeHandler = realtimeHandler.WithTicket(ticketHandler).WithMatch(matchWSHandler)
+
+	// Background workers: match lifecycle sweeps, expired claim recovery, rating finalization, chat cleanup.
+	lifecycleWorker := matchplay.NewLifecycleRunner(matchplayService, matchplay.LifecycleWorkerConfig{
+		Interval: cfg.MatchSweepInterval,
+	}, logger)
+	deadlineWorker := games.NewRankedDeadlineRunner(gamesService, games.RankedDeadlineWorkerConfig{
+		Interval:  cfg.MatchSweepInterval,
+		BatchSize: 50,
+	}, logger)
+	claimWorker := matchmaking.NewClaimSweepRunner(matchmakingService, matchmaking.ClaimSweepConfig{
+		Interval: cfg.MatchClaimSweepInterval,
+	}, logger)
+	progressionWorker := competitive.NewProgressionRetryRunner(competitiveService, competitive.ProgressionWorkerConfig{
+		Interval: cfg.MatchSweepInterval,
+	}, logger)
+	rolloverObs := &competitive.RolloverWorkerObservations{}
+	rolloverWorker := competitive.NewSeasonRolloverRunner(competitiveService, competitive.RolloverWorkerConfig{
+		Interval: time.Minute,
+	}, logger, rolloverObs)
+	chatCleaner := matchplay.NewCleaner(
+		matchplayRepo,
+		app.NewObjectDeleterAdapter(storageProvider),
+		logger,
+		matchplayMetrics,
+		matchplay.CleanupConfig{},
+	)
+	cleanupWorker := matchplay.NewCleanupRunner(chatCleaner, matchplay.CleanupWorkerConfig{
+		Interval: cfg.TeamChatCleanupInterval,
+	}, logger)
+	lifecycleWorker.Start(ctx)
+	deadlineWorker.Start(ctx)
+	claimWorker.Start(ctx)
+	progressionWorker.Start(ctx)
+	rolloverWorker.Start(ctx)
+	cleanupWorker.Start(ctx)
+
 	homeMetrics, err := home.NewMetrics(obs.Metrics.Registry())
 	if err != nil {
 		logger.Error("failed to register authenticated home metrics", slog.Any("error", err))
@@ -228,7 +430,7 @@ func main() {
 	homeService := home.NewService(profilesRepo, challengesService, mapsService, logger, homeMetrics)
 	homeHandler := home.NewHandler(homeService, logger, homeMetrics)
 
-	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler, friendsHandler, homeHandler)
+	server := app.NewServer(cfg, logger, obs, redisplatform.NewRateLimiter(redisClient), healthHandler, authHandler, profilesHandler, uploadsHandler, mapsHandler, locationsHandler, gamesHandler, challengesHandler, leaderboardsHandler, roomsHandler, realtimeHandler, matchmakingHandler, friendsHandler, homeHandler, partiesHandler, matchplayHandler, competitiveHandler)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -248,6 +450,15 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// Stop background workers before/around HTTP drain so ticks do not race shutdown.
+	lifecycleWorker.Stop()
+	deadlineWorker.Stop()
+	claimWorker.Stop()
+	progressionWorker.Stop()
+	rolloverWorker.Stop()
+	cleanupWorker.Stop()
+	_ = realtimePubSub.Shutdown(shutdownCtx)
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Error("api server shutdown failed", slog.Any("error", err))

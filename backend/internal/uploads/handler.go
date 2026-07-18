@@ -100,15 +100,48 @@ func (h *Handler) mapError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, ErrInvalidSize),
 		errors.Is(err, ErrFileTooLarge),
 		errors.Is(err, ErrInvalidContentType),
-		errors.Is(err, ErrObjectMetadataMismatch):
+		errors.Is(err, ErrObjectMetadataMismatch),
+		errors.Is(err, ErrInvalidPurpose),
+		errors.Is(err, ErrContextIDRequired),
+		errors.Is(err, ErrInvalidContextID):
 		apphttp.Error(w, r, h.logger, apphttp.ErrValidationFailed.WithCause(err))
+	case errors.Is(err, ErrInvalidImage),
+		errors.Is(err, ErrImageTooManyPixels),
+		errors.Is(err, ErrSanitizedTooLarge):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(
+			http.StatusUnprocessableEntity,
+			"invalid_image",
+			"That image is not valid.",
+		).WithCause(err))
+	case errors.Is(err, ErrUnsafeImage):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(
+			http.StatusUnprocessableEntity,
+			"unsafe_image",
+			"That image could not be accepted.",
+		).WithCause(err))
+	case errors.Is(err, ErrAttachmentNotReady):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(
+			http.StatusUnprocessableEntity,
+			"attachment_not_ready",
+			"That attachment is not ready yet.",
+		).WithCause(err))
+	case errors.Is(err, ErrImagesDisabled),
+		errors.Is(err, ErrStorageUnavailable):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(
+			http.StatusServiceUnavailable,
+			"image_service_unavailable",
+			"Image uploads are temporarily unavailable.",
+		).WithCause(err))
 	case errors.Is(err, ErrUploadNotFound),
 		errors.Is(err, ErrUploadExpired),
 		errors.Is(err, ErrUploadAlreadyComplete),
 		errors.Is(err, ErrFileNotFound),
 		errors.Is(err, ErrObjectNotFound):
 		apphttp.Error(w, r, h.logger, apphttp.ErrNotFound.WithCause(err))
-	case errors.Is(err, ErrForbidden):
+	case errors.Is(err, ErrForbidden),
+		errors.Is(err, ErrMatchAccessDenied),
+		errors.Is(err, ErrPurposeContextMismatch):
+		// Privacy-safe: match access denied looks like not found / forbidden without leaking membership.
 		apphttp.Error(w, r, h.logger, apphttp.ErrForbidden.WithCause(err))
 	default:
 		apphttp.Error(w, r, h.logger, err)

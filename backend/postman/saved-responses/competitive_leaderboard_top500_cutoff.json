@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/competitive/leaderboard",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"season\":{\"id\":\"019f511f-0000-7000-8000-000000000001\",\"sequence\":3,\"slug\":\"season-3\",\"name\":\"Season 3\",\"status\":\"active\",\"starts_at\":\"2026-07-18T00:00:00Z\",\"ends_at\":\"2026-10-10T00:00:00Z\",\"reset\":{\"anchor\":800,\"factor_percent\":50},\"top500_min_matches\":25},\"data\":[{\"position\":500,\"player\":{\"user_id\":\"019f511f-aaaa-7aaa-8aaa-aaaaaaaaaaaa\",\"display_name\":\"Cutoff\"},\"rating\":2010,\"wins\":40,\"matches_played\":80,\"standard_rank\":{\"code\":\"geo_master_1\",\"name_key\":\"geoMaster1\",\"division\":1},\"world_legend\":true,\"rank\":{\"code\":\"world_legend\",\"name_key\":\"worldLegend\",\"division\":null}}],\"viewer\":{\"position\":501,\"eligible\":true,\"rating\":2005,\"wins\":39,\"matches_played\":79,\"placements_completed\":5,\"placements_required\":5,\"standard_rank\":{\"code\":\"geo_master_1\",\"name_key\":\"geoMaster1\",\"division\":1},\"world_legend\":false,\"rank\":{\"code\":\"geo_master_1\",\"name_key\":\"geoMaster1\",\"division\":1}},\"page\":{\"limit\":50}}"
+}

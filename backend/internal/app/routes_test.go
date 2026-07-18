@@ -27,6 +27,7 @@ import (
 	"github.com/raven/geoguess/backend/internal/platform/clock"
 	"github.com/raven/geoguess/backend/internal/platform/observability"
 	"github.com/raven/geoguess/backend/internal/profiles"
+	"github.com/raven/geoguess/backend/internal/realtime"
 	"github.com/raven/geoguess/backend/internal/session"
 )
 
@@ -35,6 +36,37 @@ type noopRateLimiter struct{}
 
 func (noopRateLimiter) Allow(context.Context, string, int, time.Duration) (bool, int, error) {
 	return true, 0, nil
+}
+
+type deadlineTicketValidator struct {
+	hadDeadline bool
+}
+
+func (v *deadlineTicketValidator) Consume(ctx context.Context, _ string) (*realtime.TicketClaims, error) {
+	_, v.hadDeadline = ctx.Deadline()
+	return nil, realtime.ErrTicketInvalid
+}
+
+func TestRouterDoesNotApplyHTTPTimeoutToRealtimeTransport(t *testing.T) {
+	cfg := testConfig()
+	cfg.WriteTimeout = time.Millisecond
+	obs, err := observability.New("geoguess-test", cfg.Version)
+	if err != nil {
+		t.Fatalf("observability setup failed: %v", err)
+	}
+	validator := &deadlineTicketValidator{}
+	matchTransport := realtime.NewMatchHandler(nil, validator, nil, nil, nil, nil, realtime.MatchHandlerConfig{}, obs.Logger, nil)
+	realtimeHandler := realtime.NewHandler(nil, nil, obs.Logger, nil).WithMatch(matchTransport)
+	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, realtimeHandler, nil, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/realtime/matches/"+uuid.NewString(), nil)
+	req.Header.Set("Sec-WebSocket-Protocol", realtime.SubprotocolV1+", "+realtime.TicketSubprotocolPrefix+"opaque")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+	if validator.hadDeadline {
+		t.Fatal("realtime transport inherited the finite HTTP write timeout")
+	}
 }
 
 func TestRouterMountsHealthEndpoints(t *testing.T) {
@@ -46,7 +78,7 @@ func TestRouterMountsHealthEndpoints(t *testing.T) {
 	}
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready", "/api/v1/metrics"}
 	for _, path := range endpoints {
@@ -77,7 +109,7 @@ func TestRouterMountsDocumentedAuthAndUserRoutes(t *testing.T) {
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(nil, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader("{}"))
@@ -124,7 +156,7 @@ func TestRouterPublicUserRoutesUseProfilesContract(t *testing.T) {
 
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, nil), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID.String()+"/stats", nil)
@@ -226,7 +258,7 @@ func TestRouterMountsDocumentedGameRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	gamesHandler := games.NewHandler(games.NewService(nil, nil, clock.NewSystem(), obs.Logger), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, gamesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -260,7 +292,7 @@ func TestRouterMountsDocumentedChallengeRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	challengesHandler := challenges.NewHandler(stubChallengeService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, challengesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []struct {
 		method string
@@ -298,7 +330,7 @@ func TestRouterMountsDocumentedLeaderboardRoutes(t *testing.T) {
 
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	endpoints := []string{
 		"/api/v1/leaderboards/global",
@@ -334,6 +366,15 @@ func testConfig() config.Config {
 		RoomReconnectGrace:    30 * time.Second,
 		RoomHeartbeatInterval: 10 * time.Second,
 		RoomPresenceTTL:       30 * time.Second,
+		// Casual / Ranked team modes — safe disabled defaults (matches validBaseConfig).
+		CasualMatchmakingEnabled:  false,
+		RankedTeamModesEnabled:    false,
+		PartyInviteTTL:            900 * time.Second,
+		MatchReconnectGrace:       90 * time.Second,
+		CasualInactivity:          600 * time.Second,
+		MatchSweepInterval:        5 * time.Second,
+		MatchClaimSweepInterval:   5 * time.Second,
+		RealtimeOutboundQueueSize: 128,
 	}
 }
 
@@ -490,7 +531,7 @@ func newProfileRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	profilesHandler := profiles.NewHandler(profiles.NewService(store, profileMetrics), obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, profilesHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	return router, csrfManager, accessToken
 }
@@ -513,7 +554,7 @@ func TestRouterMatchmakingRequiresRegisteredAuth(t *testing.T) {
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 
 	// Nil matchmaking handler means routes are not mounted.
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/matchmaking/status", nil)
 	router.ServeHTTP(w, req)
@@ -565,7 +606,7 @@ func newMatchmakingRouter(t *testing.T, cfg config.Config, limiter appmiddleware
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	mmHandler := matchmaking.NewHandler(svc, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, mmHandler, nil, nil, nil, nil, nil)
 	return router, csrfManager, accessToken, userID
 }
 
@@ -722,7 +763,7 @@ func newFriendsRouter(t *testing.T, cfg config.Config, limiter appmiddleware.Rat
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	friendsHandler := friends.NewHandler(friends.NewService(friendsRouteStore{}, nil), obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, friendsHandler, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, friendsHandler, nil, nil, nil, nil)
 	return router, csrfManager, accessToken
 }
 
@@ -861,7 +902,7 @@ func TestRouterFriendsLeaderboardRequiresAuth(t *testing.T) {
 	}
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	leaderboardsHandler := leaderboards.NewHandler(stubLeaderboardService{}, obs.Logger)
-	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil, nil)
+	router := app.NewRouter(cfg, obs.Logger, obs, noopRateLimiter{}, healthHandler, nil, nil, nil, nil, nil, nil, nil, leaderboardsHandler, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/leaderboards/friends", nil)
@@ -902,7 +943,7 @@ func newHomeRouter(t *testing.T, cfg config.Config, limiter appmiddleware.RateLi
 	authHandler := auth.NewHandler(authService, cfg, obs.Logger)
 	healthHandler := health.NewHandlerWithPingers(cfg.Version, obs.Logger, nil)
 	homeHandler := home.NewHandler(homeRouteService{userID: userID}, obs.Logger, nil)
-	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, homeHandler)
+	router := app.NewRouter(cfg, obs.Logger, obs, limiter, healthHandler, authHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, homeHandler, nil, nil, nil)
 	return router, accessToken
 }
 

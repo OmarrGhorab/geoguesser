@@ -1,0 +1,6 @@
+{
+  "path": "/api/v1/competitive/profile",
+  "method": "GET",
+  "status": 200,
+  "body": "{\"season\":{\"id\":\"019f511f-0000-7000-8000-000000000001\",\"sequence\":3,\"slug\":\"season-3\",\"name\":\"Season 3\",\"status\":\"active\",\"starts_at\":\"2026-07-18T00:00:00Z\",\"ends_at\":\"2026-10-10T00:00:00Z\",\"reset\":{\"anchor\":800,\"factor_percent\":50},\"top500_min_matches\":25},\"profile\":{\"rating\":null,\"placements_completed\":2,\"placements_required\":5,\"rank\":null,\"standard_rank\":null,\"division_progress\":null,\"matches_played\":2,\"wins\":1,\"losses\":1,\"draws\":0,\"abandons\":0,\"peak_rating\":null,\"top500_position\":null,\"placement\":{\"completed\":2,\"required\":5}}}"
+}

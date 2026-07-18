@@ -73,3 +73,43 @@ func TestScoringVersionConstant(t *testing.T) {
 		t.Fatalf("ScoringVersionV1 = %d, want 1", ScoringVersionV1)
 	}
 }
+
+func TestSpeedBonusV1(t *testing.T) {
+	t.Parallel()
+
+	// Full remaining time: floor(4000 * 0.05 * 1) = 200.
+	if got := SpeedBonusV1(4000, 60_000, 60_000); got != 200 {
+		t.Fatalf("full remaining SpeedBonusV1 = %d, want 200", got)
+	}
+	// Half remaining: floor(4000 * 0.05 * 0.5) = 100.
+	if got := SpeedBonusV1(4000, 30_000, 60_000); got != 100 {
+		t.Fatalf("half remaining SpeedBonusV1 = %d, want 100", got)
+	}
+	// Cap at 250: floor(5000 * 0.05) = 250.
+	if got := SpeedBonusV1(5000, 60_000, 60_000); got != 250 {
+		t.Fatalf("cap SpeedBonusV1 = %d, want 250", got)
+	}
+	if got := SpeedBonusV1(5000, 0, 60_000); got != 0 {
+		t.Fatalf("zero remaining = %d", got)
+	}
+	if got := SpeedBonusV1(0, 60_000, 60_000); got != 0 {
+		t.Fatalf("zero accuracy = %d", got)
+	}
+}
+
+func TestComposeGuessScoresCasualZeroBonus(t *testing.T) {
+	t.Parallel()
+
+	acc, bonus, total := ComposeGuessScores(GameModeCasualDuo, 4000, 60_000, 60_000)
+	if acc != 4000 || bonus != 0 || total != 4000 {
+		t.Fatalf("casual compose = %d/%d/%d", acc, bonus, total)
+	}
+	acc, bonus, total = ComposeGuessScores(GameModeRankedSolo, 4000, 60_000, 60_000)
+	if acc != 4000 || bonus != 200 || total != 4200 {
+		t.Fatalf("ranked compose = %d/%d/%d", acc, bonus, total)
+	}
+	acc, bonus, total = ComposeGuessScores(GameModePrivateRoom, 4000, 60_000, 60_000)
+	if bonus != 0 || total != acc {
+		t.Fatalf("private room must not grant speed bonus: %d/%d/%d", acc, bonus, total)
+	}
+}

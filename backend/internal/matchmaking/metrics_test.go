@@ -18,6 +18,7 @@ func TestNewMetricsRegisters(t *testing.T) {
 	m.ObserveCommand("join", "success", 5*time.Millisecond)
 	m.ObserveStatus(matchmaking.PublicStatusSearching)
 	m.ObserveFormation("matched", 10*time.Millisecond)
+	m.ObserveRankedFormation(matchmaking.PlaylistRanked, matchmaking.FormatSolo, "formed", 10*time.Millisecond)
 	m.ObserveRecovery("finalized")
 	m.ObserveStaleEntry()
 	m.ObserveDependencyFailure("redis")
@@ -37,6 +38,7 @@ func TestNoopMetricsSafe(t *testing.T) {
 	m.ObserveCommand("join", "success", time.Millisecond)
 	m.ObserveStatus(matchmaking.PublicStatusNotQueued)
 	m.ObserveFormation("none", 0)
+	m.ObserveRankedFormation(matchmaking.PlaylistRanked, matchmaking.FormatDuo, "formed", 0)
 	m.ObserveRecovery("none")
 	m.ObserveStaleEntry()
 	m.ObserveDependencyFailure("redis")
@@ -104,7 +106,7 @@ func TestMetricsBoundedLabelsOnly(t *testing.T) {
 				name := label.GetName()
 				value := label.GetValue()
 				switch name {
-				case "command", "outcome", "status", "dependency", "route":
+				case "command", "outcome", "status", "dependency", "route", "playlist", "format":
 					if value == "" {
 						t.Fatalf("empty label value for %s", name)
 					}

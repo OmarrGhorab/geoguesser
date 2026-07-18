@@ -47,7 +47,7 @@ func (Round) TableName() string {
 	return "rounds"
 }
 
-// GamePlayer is the solo participant snapshot.
+// GamePlayer is a participant snapshot (solo or multiplayer/team).
 type GamePlayer struct {
 	ID                uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	GameID            uuid.UUID  `gorm:"type:uuid;not null"`
@@ -56,9 +56,11 @@ type GamePlayer struct {
 	DisplayName       string     `gorm:"type:text;not null"`
 	Role              string     `gorm:"type:text;not null;default:'player'"`
 	Status            string     `gorm:"type:text;not null;default:'active'"`
-	TotalScore        int        `gorm:"type:int;not null;default:0"`
-	JoinedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
-	LeftAt            *time.Time `gorm:"type:timestamptz"`
+	// TeamSlot is 1 or 2 for matchmade Casual/Ranked teams; null for solo/daily/private_room.
+	TeamSlot   *int       `gorm:"type:smallint"`
+	TotalScore int        `gorm:"type:int;not null;default:0"`
+	JoinedAt   time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+	LeftAt     *time.Time `gorm:"type:timestamptz"`
 }
 
 // TableName returns the database table name.
@@ -74,6 +76,10 @@ type Guess struct {
 	Latitude       float64   `gorm:"type:numeric(9,6);not null"`
 	Longitude      float64   `gorm:"type:numeric(9,6);not null"`
 	DistanceMeters int       `gorm:"type:int;not null"`
+	// AccuracyScore is the geography score (0–5000). Score must equal AccuracyScore + SpeedBonus.
+	AccuracyScore int `gorm:"type:int;not null"`
+	// SpeedBonus is ranked-only (0–250); always 0 for casual/solo/daily/private_room.
+	SpeedBonus     int       `gorm:"type:int;not null;default:0"`
 	Score          int       `gorm:"type:int;not null"`
 	IdempotencyKey *string   `gorm:"type:text"`
 	TimedOut       bool      `gorm:"type:boolean;not null;default:false"`

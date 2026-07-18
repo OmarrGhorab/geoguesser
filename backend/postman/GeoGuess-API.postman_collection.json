@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "513282ee-ed4e-412a-ad5e-64d77fbe396b",
     "name": "GeoGuess API",
-    "description": "Organized Postman collection for the GeoGuess Go backend (`/api/v1`).\n\n## Setup\n1. Import **GeoGuess-API.postman_collection.json** and **GeoGuess-Local.postman_environment.json**.\n2. Select the **GeoGuess Local** environment.\n3. Run **01 Auth → Get current session (bootstrap cookies)** first.\n4. Ensure `csrfToken` is filled (test script copies the `csrf_token` cookie when possible).\n5. **Register** or **Login** for protected routes (friends, matchmaking, profile mutations).\n\n## Auth model\n- Cookie-based sessions (`access_token`, `refresh_token`, optional `guest_session`)\n- Mutations require header `X-CSRF-Token` matching the `csrf_token` cookie\n- Enable **Postman → Settings → Automatically follow redirects** / cookie jar\n\n## Saved responses\nMany examples were captured live from `http://localhost:8080` on 2026-07-13.\nDomain errors (e.g. daily challenge not seeded → 422) are preserved as real samples.\nRaw capture files also live in `backend/postman/saved-responses/`.\n\nSources: `backend/openapi/openapi.yaml`, `backend/internal/app/routes.go`.",
+    "description": "Organized Postman collection for the GeoGuess Go backend (`/api/v1`).\n\n## Setup\n1. Import **GeoGuess-API.postman_collection.json** and **GeoGuess-Local.postman_environment.json**.\n2. Select the **GeoGuess Local** environment.\n3. Run **01 Auth → Get current session (bootstrap cookies)** first.\n4. Ensure `csrfToken` is filled (test script copies the `csrf_token` cookie when possible).\n5. **Register** or **Login** for protected routes (friends, matchmaking, profile mutations).\n\n## Auth model\n- Cookie-based sessions (`access_token`, `refresh_token`, optional `guest_session`)\n- Mutations require header `X-CSRF-Token` matching the `csrf_token` cookie\n- Enable **Postman → Settings → Automatically follow redirects** / cookie jar\n\n## Saved responses\nMany examples were captured live from `http://localhost:8080` on 2026-07-13.\nDomain errors (e.g. daily challenge not seeded → 422) are preserved as real samples.\nRaw capture files also live in `backend/postman/saved-responses/`.\n\nCasual/Ranked party and multiplayer match examples live under **14 Parties** and **15 Matches** folders; fixtures in `backend/postman/saved-responses/`.\n\nSources: `backend/openapi/openapi.yaml`, `backend/internal/app/routes.go`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -61,6 +61,22 @@
     {
       "key": "password",
       "value": "correct horse battery staple"
+    },
+    {
+      "key": "partyId",
+      "value": "00000000-0000-4000-8000-0000000000b1"
+    },
+    {
+      "key": "matchId",
+      "value": "00000000-0000-4000-8000-0000000000c2"
+    },
+    {
+      "key": "inviteId",
+      "value": ""
+    },
+    {
+      "key": "partyFormat",
+      "value": "duo"
     }
   ],
   "item": [
@@ -4087,7 +4103,7 @@
     },
     {
       "name": "10 Matchmaking",
-      "description": "",
+      "description": "Casual and ranked queue. Canonical body uses playlist/format/(party_id). Legacy mode ranked_standard remains accepted as ranked solo. Examples include searching and 1v1/2v2/4v4 matched assignments.",
       "item": [
         {
           "name": "Join queue",
@@ -4108,6 +4124,11 @@
                 "key": "X-CSRF-Token",
                 "value": "{{csrfToken}}",
                 "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -4120,10 +4141,10 @@
                 "queue"
               ]
             },
-            "description": "Registered users only. Confirm request body against OpenAPI / matchmaking DTO.",
+            "description": "Registered users only. Prefer playlist+format. Duo/Squad require party_id. Legacy {\"mode\":\"ranked_standard\"} maps to ranked solo.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"map_id\": \"{{mapId}}\"\n}",
+              "raw": "{\n  \"playlist\": \"casual\",\n  \"format\": \"solo\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4133,10 +4154,10 @@
           },
           "response": [
             {
-              "id": "b6aa4bfb-8b7d-4789-8c18-1a6e5d61528e",
-              "name": "400 invalid_json",
-              "status": "400",
-              "code": 400,
+              "id": "bb141a22-1f22-47be-a3a9-7859a95da2ed",
+              "name": "202 Searching casual solo",
+              "status": "Accepted",
+              "code": 202,
               "_postman_previewlanguage": "json",
               "header": [
                 {
@@ -4145,7 +4166,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"error\": {\n    \"code\": \"invalid_json\",\n    \"message\": \"The request body is not valid JSON.\",\n    \"request_id\": \"3064d208d479/AsznE3Z2xq-000052\"\n  }\n}",
+              "body": "{\n  \"status\": \"searching\",\n  \"queue\": {\n    \"ticket_id\": \"tkt_opaque_casual_solo_01\",\n    \"playlist\": \"casual\",\n    \"format\": \"solo\",\n    \"mode\": \"casual_solo\",\n    \"search_started_at\": \"2026-07-18T10:00:00Z\",\n    \"lease_expires_at\": \"2026-07-18T10:00:30Z\"\n  },\n  \"match\": null\n}",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -4163,6 +4184,11 @@
                     "key": "X-CSRF-Token",
                     "value": "{{csrfToken}}",
                     "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
                   }
                 ],
                 "url": {
@@ -4177,7 +4203,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"map_id\": \"{{mapId}}\"\n}",
+                  "raw": "{\n  \"playlist\": \"casual\",\n  \"format\": \"solo\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -4187,10 +4213,10 @@
               }
             },
             {
-              "id": "286a2044-2d49-4c1e-886e-a2bdca84f5ab",
-              "name": "200 Queued (example)",
-              "status": "200",
-              "code": 200,
+              "id": "0d2934bb-b380-4399-b11a-4bd9cd60dab0",
+              "name": "202 Searching casual duo",
+              "status": "Accepted",
+              "code": 202,
               "_postman_previewlanguage": "json",
               "header": [
                 {
@@ -4199,7 +4225,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"status\": \"queued\",\n  \"queue\": {\n    \"map_id\": \"{{mapId}}\",\n    \"joined_at\": \"2026-07-13T15:00:00Z\"\n  },\n  \"match\": null\n}",
+              "body": "{\n  \"status\": \"searching\",\n  \"queue\": {\n    \"ticket_id\": \"tkt_opaque_casual_duo_01\",\n    \"playlist\": \"casual\",\n    \"format\": \"duo\",\n    \"mode\": \"casual_duo\",\n    \"party_id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"search_started_at\": \"2026-07-18T10:00:00Z\",\n    \"lease_expires_at\": \"2026-07-18T10:00:30Z\"\n  },\n  \"match\": null\n}",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -4217,6 +4243,11 @@
                     "key": "X-CSRF-Token",
                     "value": "{{csrfToken}}",
                     "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
                   }
                 ],
                 "url": {
@@ -4231,7 +4262,243 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"map_id\": \"{{mapId}}\"\n}",
+                  "raw": "{\n  \"playlist\": \"casual\",\n  \"format\": \"duo\",\n  \"party_id\": \"{{partyId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "647c736c-7807-46de-9af3-83327a9e4505",
+              "name": "202 Matched 1v1",
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"matched\",\n  \"queue\": null,\n  \"match\": {\n    \"match_id\": \"00000000-0000-4000-8000-0000000000c1\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d1\",\n    \"playlist\": \"casual\",\n    \"format\": \"solo\",\n    \"mode\": \"casual_solo\",\n    \"formed_at\": \"2026-07-18T10:01:00Z\",\n    \"destination\": \"/matches/00000000-0000-4000-8000-0000000000c1\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"playlist\": \"casual\",\n  \"format\": \"solo\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "fc9abea6-b098-419d-95d1-c730386bc826",
+              "name": "202 Matched 2v2",
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"matched\",\n  \"queue\": null,\n  \"match\": {\n    \"match_id\": \"00000000-0000-4000-8000-0000000000c2\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d2\",\n    \"playlist\": \"casual\",\n    \"format\": \"duo\",\n    \"mode\": \"casual_duo\",\n    \"formed_at\": \"2026-07-18T10:01:00Z\",\n    \"destination\": \"/matches/00000000-0000-4000-8000-0000000000c2\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"playlist\": \"casual\",\n  \"format\": \"duo\",\n  \"party_id\": \"{{partyId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "88957b13-6d94-422d-bb6c-8addb7945f3d",
+              "name": "202 Matched 4v4",
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"matched\",\n  \"queue\": null,\n  \"match\": {\n    \"match_id\": \"00000000-0000-4000-8000-0000000000c4\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d4\",\n    \"playlist\": \"casual\",\n    \"format\": \"squad\",\n    \"mode\": \"casual_squad\",\n    \"formed_at\": \"2026-07-18T10:01:00Z\",\n    \"destination\": \"/matches/00000000-0000-4000-8000-0000000000c4\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"playlist\": \"casual\",\n  \"format\": \"squad\",\n  \"party_id\": \"{{partyId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "81e2c417-62f2-4461-a680-0ecb41e70026",
+              "name": "Legacy ranked_standard",
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"searching\",\n  \"queue\": {\n    \"playlist\": \"ranked\",\n    \"format\": \"solo\",\n    \"mode\": \"ranked_solo\",\n    \"search_started_at\": \"2026-07-18T10:00:00Z\",\n    \"lease_expires_at\": \"2026-07-18T10:00:30Z\",\n    \"rating_window\": {\n      \"minimum\": 900,\n      \"maximum\": 1100\n    }\n  },\n  \"match\": null\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/queue",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "queue"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mode\": \"ranked_standard\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -4251,6 +4518,11 @@
                 "key": "Accept",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -4263,7 +4535,7 @@
                 "queue"
               ]
             },
-            "description": ""
+            "description": "Solo caller or party leader leaves searching ticket. 409 match_already_formed when assignment exists."
           },
           "response": [
             {
@@ -4319,13 +4591,13 @@
                 "status"
               ]
             },
-            "description": ""
+            "description": "Durable-first status. Searching renews lease. Examples cover not_queued, searching, and matched 1v1/2v2/4v4."
           },
           "response": [
             {
-              "id": "d888cc1b-7483-4fa8-86be-5ed73639423e",
-              "name": "200 OK",
-              "status": "200",
+              "id": "d56ae98e-8b9a-4de5-a6ec-cfd188926893",
+              "name": "200 not_queued",
+              "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
               "header": [
@@ -4336,6 +4608,146 @@
               ],
               "cookie": [],
               "body": "{\n  \"status\": \"not_queued\",\n  \"queue\": null,\n  \"match\": null\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "status"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "d7626543-aa0a-4534-a4aa-04091060c5cb",
+              "name": "200 searching",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"searching\",\n  \"queue\": {\n    \"ticket_id\": \"tkt_opaque_casual_duo_01\",\n    \"playlist\": \"casual\",\n    \"format\": \"duo\",\n    \"mode\": \"casual_duo\",\n    \"party_id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"search_started_at\": \"2026-07-18T10:00:00Z\",\n    \"lease_expires_at\": \"2026-07-18T10:00:30Z\"\n  },\n  \"match\": null\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "status"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "d39f1ccc-002f-4b46-80ac-26f3e9444206",
+              "name": "200 matched 1v1",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"matched\",\n  \"queue\": null,\n  \"match\": {\n    \"match_id\": \"00000000-0000-4000-8000-0000000000c1\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d1\",\n    \"playlist\": \"casual\",\n    \"format\": \"solo\",\n    \"mode\": \"casual_solo\",\n    \"formed_at\": \"2026-07-18T10:01:00Z\",\n    \"destination\": \"/matches/00000000-0000-4000-8000-0000000000c1\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "status"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "0d0e7ab1-f332-414a-b52c-7ecc3a6d1138",
+              "name": "200 matched 2v2",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"matched\",\n  \"queue\": null,\n  \"match\": {\n    \"match_id\": \"00000000-0000-4000-8000-0000000000c2\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d2\",\n    \"playlist\": \"casual\",\n    \"format\": \"duo\",\n    \"mode\": \"casual_duo\",\n    \"formed_at\": \"2026-07-18T10:01:00Z\",\n    \"destination\": \"/matches/00000000-0000-4000-8000-0000000000c2\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matchmaking/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matchmaking",
+                    "status"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "623095bc-2507-49e8-917c-356dbeede05d",
+              "name": "200 matched 4v4",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"matched\",\n  \"queue\": null,\n  \"match\": {\n    \"match_id\": \"00000000-0000-4000-8000-0000000000c4\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d4\",\n    \"playlist\": \"casual\",\n    \"format\": \"squad\",\n    \"mode\": \"casual_squad\",\n    \"formed_at\": \"2026-07-18T10:01:00Z\",\n    \"destination\": \"/matches/00000000-0000-4000-8000-0000000000c4\"\n  }\n}",
               "originalRequest": {
                 "method": "GET",
                 "header": [
@@ -5444,6 +5856,1871 @@
                     "leaderboards",
                     "friends"
                   ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "16 Competitive (Ranks & Seasons)",
+      "description": "Seasonal ranked profile, placements, top-500 World Legend, history, and closed-season leaderboards.",
+      "item": [
+        {
+          "name": "Get competitive profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitive/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitive",
+                "profile"
+              ]
+            },
+            "description": "Active-season profile; rating/rank hidden during placements."
+          },
+          "response": [
+            {
+              "id": "549c585c-22b6-48b1-99b6-822f3dd29f19",
+              "name": "200 World Legend",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"season\": {\n    \"id\": \"019f511f-0000-7000-8000-000000000001\",\n    \"sequence\": 3,\n    \"slug\": \"season-3\",\n    \"name\": \"Season 3\",\n    \"status\": \"active\",\n    \"starts_at\": \"2026-07-18T00:00:00Z\",\n    \"ends_at\": \"2026-10-10T00:00:00Z\",\n    \"reset\": {\n      \"anchor\": 800,\n      \"factor_percent\": 50\n    },\n    \"top500_min_matches\": 25\n  },\n  \"profile\": {\n    \"rating\": 2034,\n    \"placements_completed\": 5,\n    \"placements_required\": 5,\n    \"rank\": {\n      \"code\": \"world_legend\",\n      \"name_key\": \"worldLegend\",\n      \"division\": null\n    },\n    \"standard_rank\": {\n      \"code\": \"geo_master_1\",\n      \"name_key\": \"geoMaster1\",\n      \"division\": 1\n    },\n    \"division_progress\": 34,\n    \"matches_played\": 52,\n    \"wins\": 31,\n    \"losses\": 18,\n    \"draws\": 3,\n    \"abandons\": 0,\n    \"peak_rating\": 2050,\n    \"top500_position\": 412,\n    \"last_change\": {\n      \"match_id\": \"019f511f-1111-7111-8111-111111111111\",\n      \"delta\": 14\n    }\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/competitive/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "competitive",
+                    "profile"
+                  ]
+                },
+                "description": "Active-season profile; rating/rank hidden during placements."
+              }
+            },
+            {
+              "id": "9730b900-ea08-4b6d-bfda-303736bc2e44",
+              "name": "200 Placements",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"season\": {\n    \"id\": \"019f511f-0000-7000-8000-000000000001\",\n    \"sequence\": 3,\n    \"slug\": \"season-3\",\n    \"name\": \"Season 3\",\n    \"status\": \"active\",\n    \"starts_at\": \"2026-07-18T00:00:00Z\",\n    \"ends_at\": \"2026-10-10T00:00:00Z\",\n    \"reset\": {\n      \"anchor\": 800,\n      \"factor_percent\": 50\n    },\n    \"top500_min_matches\": 25\n  },\n  \"profile\": {\n    \"rating\": null,\n    \"placements_completed\": 2,\n    \"placements_required\": 5,\n    \"rank\": null,\n    \"standard_rank\": null,\n    \"division_progress\": null,\n    \"matches_played\": 2,\n    \"wins\": 1,\n    \"losses\": 1,\n    \"draws\": 0,\n    \"abandons\": 0,\n    \"peak_rating\": null,\n    \"top500_position\": null,\n    \"placement\": {\n      \"completed\": 2,\n      \"required\": 5\n    }\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/competitive/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "competitive",
+                    "profile"
+                  ]
+                },
+                "description": "Active-season profile; rating/rank hidden during placements."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get competitive leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitive/leaderboard?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitive",
+                "leaderboard"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Eligible top-500 ordered standings with viewer entry."
+          },
+          "response": [
+            {
+              "id": "ee455f82-1616-46b3-892a-0f1023b935e2",
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"season\": {\n    \"id\": \"019f511f-0000-7000-8000-000000000001\",\n    \"sequence\": 3,\n    \"slug\": \"season-3\",\n    \"name\": \"Season 3\",\n    \"status\": \"active\",\n    \"starts_at\": \"2026-07-18T00:00:00Z\",\n    \"ends_at\": \"2026-10-10T00:00:00Z\",\n    \"reset\": {\n      \"anchor\": 800,\n      \"factor_percent\": 50\n    },\n    \"top500_min_matches\": 25\n  },\n  \"data\": [\n    {\n      \"position\": 500,\n      \"player\": {\n        \"user_id\": \"019f511f-aaaa-7aaa-8aaa-aaaaaaaaaaaa\",\n        \"display_name\": \"Cutoff\"\n      },\n      \"rating\": 2010,\n      \"wins\": 40,\n      \"matches_played\": 80,\n      \"standard_rank\": {\n        \"code\": \"geo_master_1\",\n        \"name_key\": \"geoMaster1\",\n        \"division\": 1\n      },\n      \"world_legend\": true,\n      \"rank\": {\n        \"code\": \"world_legend\",\n        \"name_key\": \"worldLegend\",\n        \"division\": null\n      }\n    }\n  ],\n  \"viewer\": {\n    \"position\": 501,\n    \"eligible\": true,\n    \"rating\": 2005,\n    \"wins\": 39,\n    \"matches_played\": 79,\n    \"placements_completed\": 5,\n    \"placements_required\": 5,\n    \"standard_rank\": {\n      \"code\": \"geo_master_1\",\n      \"name_key\": \"geoMaster1\",\n      \"division\": 1\n    },\n    \"world_legend\": false,\n    \"rank\": {\n      \"code\": \"geo_master_1\",\n      \"name_key\": \"geoMaster1\",\n      \"division\": 1\n    }\n  },\n  \"page\": {\n    \"limit\": 50\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/competitive/leaderboard?limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "competitive",
+                    "leaderboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                },
+                "description": "Eligible top-500 ordered standings with viewer entry."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get competitive history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitive/history?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitive",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Caller rating changes newest first (promotion/demotion examples)."
+          },
+          "response": [
+            {
+              "id": "680b0dbc-0a82-42ee-8cea-afa89de9c532",
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"019f511f-bbbb-7bbb-8bbb-bbbbbbbbbbbb\",\n      \"match_id\": \"019f511f-cccc-7ccc-8ccc-cccccccccccc\",\n      \"season_id\": \"019f511f-0000-7000-8000-000000000001\",\n      \"playlist\": \"ranked\",\n      \"format\": \"solo\",\n      \"outcome\": \"win\",\n      \"old_rating\": 890,\n      \"new_rating\": 906,\n      \"base_delta\": 16,\n      \"abandon_penalty\": 0,\n      \"total_delta\": 16,\n      \"old_rank\": {\n        \"code\": \"trailblazer_1\"\n      },\n      \"new_rank\": {\n        \"code\": \"navigator_3\"\n      },\n      \"created_at\": \"2026-07-18T12:00:00Z\"\n    }\n  ],\n  \"page\": {\n    \"limit\": 20\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/competitive/history?limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "competitive",
+                    "history"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Caller rating changes newest first (promotion/demotion examples)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "List competitive seasons",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitive/seasons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitive",
+                "seasons"
+              ]
+            },
+            "description": "Active and closed seasons with frozen ending/peak ranks."
+          },
+          "response": [
+            {
+              "id": "6fc70bd2-2eca-400b-996d-5e54e29a8663",
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"season\": {\n        \"id\": \"019f511f-0000-7000-8000-000000000002\",\n        \"sequence\": 2,\n        \"slug\": \"season-2\",\n        \"name\": \"Season 2\",\n        \"status\": \"closed\",\n        \"starts_at\": \"2026-04-25T00:00:00Z\",\n        \"ends_at\": \"2026-07-18T00:00:00Z\",\n        \"closed_at\": \"2026-07-18T00:00:05Z\",\n        \"reset\": {\n          \"anchor\": 800,\n          \"factor_percent\": 50\n        },\n        \"top500_min_matches\": 25\n      },\n      \"final_position\": 412,\n      \"ending_rank\": {\n        \"code\": \"world_legend\",\n        \"name_key\": \"worldLegend\",\n        \"division\": null\n      },\n      \"peak_rank\": {\n        \"code\": \"world_legend\",\n        \"name_key\": \"worldLegend\",\n        \"division\": null\n      }\n    }\n  ]\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/competitive/seasons",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "competitive",
+                    "seasons"
+                  ]
+                },
+                "description": "Active and closed seasons with frozen ending/peak ranks."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get closed season leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/competitive/seasons/{{seasonId}}/leaderboard?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "competitive",
+                "seasons",
+                "{{seasonId}}",
+                "leaderboard"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Frozen final top 500 for a closed season."
+          },
+          "response": [
+            {
+              "id": "5d9eabf8-d307-4728-8276-cc3657f5a1b3",
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"season\": {\n    \"id\": \"019f511f-0000-7000-8000-000000000002\",\n    \"sequence\": 2,\n    \"slug\": \"season-2\",\n    \"name\": \"Season 2\",\n    \"status\": \"closed\",\n    \"starts_at\": \"2026-04-25T00:00:00Z\",\n    \"ends_at\": \"2026-07-18T00:00:00Z\",\n    \"closed_at\": \"2026-07-18T00:00:05Z\",\n    \"reset\": {\n      \"anchor\": 800,\n      \"factor_percent\": 50\n    },\n    \"top500_min_matches\": 25\n  },\n  \"data\": [\n    {\n      \"position\": 1,\n      \"player\": {\n        \"user_id\": \"019f511f-dddd-7ddd-8ddd-dddddddddddd\",\n        \"display_name\": \"Champion\"\n      },\n      \"rating\": 2400,\n      \"wins\": 90,\n      \"matches_played\": 120,\n      \"standard_rank\": {\n        \"code\": \"geo_master_1\",\n        \"name_key\": \"geoMaster1\",\n        \"division\": 1\n      },\n      \"world_legend\": true,\n      \"rank\": {\n        \"code\": \"world_legend\",\n        \"name_key\": \"worldLegend\",\n        \"division\": null\n      }\n    }\n  ],\n  \"page\": {\n    \"limit\": 50\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/competitive/seasons/{{seasonId}}/leaderboard?limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "competitive",
+                    "seasons",
+                    "{{seasonId}}",
+                    "leaderboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                },
+                "description": "Frozen final top 500 for a closed season."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "14 Parties (Casual)",
+      "description": "Duo/Squad party CRUD, invites, and readiness. Registered auth + CSRF on mutations. See saved-responses/parties_*.json.",
+      "item": [
+        {
+          "name": "Create duo party",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties"
+              ]
+            },
+            "description": "Create a forming duo party led by the caller. Requires Idempotency-Key.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"duo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "a86b026f-95ef-4969-930c-e00f78aea605",
+              "name": "201 Duo forming",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"party\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"format\": \"duo\",\n    \"capacity\": 2,\n    \"status\": \"forming\",\n    \"version\": 1,\n    \"leader_user_id\": \"00000000-0000-4000-8000-000000000001\",\n    \"active_match_id\": null,\n    \"members\": [\n      {\n        \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n        \"display_name\": \"Raven\",\n        \"avatar_url\": null,\n        \"ready\": true,\n        \"is_leader\": true,\n        \"joined_at\": \"2026-07-18T10:00:00Z\"\n      }\n    ],\n    \"created_at\": \"2026-07-18T10:00:00Z\",\n    \"updated_at\": \"2026-07-18T10:00:00Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"format\": \"duo\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "3b901803-c7b8-4562-9637-c4460b81df57",
+              "name": "409 active_party_conflict",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"active_party_conflict\",\n    \"message\": \"You already have an active party.\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"format\": \"duo\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create squad party",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties"
+              ]
+            },
+            "description": "Create a forming squad party (capacity 4).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"squad\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "2a86db78-471b-4333-9348-7a9b2e1eec2c",
+              "name": "201 Squad forming",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"party\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000b2\",\n    \"format\": \"squad\",\n    \"capacity\": 4,\n    \"status\": \"forming\",\n    \"version\": 1,\n    \"leader_user_id\": \"00000000-0000-4000-8000-000000000001\",\n    \"active_match_id\": null,\n    \"members\": [\n      {\n        \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n        \"display_name\": \"Raven\",\n        \"avatar_url\": null,\n        \"ready\": true,\n        \"is_leader\": true,\n        \"joined_at\": \"2026-07-18T10:00:00Z\"\n      }\n    ],\n    \"created_at\": \"2026-07-18T10:00:00Z\",\n    \"updated_at\": \"2026-07-18T10:00:00Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"format\": \"squad\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current party",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/current",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "current"
+              ]
+            },
+            "description": "Returns current active party or party:null."
+          },
+          "response": [
+            {
+              "id": "65dd5cce-4ecf-40d2-b301-fedaa3493189",
+              "name": "200 Party present",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"party\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"format\": \"duo\",\n    \"capacity\": 2,\n    \"status\": \"forming\",\n    \"version\": 1,\n    \"leader_user_id\": \"00000000-0000-4000-8000-000000000001\",\n    \"active_match_id\": null,\n    \"members\": [\n      {\n        \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n        \"display_name\": \"Raven\",\n        \"avatar_url\": null,\n        \"ready\": true,\n        \"is_leader\": true,\n        \"joined_at\": \"2026-07-18T10:00:00Z\"\n      }\n    ],\n    \"created_at\": \"2026-07-18T10:00:00Z\",\n    \"updated_at\": \"2026-07-18T10:00:00Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/current",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "current"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "54792a50-310e-41f6-8f83-3cd8bbfd90f6",
+              "name": "200 No party",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"party\": null\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/current",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "current"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get party by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/{{partyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "{{partyId}}"
+              ]
+            },
+            "description": "Authorized snapshot for active members only."
+          },
+          "response": [
+            {
+              "id": "b331d3e2-7ebb-45ec-8eab-c6c2ff14d002",
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"party\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"format\": \"duo\",\n    \"capacity\": 2,\n    \"status\": \"forming\",\n    \"version\": 1,\n    \"leader_user_id\": \"00000000-0000-4000-8000-000000000001\",\n    \"active_match_id\": null,\n    \"members\": [\n      {\n        \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n        \"display_name\": \"Raven\",\n        \"avatar_url\": null,\n        \"ready\": true,\n        \"is_leader\": true,\n        \"joined_at\": \"2026-07-18T10:00:00Z\"\n      }\n    ],\n    \"created_at\": \"2026-07-18T10:00:00Z\",\n    \"updated_at\": \"2026-07-18T10:00:00Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/{{partyId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "{{partyId}}"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "7ff64bc9-fe9e-4451-9cd9-3ea45b8ae775",
+              "name": "404 not_found (privacy-safe)",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"The requested resource was not found.\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/{{partyId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "{{partyId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite friend",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/{{partyId}}/invites",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "{{partyId}}",
+                "invites"
+              ]
+            },
+            "description": "Leader invites an accepted friend. friend_unavailable is privacy-safe.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{userId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "c95a275c-6580-4433-9411-4072577a51d1",
+              "name": "201 Invite created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"invite\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000i1\",\n    \"party_id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"format\": \"duo\",\n    \"capacity\": 2,\n    \"expires_at\": \"2026-07-18T10:15:00Z\",\n    \"created_at\": \"2026-07-18T10:00:00Z\",\n    \"inviter\": {\n      \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n      \"display_name\": \"Raven\",\n      \"avatar_url\": null\n    }\n  }\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/{{partyId}}/invites",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "{{partyId}}",
+                    "invites"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"{{userId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "List party invites",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/party-invites",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "party-invites"
+              ]
+            },
+            "description": "Pending incoming invitations for the caller."
+          },
+          "response": []
+        },
+        {
+          "name": "Accept party invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/party-invites/{{inviteId}}/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "party-invites",
+                "{{inviteId}}",
+                "accept"
+              ]
+            },
+            "description": "Atomic accept; returns PartyResponse."
+          },
+          "response": []
+        },
+        {
+          "name": "Decline party invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/party-invites/{{inviteId}}/decline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "party-invites",
+                "{{inviteId}}",
+                "decline"
+              ]
+            },
+            "description": "Idempotent decline; 204."
+          },
+          "response": [
+            {
+              "id": "6f08ad51-7d79-4656-855e-59dca8009233",
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/party-invites/{{inviteId}}/decline",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "party-invites",
+                    "{{inviteId}}",
+                    "decline"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set readiness",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/{{partyId}}/readiness/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "{{partyId}}",
+                "readiness",
+                "me"
+              ]
+            },
+            "description": "Only while forming.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ready\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "3697d766-4db6-46bb-8f51-31626bf31355",
+              "name": "200 Ready",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"party\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000b1\",\n    \"format\": \"duo\",\n    \"capacity\": 2,\n    \"status\": \"forming\",\n    \"version\": 1,\n    \"leader_user_id\": \"00000000-0000-4000-8000-000000000001\",\n    \"active_match_id\": null,\n    \"members\": [\n      {\n        \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n        \"display_name\": \"Raven\",\n        \"avatar_url\": null,\n        \"ready\": true,\n        \"is_leader\": true,\n        \"joined_at\": \"2026-07-18T10:00:00Z\"\n      }\n    ],\n    \"created_at\": \"2026-07-18T10:00:00Z\",\n    \"updated_at\": \"2026-07-18T10:00:00Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/{{partyId}}/readiness/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "{{partyId}}",
+                    "readiness",
+                    "me"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ready\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leave party",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/{{partyId}}/members/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "{{partyId}}",
+                "members",
+                "me"
+              ]
+            },
+            "description": "Leave forming party. 409 party_locked when queued/in match."
+          },
+          "response": [
+            {
+              "id": "f8f78b3d-7c44-47cf-ad48-7c19d624b975",
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/{{partyId}}/members/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "{{partyId}}",
+                    "members",
+                    "me"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kick member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/{{partyId}}/members/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "{{partyId}}",
+                "members",
+                "{{userId}}"
+              ]
+            },
+            "description": "Leader removes another member from a forming party."
+          },
+          "response": []
+        },
+        {
+          "name": "Disband party",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/parties/{{partyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "parties",
+                "{{partyId}}"
+              ]
+            },
+            "description": "Leader closes a forming party."
+          },
+          "response": [
+            {
+              "id": "e74fd9ea-e4fb-469b-a511-964fb6ba32ff",
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/parties/{{partyId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "parties",
+                    "{{partyId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "15 Matches (Casual)",
+      "description": "Authorized multiplayer snapshot, delayed-reveal guess shape, round/terminal results, leave. Casual progression is always applied=false.",
+      "item": [
+        {
+          "name": "Get match snapshot",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}"
+              ]
+            },
+            "description": "Participant-only snapshot. Opponent individual totals may be redacted pre-reveal."
+          },
+          "response": [
+            {
+              "id": "9e15c8b1-c599-4530-90fe-69426726818c",
+              "name": "200 Active 2v2",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"match\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000c2\",\n    \"game_id\": \"00000000-0000-4000-8000-0000000000d2\",\n    \"playlist\": \"casual\",\n    \"format\": \"duo\",\n    \"status\": \"active\",\n    \"result\": null,\n    \"team_size\": 2,\n    \"viewer\": {\n      \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n      \"game_player_id\": \"00000000-0000-4000-8000-0000000000e1\",\n      \"team_slot\": 1,\n      \"submitted\": true,\n      \"can_chat\": true,\n      \"allowed_spectate_player_ids\": [\n        \"00000000-0000-4000-8000-0000000000e2\"\n      ]\n    },\n    \"teams\": [\n      {\n        \"slot\": 1,\n        \"score\": 8200,\n        \"players\": [\n          {\n            \"game_player_id\": \"00000000-0000-4000-8000-0000000000e1\",\n            \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n            \"display_name\": \"Raven\",\n            \"status\": \"active\",\n            \"submitted\": true,\n            \"total_score\": 4100\n          },\n          {\n            \"game_player_id\": \"00000000-0000-4000-8000-0000000000e2\",\n            \"user_id\": \"00000000-0000-4000-8000-000000000002\",\n            \"display_name\": \"Falcon\",\n            \"status\": \"active\",\n            \"submitted\": false,\n            \"total_score\": 4100\n          }\n        ]\n      },\n      {\n        \"slot\": 2,\n        \"score\": 7900,\n        \"players\": [\n          {\n            \"game_player_id\": \"00000000-0000-4000-8000-0000000000e3\",\n            \"user_id\": \"00000000-0000-4000-8000-000000000003\",\n            \"display_name\": \"Hawk\",\n            \"status\": \"active\",\n            \"submitted\": true\n          },\n          {\n            \"game_player_id\": \"00000000-0000-4000-8000-0000000000e4\",\n            \"user_id\": \"00000000-0000-4000-8000-000000000004\",\n            \"display_name\": \"Owl\",\n            \"status\": \"active\",\n            \"submitted\": false\n          }\n        ]\n      }\n    ],\n    \"round\": {\n      \"id\": \"00000000-0000-4000-8000-0000000000f2\",\n      \"number\": 2,\n      \"status\": \"active\",\n      \"starts_at\": \"2026-07-18T10:02:00Z\",\n      \"ends_at\": null,\n      \"media\": {\n        \"type\": \"panorama\",\n        \"panorama_id\": \"safe-provider-ref\"\n      },\n      \"submitted_count\": 2,\n      \"eligible_count\": 4\n    },\n    \"team_markers\": [],\n    \"realtime_version\": 42,\n    \"formed_at\": \"2026-07-18T10:00:00Z\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matches/{{matchId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matches",
+                    "{{matchId}}"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "a0c1e5d9-2181-4323-b2f3-33a78c08bf8c",
+              "name": "404 not_found (privacy-safe)",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"The requested resource was not found.\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matches/{{matchId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matches",
+                    "{{matchId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit multiplayer guess (delayed reveal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/guesses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "rounds",
+                "{{roundId}}",
+                "guesses"
+              ]
+            },
+            "description": "Multiplayer response keeps actual_location null while round_completed=false.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 48.8566,\n  \"longitude\": 2.3522\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "0e418b53-f8ab-4f41-9840-2c594f82a9c9",
+              "name": "200 Delayed reveal",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"guess\": {\n    \"id\": \"00000000-0000-4000-8000-0000000000a2\",\n    \"latitude\": 48.8566,\n    \"longitude\": 2.3522,\n    \"distance_meters\": 5432,\n    \"accuracy_score\": 4120,\n    \"speed_bonus\": 0,\n    \"score\": 4120,\n    \"submitted_at\": \"2026-07-18T10:02:25Z\",\n    \"timed_out\": false\n  },\n  \"round_completed\": false,\n  \"game_completed\": false,\n  \"submitted_count\": 3,\n  \"eligible_count\": 4,\n  \"actual_location\": null,\n  \"max_score\": 5000,\n  \"score_percent\": 82,\n  \"max_accuracy_score\": 5000,\n  \"max_speed_bonus\": 250,\n  \"outcome\": \"submitted\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/guesses",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "games",
+                    "{{gameId}}",
+                    "rounds",
+                    "{{roundId}}",
+                    "guesses"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latitude\": 48.8566,\n  \"longitude\": 2.3522\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get round results",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/rounds/{{roundId}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "rounds",
+                "{{roundId}}",
+                "results"
+              ]
+            },
+            "description": "Only after round is completed. 409 round_not_revealed while active."
+          },
+          "response": [
+            {
+              "id": "2f27cd1d-772d-4665-a7b7-b298e21a5eae",
+              "name": "409 round_not_revealed",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"round_not_revealed\",\n    \"message\": \"Round results are not available yet.\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matches/{{matchId}}/rounds/{{roundId}}/results",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matches",
+                    "{{matchId}}",
+                    "rounds",
+                    "{{roundId}}",
+                    "results"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get terminal results (casual no progression)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "results"
+              ]
+            },
+            "description": "Casual returns progression.applied=false reason=casual (no competitive mutation)."
+          },
+          "response": [
+            {
+              "id": "1ca64336-6092-4ef1-a047-702bab7814d9",
+              "name": "200 Casual terminal",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"result\": \"team_one_win\",\n  \"winner_team_slot\": 1,\n  \"teams\": [\n    {\n      \"slot\": 1,\n      \"score\": 21050,\n      \"players\": [\n        {\n          \"game_player_id\": \"00000000-0000-4000-8000-0000000000e1\",\n          \"user_id\": \"00000000-0000-4000-8000-000000000001\",\n          \"display_name\": \"Raven\",\n          \"status\": \"active\",\n          \"submitted\": true,\n          \"total_score\": 10525\n        },\n        {\n          \"game_player_id\": \"00000000-0000-4000-8000-0000000000e2\",\n          \"user_id\": \"00000000-0000-4000-8000-000000000002\",\n          \"display_name\": \"Falcon\",\n          \"status\": \"active\",\n          \"submitted\": true,\n          \"total_score\": 10525\n        }\n      ]\n    },\n    {\n      \"slot\": 2,\n      \"score\": 19800,\n      \"players\": [\n        {\n          \"game_player_id\": \"00000000-0000-4000-8000-0000000000e3\",\n          \"user_id\": \"00000000-0000-4000-8000-000000000003\",\n          \"display_name\": \"Hawk\",\n          \"status\": \"active\",\n          \"submitted\": true,\n          \"total_score\": 9900\n        },\n        {\n          \"game_player_id\": \"00000000-0000-4000-8000-0000000000e4\",\n          \"user_id\": \"00000000-0000-4000-8000-000000000004\",\n          \"display_name\": \"Owl\",\n          \"status\": \"active\",\n          \"submitted\": true,\n          \"total_score\": 9900\n        }\n      ]\n    }\n  ],\n  \"rounds\": [],\n  \"progression\": {\n    \"applied\": false,\n    \"reason\": \"casual\"\n  }\n}",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matches/{{matchId}}/results",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matches",
+                    "{{matchId}}",
+                    "results"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leave match",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/matches/{{matchId}}/leave",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "matches",
+                "{{matchId}}",
+                "leave"
+              ]
+            },
+            "description": "Active casual forfeits team without rating. Terminal replay is 204.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "edc1830e-c0a6-4008-9e1d-abb2e9d07f5d",
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/matches/{{matchId}}/leave",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "matches",
+                    "{{matchId}}",
+                    "leave"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
                 }
               }
             }
