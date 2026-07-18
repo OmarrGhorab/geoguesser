@@ -2,6 +2,7 @@ package competitive_test
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"sync"
 	"testing"
@@ -479,11 +480,11 @@ func TestFinalizeMatchProgression_rollbackOnInvalidResult(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("rollback failed: rating changes = %d", count)
 	}
-	var finalized *time.Time
+	var finalized sql.NullTime
 	if err := db.Raw(`SELECT progression_finalized_at FROM matches WHERE id = ?`, fx.MatchID).Scan(&finalized).Error; err != nil {
 		t.Fatalf("finalized: %v", err)
 	}
-	if finalized != nil {
+	if finalized.Valid {
 		t.Fatal("rollback failed: progression_finalized_at set")
 	}
 	var rating int
