@@ -106,6 +106,7 @@ func TestHandlerMapsDomainErrors(t *testing.T) {
 		{name: "wrong mode", err: ErrWrongGameMode, want: http.StatusUnprocessableEntity, code: CodeWrongGameMode},
 		{name: "round incomplete", err: ErrCurrentRoundIncomplete, want: http.StatusUnprocessableEntity, code: CodeCurrentRoundIncomplete},
 		{name: "invalid cursor", err: ErrInvalidCursor, want: http.StatusBadRequest, code: CodeInvalidCursor},
+		{name: "quick play unavailable", err: ErrQuickPlayUnavailable, want: http.StatusServiceUnavailable, code: CodeQuickPlayUnavailable},
 	}
 
 	for _, tc := range cases {
@@ -126,6 +127,45 @@ func TestHandlerMapsDomainErrors(t *testing.T) {
 				t.Fatalf("code = %q, want %q", resp.Error.Code, tc.code)
 			}
 		})
+	}
+}
+
+func TestHandlerQuickPlayRoute(t *testing.T) {
+	t.Parallel()
+
+	gameID := uuid.New()
+	timer := 60
+	svc := &fakeServiceAPI{
+		createGame: &GameResponse{Game: GameDTO{
+			ID:             gameID,
+			Mode:           GameModeQuickPlay,
+			Status:         GameStatusActive,
+			RoundCount:     5,
+			TimerSeconds:   &timer,
+			ScoringVersion: ScoringVersionV1,
+		}},
+	}
+	handler := NewHandler(svc, slog.Default())
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/games/quick-play", nil)
+	r.Header.Set("Idempotency-Key", "handler-key-16-chars")
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d body = %s, want 201", w.Code, w.Body.String())
+	}
+	if svc.quickPlayKey != "handler-key-16-chars" {
+		t.Fatalf("Idempotency-Key = %q did not reach the service", svc.quickPlayKey)
+	}
+	var resp GameResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Game.ID != gameID || resp.Game.Mode != GameModeQuickPlay {
+		t.Fatalf("game = %+v", resp.Game)
 	}
 }
 
@@ -177,6 +217,7 @@ type fakeServiceAPI struct {
 	historyCursor      string
 	historyLimit       int
 	endGameID          string
+	quickPlayKey       string
 }
 
 func (f *fakeServiceAPI) CreateGame(context.Context, *session.Context, CreateGameRequest) (*GameResponse, error) {
@@ -184,6 +225,17 @@ func (f *fakeServiceAPI) CreateGame(context.Context, *session.Context, CreateGam
 		return nil, f.createErr
 	}
 	return f.createGame, nil
+}
+
+func (f *fakeServiceAPI) StartQuickPlay(_ context.Context, _ *session.Context, idempotencyKey string) (*GameResponse, error) {
+	f.quickPlayKey = idempotencyKey
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	if f.createGame != nil {
+		return f.createGame, nil
+	}
+	return f.start, nil
 }
 
 func (f *fakeServiceAPI) GetGame(context.Context, *session.Context, string) (*GameResponse, error) {

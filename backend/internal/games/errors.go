@@ -6,10 +6,12 @@ const (
 	CodeWrongGameMode          = "wrong_game_mode"
 	CodeCurrentRoundIncomplete = "current_round_incomplete"
 	CodeInvalidCursor          = "invalid_cursor"
+	CodeQuickPlayUnavailable   = "quick_play_unavailable"
 
 	MsgWrongGameMode          = "This operation is not available for the game mode."
 	MsgCurrentRoundIncomplete = "Complete the current Practice round before creating another."
 	MsgInvalidCursor          = "The Practice history cursor is invalid."
+	MsgQuickPlayUnavailable   = "Quick Play is not configured on this server yet. Try again later."
 )
 
 var (
@@ -45,4 +47,7 @@ var (
 	ErrCurrentRoundIncomplete = errors.New("current round incomplete")
 	// ErrInvalidCursor indicates a malformed or cross-game history cursor.
 	ErrInvalidCursor = errors.New("invalid cursor")
+	// ErrQuickPlayUnavailable indicates Quick Play server defaults are not
+	// configured (operator misconfiguration, not a client error) — maps to 503.
+	ErrQuickPlayUnavailable = errors.New("quick play unavailable")
 )

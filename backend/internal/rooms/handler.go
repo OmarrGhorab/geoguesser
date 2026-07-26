@@ -26,6 +26,8 @@ type ServiceAPI interface {
 	SetReady(ctx context.Context, sess *session.Context, roomCode string, req ReadyRoomRequest) (*RoomResponse, error)
 	StartRoom(ctx context.Context, sess *session.Context, roomCode, idempotencyKey string) (*RoomResponse, error)
 	RemovePlayer(ctx context.Context, sess *session.Context, roomCode string, playerID uuid.UUID) (*RoomResponse, error)
+	LeaveSelf(ctx context.Context, sess *session.Context, roomCode string) error
+	CancelRoom(ctx context.Context, sess *session.Context, roomCode string) error
 }
 
 func NewHandler(service ServiceAPI, logger *slog.Logger) *Handler {
@@ -39,9 +41,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/rooms", h.CreateRoom)
 	r.Post("/rooms/join", h.JoinRoom)
 	r.Get("/rooms/{roomCode}", h.GetRoom)
+	r.Delete("/rooms/{roomCode}", h.CancelRoom)
 	r.Patch("/rooms/{roomCode}/settings", h.UpdateSettings)
 	r.Post("/rooms/{roomCode}/ready", h.SetReady)
 	r.Post("/rooms/{roomCode}/start", h.StartRoom)
+	// Static "me" segment must be registered before the playerId parameter route.
+	r.Delete("/rooms/{roomCode}/players/me", h.LeaveSelf)
 	r.Delete("/rooms/{roomCode}/players/{playerId}", h.RemovePlayer)
 }
 
@@ -133,6 +138,22 @@ func (h *Handler) RemovePlayer(w http.ResponseWriter, r *http.Request) {
 	apphttp.OK(w, r, resp)
 }
 
+func (h *Handler) LeaveSelf(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.LeaveSelf(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "roomCode")); err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.NoContent(w)
+}
+
+func (h *Handler) CancelRoom(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.CancelRoom(r.Context(), appmiddleware.SessionFromContext(r.Context()), chi.URLParam(r, "roomCode")); err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.NoContent(w)
+}
+
 func (h *Handler) mapError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidRoomRequest):
@@ -141,6 +162,10 @@ func (h *Handler) mapError(w http.ResponseWriter, r *http.Request, err error) {
 		apphttp.Error(w, r, h.logger, apphttp.ErrForbidden.WithCause(err))
 	case errors.Is(err, ErrRoomNotFound), errors.Is(err, ErrRoomPlayerNotFound):
 		apphttp.WriteError(w, r, http.StatusNotFound, CodeRoomNotFound, "The room was not found.", nil)
+	case errors.Is(err, ErrHostActionRequired):
+		apphttp.WriteError(w, r, http.StatusConflict, CodeHostActionRequired, "The host must cancel the lobby instead of leaving.", nil)
+	case errors.Is(err, ErrRoomNotCancellable):
+		apphttp.WriteError(w, r, http.StatusConflict, CodeRoomNotCancellable, "The room can no longer be cancelled because the game already started.", nil)
 	case errors.Is(err, ErrRoomFull), errors.Is(err, ErrIdempotencyConflict):
 		apphttp.Error(w, r, h.logger, apphttp.ErrConflict.WithCause(err))
 	case errors.Is(err, ErrRoomNotJoinable), errors.Is(err, ErrRoomExpired), errors.Is(err, ErrRoomAlreadyStarted), errors.Is(err, ErrRoomSettingsLocked), errors.Is(err, ErrRoomReconnectExpired):

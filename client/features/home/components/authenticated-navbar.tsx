@@ -4,6 +4,7 @@ import type { Route } from "next";
 import { ChevronDown, Menu, Search } from "lucide-react";
 import type { AppLocale } from "@/lib/i18n/routing";
 import type {
+  AuthenticatedGameModesCopy,
   AuthenticatedAriaCopy,
   AuthenticatedNavCopy,
 } from "@/features/home/types";
@@ -12,11 +13,13 @@ import {
   type AuthenticatedTopNavId,
 } from "@/features/home/nav-config";
 import { AUTHENTICATED_ASSETS } from "./shared";
+import { GameModeMenu } from "./game-mode-menu";
 
 type AuthenticatedNavbarProps = Readonly<{
   locale: AppLocale;
   brand: string;
   nav: AuthenticatedNavCopy;
+  gameModes: AuthenticatedGameModesCopy;
   viewerName: string;
   viewerAvatarUrl: string | null;
   aria: AuthenticatedAriaCopy;
@@ -27,19 +30,16 @@ export function AuthenticatedNavbar({
   locale,
   brand,
   nav,
+  gameModes,
   viewerName,
   viewerAvatarUrl,
   aria,
-  activeTopNavId = "multiplayer",
+  activeTopNavId = "play",
 }: AuthenticatedNavbarProps) {
   const labelFor = (id: AuthenticatedTopNavId): string => {
     switch (id) {
-      case "singleplayer":
-        return nav.singleplayer;
-      case "multiplayer":
-        return nav.multiplayer;
-      case "party":
-        return nav.party;
+      case "play":
+        return nav.play;
       case "challenges":
         return nav.challenges;
       case "maps":
@@ -76,6 +76,19 @@ export function AuthenticatedNavbar({
           const isActive = item.id === activeTopNavId;
           const label = labelFor(item.id);
           const href = `/${locale}${item.href}` as Route;
+
+          if (item.id === "play") {
+            return (
+              <GameModeMenu
+                key={item.id}
+                locale={locale}
+                label={label}
+                copy={gameModes}
+                active={isActive}
+              />
+            );
+          }
+
           return (
             <Link
               key={item.id}
@@ -86,9 +99,6 @@ export function AuthenticatedNavbar({
               }`}
             >
               {label}
-              {item.hasDropdown ? (
-                <ChevronDown className="size-3 opacity-70" aria-hidden="true" />
-              ) : null}
               {isActive ? (
                 <span
                   className="absolute inset-x-2 bottom-0 h-[3px] rounded-full bg-[#FF2D8A]"

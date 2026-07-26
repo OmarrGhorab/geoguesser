@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, ChevronDown, Medal, RotateCcw, Trophy } from "lucide-react";
+import { ArrowLeft, ChevronDown, Medal, RotateCcw } from "lucide-react";
 import type { Route } from "next";
+import { RoundBreakdown } from "@/features/gameplay/components/round-breakdown";
 import { MISSION_ASSETS } from "@/features/mission/assets";
 import type { DailyGameResults } from "@/features/mission/schemas";
 import type { DailyResultsCopy } from "@/features/mission/types";
@@ -24,10 +25,6 @@ type DailyResultsPanelProps = DailyResultsProps &
     showBackToMission?: boolean;
     initialTab?: "results" | "map";
   }>;
-
-function formatDistance(locale: AppLocale, distanceMeters: number) {
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(distanceMeters / 1_000)} km`;
-}
 
 export function DailyResultsPanel({
   locale,
@@ -193,38 +190,22 @@ export function DailyResultsPanel({
               </span>
               <ChevronDown className="size-4 text-violet-300" />
             </div>
-            <ol className="grid grid-cols-2 gap-px border-t border-violet-400/15 bg-violet-400/10 p-px sm:grid-cols-6">
-              {rounds.map((round) => {
+            <RoundBreakdown
+              rounds={rounds.map((round) => {
                 const guess = round.guesses[0];
-                return (
-                  <li key={round.round_id} className="bg-[#0d092b] p-3">
-                    <p className="flex items-center gap-1 text-[.62rem] font-black italic">
-                      <span>
-                        {copy.round} {round.round_number}
-                      </span>
-                      {(guess?.score ?? 0) >= 4000 ? (
-                        <Trophy className="size-3 fill-[#ffc341] text-[#ffc341]" />
-                      ) : null}
-                    </p>
-                    <p className="mt-2 text-sm font-black">
-                      {(guess?.score ?? 0).toLocaleString(locale)} pts
-                    </p>
-                    <p className="mt-1 text-[.6rem] text-white/50">
-                      {formatDistance(locale, guess?.distance_meters ?? 0)}
-                    </p>
-                  </li>
-                );
+                return {
+                  roundNumber: round.round_number,
+                  score: guess?.score ?? 0,
+                  distanceMeters: guess?.distance_meters ?? 0,
+                };
               })}
-              <li className="bg-[#0d092b] p-3">
-                <p className="text-[.62rem] font-black italic">{copy.total}</p>
-                <p className="mt-2 text-sm font-black">
-                  {totalScore.toLocaleString(locale)} pts
-                </p>
-                <p className="mt-1 text-[.6rem] text-white/50">
-                  {formatDistance(locale, totalDistance)}
-                </p>
-              </li>
-            </ol>
+              locale={locale}
+              totalScore={totalScore}
+              totalDistanceMeters={totalDistance}
+              maxScore={5_000}
+              roundLabel={copy.round}
+              totalLabel={copy.total}
+            />
           </section>
 
           <section className="rounded-xl border border-violet-400/20 bg-[#100b2e] p-5 text-center">

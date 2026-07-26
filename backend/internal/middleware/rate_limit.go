@@ -75,6 +75,27 @@ func RateLimitByCookie(prefix, cookieName string) func(r *http.Request) string {
 	}
 }
 
+// RateLimitBySessionActor returns a key extractor keyed by the resolved
+// session actor: registered user ID or guest session ID (both hashed so raw
+// identifiers never appear in Redis keys). Anonymous requests fall back to IP.
+// Use alongside an IP limiter to bound per-actor cost behind shared NATs.
+func RateLimitBySessionActor(prefix string) func(r *http.Request) string {
+	return func(r *http.Request) string {
+		sc := SessionFromContext(r.Context())
+		if sc != nil {
+			if sc.IsRegistered() && sc.UserID != nil && strings.TrimSpace(*sc.UserID) != "" {
+				sum := sha256.Sum256([]byte(*sc.UserID))
+				return fmt.Sprintf("%s:user:%s", prefix, hex.EncodeToString(sum[:8]))
+			}
+			if sc.IsGuest() && sc.GuestID != nil && strings.TrimSpace(*sc.GuestID) != "" {
+				sum := sha256.Sum256([]byte(*sc.GuestID))
+				return fmt.Sprintf("%s:guest:%s", prefix, hex.EncodeToString(sum[:8]))
+			}
+		}
+		return fmt.Sprintf("%s:ip:%s", prefix, remoteHost(r))
+	}
+}
+
 // RateLimitByRegisteredUser returns a key extractor that uses the resolved
 // registered session user ID when present. The identity is hashed so raw user
 // IDs and tokens never appear in Redis rate-limit keys. Callers sharing an IP

@@ -53,6 +53,20 @@ type Service struct {
 	multiplayerEvents MultiplayerEventSink
 	revealPolicy      RoundRevealPolicy
 	practiceCursorKey []byte
+	// Quick Play server-owned defaults (empty map ID disables the endpoint).
+	quickPlayMapID        uuid.UUID
+	quickPlayRoundCount   int
+	quickPlayTimerSeconds int
+	// quickPlayStore is the narrow persistence surface used by StartQuickPlay.
+	// It defaults to repo and exists so tests can exercise the persistence
+	// path (create-and-start, replay, conflict) without PostgreSQL.
+	quickPlayStore quickPlayStore
+}
+
+// quickPlayStore is the consumer-side persistence interface for Quick Play.
+type quickPlayStore interface {
+	GetGameByCreationIdempotencyKey(ctx context.Context, key string) (*Game, error)
+	CreateAndStartGameBundle(ctx context.Context, game *Game, player *GamePlayer, rounds []Round, now time.Time) (*Game, error)
 }
 
 // WithMultiplayerEvents attaches post-commit round/match realtime fanout.
@@ -74,6 +88,27 @@ func (s *Service) WithPracticeCursorSigningSecret(secret string) *Service {
 	return s
 }
 
+// WithQuickPlayDefaults configures server-owned map, round count, and timer for
+// POST /games/quick-play. Round count defaults to 5 and timer to 60 when
+// non-positive values are provided. A nil map ID leaves Quick Play unavailable.
+func (s *Service) WithQuickPlayDefaults(mapID uuid.UUID, rounds, timerSeconds int) *Service {
+	if s == nil {
+		return s
+	}
+	s.quickPlayMapID = mapID
+	if rounds > 0 {
+		s.quickPlayRoundCount = rounds
+	} else {
+		s.quickPlayRoundCount = 5
+	}
+	if timerSeconds > 0 {
+		s.quickPlayTimerSeconds = timerSeconds
+	} else {
+		s.quickPlayTimerSeconds = 60
+	}
+	return s
+}
+
 // NewService returns a solo game service.
 func NewService(repo *Repository, selector LocationSelector, clk clock.Clock, logger *slog.Logger) *Service {
 	return NewServiceWithMedia(repo, selector, locations.StaticProvider{}, clk, logger)
@@ -92,7 +127,7 @@ func NewServiceWithHook(repo *Repository, selector LocationSelector, media Locat
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{
+	s := &Service{
 		repo:           repo,
 		selector:       selector,
 		media:          media,
@@ -103,6 +138,10 @@ func NewServiceWithHook(repo *Repository, selector LocationSelector, media Locat
 		completionHook: completionHook,
 		revealPolicy:   DelayedRevealPolicy{},
 	}
+	if repo != nil {
+		s.quickPlayStore = repo
+	}
+	return s
 }
 
 // WithRankedLifecycle attaches a ranked match lifecycle callback (no games→matchmaking import).
@@ -164,6 +203,38 @@ func (s *Service) SweepExpiredTimedMultiplayerRounds(ctx context.Context, limit 
 	return nil
 }
 
+// CloseRoundIfAllSubmitted closes the current multiplayer round when every
+// remaining eligible player has already guessed. Rooms call this after a
+// departure shrinks the eligible set so the round does not wait out its timer
+// on a player who left. Safe no-op for missing, non-multiplayer, or inactive
+// games and for rounds still waiting on active players.
+func (s *Service) CloseRoundIfAllSubmitted(ctx context.Context, gameID uuid.UUID) error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	game, err := s.repo.GetGameByID(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	if game == nil || !IsMultiplayerMode(game.Mode) || game.Status != GameStatusActive {
+		return nil
+	}
+	outcome, err := s.repo.CompleteMultiplayerRoundIfAllSubmitted(ctx, gameID, s.clock.Now().UTC(), s.multiplayerTxHooksForMode(game.Mode))
+	if err != nil {
+		return err
+	}
+	if outcome == nil {
+		return nil
+	}
+	s.publishMultiplayerOutcome(ctx, gameID, outcome)
+	if outcome.GameCompleted && !IsProgressionNeutralMode(game.Mode) && s.completionHook != nil {
+		if hookErr := s.completionHook.OnGameCompleted(ctx, gameID, s.clock.Now().UTC()); hookErr != nil {
+			return fmt.Errorf("finalize multiplayer game after departure: %w", hookErr)
+		}
+	}
+	return nil
+}
+
 func (s *Service) observeRoundClose(modeClass, outcome string) {
 	type roundCloseMetrics interface {
 		ObserveRoundClose(modeClass, outcome string)
@@ -171,6 +242,161 @@ func (s *Service) observeRoundClose(modeClass, outcome string) {
 	if metrics, ok := s.metrics.(roundCloseMetrics); ok {
 		metrics.ObserveRoundClose(modeClass, outcome)
 	}
+}
+
+// StartQuickPlay atomically creates and starts a quick_play game using
+// server-owned map/round/timer defaults (create + start run in a single
+// repository transaction). Lifecycle is Solo-compatible (immediate reveal,
+// non-multiplayer scoring). Idempotency-Key is required (16–128 chars) and is
+// persisted on the game, so an identical retry replays the original game;
+// the optional IdempotencyStore additionally guards concurrent double-submits.
+func (s *Service) StartQuickPlay(ctx context.Context, sess *session.Context, idempotencyKey string) (*GameResponse, error) {
+	owner, err := ownerFromSession(sess)
+	if err != nil {
+		return nil, err
+	}
+	key := strings.TrimSpace(idempotencyKey)
+	if len(key) < 16 || len(key) > 128 {
+		s.observeModeOperation(GameModeQuickPlay, "start", "invalid")
+		return nil, ErrInvalidGameRequest
+	}
+	// Bounds for round count and timer are enforced at startup
+	// (config.Validate + WithQuickPlayDefaults); no per-request re-validation.
+	mapID := s.quickPlayMapID
+	if mapID == uuid.Nil || s.quickPlayStore == nil {
+		s.observeModeOperation(GameModeQuickPlay, "start", "unavailable")
+		return nil, ErrQuickPlayUnavailable
+	}
+	roundCount := s.quickPlayRoundCount
+	timerSeconds := s.quickPlayTimerSeconds
+
+	creationKey := quickPlayIdempotencyClaimKey(owner, key)
+	if replay, replayErr := s.quickPlayGameByCreationKey(ctx, creationKey); replayErr != nil {
+		s.observeModeOperation(GameModeQuickPlay, "start", "error")
+		return nil, replayErr
+	} else if replay != nil {
+		s.observeModeOperation(GameModeQuickPlay, "start", "replay")
+		return replay, nil
+	}
+
+	var releaseClaim func()
+	if s.idempotency != nil {
+		claimed, claimErr := s.idempotency.Claim(ctx, creationKey, 2*time.Minute)
+		if claimErr != nil {
+			s.observeModeOperation(GameModeQuickPlay, "start", "error")
+			return nil, claimErr
+		}
+		if !claimed {
+			s.observeModeOperation(GameModeQuickPlay, "start", "conflict")
+			return nil, ErrIdempotencyConflict
+		}
+		// Release on failure so a client retry after a failed attempt is not
+		// locked out for the claim TTL. Success keeps the claim as a cheap
+		// in-flight guard; the persisted creation key is the durable replay.
+		// WithoutCancel: the release must still run when the request context
+		// is already cancelled (client disconnect / deadline).
+		releaseClaim = func() {
+			if releaseErr := s.idempotency.Release(context.WithoutCancel(ctx), creationKey); releaseErr != nil {
+				s.logger.WarnContext(ctx, "quick play idempotency release failed",
+					slog.String("claim_key", creationKey), slog.Any("error", releaseErr))
+			}
+		}
+	}
+
+	selected, err := s.selector.SelectLocations(ctx, mapID, roundCount)
+	if err != nil {
+		if releaseClaim != nil {
+			releaseClaim()
+		}
+		s.observeModeOperation(GameModeQuickPlay, "start", "error")
+		return nil, err
+	}
+	selected = uniqueSelectedLocations(selected, roundCount)
+	if len(selected) < roundCount {
+		if releaseClaim != nil {
+			releaseClaim()
+		}
+		s.observeModeOperation(GameModeQuickPlay, "start", "unavailable")
+		return nil, ErrNotEnoughLocations
+	}
+
+	timer := timerSeconds
+	game := &Game{
+		Mode:                   GameModeQuickPlay,
+		Status:                 GameStatusPending,
+		MapID:                  mapID,
+		CreatedByUserID:        owner.userID,
+		RoundCount:             roundCount,
+		TimerSeconds:           &timer,
+		ScoringVersion:         ScoringVersionV1,
+		CreationIdempotencyKey: &creationKey,
+	}
+	player := &GamePlayer{
+		UserID:            owner.userID,
+		GuestIdentityHash: owner.guestHash,
+		DisplayName:       owner.displayName,
+		Role:              PlayerRolePlayer,
+		Status:            PlayerStatusActive,
+	}
+	rounds := make([]Round, roundCount)
+	for i := range rounds {
+		rounds[i] = Round{
+			LocationID:  selected[i].ID,
+			RoundNumber: i + 1,
+			Status:      RoundStatusPending,
+		}
+	}
+	started, err := s.quickPlayStore.CreateAndStartGameBundle(ctx, game, player, rounds, s.clock.Now())
+	if err != nil {
+		if releaseClaim != nil {
+			releaseClaim()
+		}
+		if IsCreationIdempotencyConflict(err) {
+			// A concurrent request with the same key won the insert; replay it.
+			if replay, replayErr := s.quickPlayGameByCreationKey(ctx, creationKey); replayErr == nil && replay != nil {
+				s.observeModeOperation(GameModeQuickPlay, "start", "replay")
+				return replay, nil
+			}
+			s.observeModeOperation(GameModeQuickPlay, "start", "conflict")
+			return nil, ErrIdempotencyConflict
+		}
+		s.observeModeOperation(GameModeQuickPlay, "start", "error")
+		return nil, err
+	}
+	s.observeModeOperation(GameModeQuickPlay, "start", "success")
+	s.logger.InfoContext(ctx, "quick play game started",
+		slog.String("game_id", started.ID.String()),
+		slog.String("map_id", mapID.String()),
+		slog.Int("round_count", started.RoundCount),
+		slog.Int("timer_seconds", timerSeconds),
+	)
+	return &GameResponse{Game: toGameDTO(*started)}, nil
+}
+
+// quickPlayGameByCreationKey returns the replayed response for a previously
+// persisted creation key, with current_round_number populated when available.
+func (s *Service) quickPlayGameByCreationKey(ctx context.Context, creationKey string) (*GameResponse, error) {
+	existing, err := s.quickPlayStore.GetGameByCreationIdempotencyKey(ctx, creationKey)
+	if err != nil || existing == nil {
+		return nil, err
+	}
+	if existing.CurrentRoundNumber == nil && s.repo != nil {
+		if current, currentErr := s.repo.GetCurrentRound(ctx, existing.ID); currentErr == nil && current != nil {
+			n := current.RoundNumber
+			existing.CurrentRoundNumber = &n
+		}
+	}
+	return &GameResponse{Game: toGameDTO(*existing)}, nil
+}
+
+func quickPlayIdempotencyClaimKey(owner ownerIdentity, key string) string {
+	actor := "anon"
+	if owner.userID != nil {
+		actor = "user:" + owner.userID.String()
+	} else if owner.guestHash != nil {
+		actor = "guest:" + *owner.guestHash
+	}
+	return "game:quick_play:" + actor + ":" + key
 }
 
 // CreateGame creates a pending solo game.
@@ -660,7 +886,12 @@ func (s *Service) SubmitGuess(ctx context.Context, sess *session.Context, gameID
 				return nil, ErrIdempotencyConflict
 			}
 			releaseClaim = func(releaseCtx context.Context) {
-				_ = s.idempotency.Release(releaseCtx, idempotencyClaimKey(player.ID, key))
+				// WithoutCancel: the release must still run when the request
+				// context is already cancelled (client disconnect / deadline),
+				// or retries stay locked out for the full claim TTL.
+				if releaseErr := s.idempotency.Release(context.WithoutCancel(releaseCtx), idempotencyClaimKey(player.ID, key)); releaseErr != nil {
+					s.logger.WarnContext(releaseCtx, "guess idempotency release failed", slog.Any("error", releaseErr))
+				}
 			}
 		}
 		guess.IdempotencyKey = &key

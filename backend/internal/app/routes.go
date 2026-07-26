@@ -111,17 +111,26 @@ func NewRouter(cfg config.Config, logger *slog.Logger, obs *observability.Observ
 		if gamesHandler != nil {
 			gameCreateLimit := appmiddleware.RateLimitConfig{Limit: 20, Window: 1 * time.Minute}
 			guessLimit := appmiddleware.RateLimitConfig{Limit: 120, Window: 1 * time.Minute}
-			api.Route("/games", func(g chi.Router) {
-				g.With(appmiddleware.RateLimit(rateLimiter, gameCreateLimit, appmiddleware.RateLimitByIP("game-create"), logger)).Post("/", gamesHandler.CreateGame)
-				g.Get("/{gameId}", gamesHandler.GetGame)
-				g.Post("/{gameId}/start", gamesHandler.StartGame)
-				g.Get("/{gameId}/rounds/current", gamesHandler.GetCurrentRound)
-				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess"), logger)).Post("/{gameId}/rounds/{roundId}/guesses", gamesHandler.SubmitGuess)
-				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("guess-timeout"), logger)).Post("/{gameId}/rounds/{roundId}/timeout", gamesHandler.ExpireRound)
-				g.Get("/{gameId}/results", gamesHandler.GetResults)
-				g.With(appmiddleware.RateLimit(rateLimiter, guessLimit, appmiddleware.RateLimitByIP("practice-next"), logger)).Post("/{gameId}/rounds/next", gamesHandler.NextPracticeRound)
-				g.Get("/{gameId}/rounds", gamesHandler.GetPracticeHistory)
-				g.With(appmiddleware.RateLimit(rateLimiter, gameCreateLimit, appmiddleware.RateLimitByIP("practice-end"), logger)).Post("/{gameId}/end", gamesHandler.EndPractice)
+			ipLimit := func(cfg appmiddleware.RateLimitConfig, class string) func(http.Handler) http.Handler {
+				return appmiddleware.RateLimit(rateLimiter, cfg, appmiddleware.RateLimitByIP(class), logger)
+			}
+			// Single source of truth for /games routes lives in the handler;
+			// this provider only attaches the per-class rate limits.
+			gamesHandler.RegisterRoutesWith(api, func(class string) func(http.Handler) http.Handler {
+				switch class {
+				case games.RouteClassGameCreate, games.RouteClassPracticeEnd:
+					return ipLimit(gameCreateLimit, class)
+				case games.RouteClassQuickPlay:
+					// IP bucket plus per-actor bucket so one session cannot
+					// spend the whole shared-NAT allowance (and vice versa).
+					ip := ipLimit(gameCreateLimit, class)
+					actor := appmiddleware.RateLimit(rateLimiter, gameCreateLimit, appmiddleware.RateLimitBySessionActor(class+"-actor"), logger)
+					return func(next http.Handler) http.Handler { return ip(actor(next)) }
+				case games.RouteClassGuess, games.RouteClassGuessTimeout, games.RouteClassPracticeNext:
+					return ipLimit(guessLimit, class)
+				default:
+					return nil
+				}
 			})
 		}
 

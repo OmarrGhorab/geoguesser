@@ -66,7 +66,11 @@ func (m *PrometheusMetrics) ObserveModeOperation(mode, operation, outcome string
 	if m == nil || m.ModeOperationsTotal == nil {
 		return
 	}
-	if mode != GameModePractice {
+	// Bounded label set: only modes with dedicated dashboards keep their own
+	// label value; everything else folds into "other".
+	switch mode {
+	case GameModePractice, GameModeQuickPlay, GameModeSolo:
+	default:
 		mode = "other"
 	}
 	m.ModeOperationsTotal.WithLabelValues(mode, operation, outcome).Inc()

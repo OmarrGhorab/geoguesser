@@ -59,11 +59,14 @@
     "welcome": "مرحباً بعودتك، {name}!",
     "question": "ماذا تريد أن تلعب اليوم؟",
     "languageLabel": "تبديل اللغة",
-    "aria": { "primary": "التنقل الرئيسي", "dashboard": "تنقل لوحة التحكم", "search": "بحث", "menu": "فتح القائمة" },
+    "aria": {
+      "primary": "التنقل الرئيسي",
+      "dashboard": "تنقل لوحة التحكم",
+      "search": "بحث",
+      "menu": "فتح القائمة"
+    },
     "nav": {
-      "singleplayer": "فردي",
-      "multiplayer": "متعدد اللاعبين",
-      "party": "حفلة",
+      "play": "العب",
       "challenges": "التحديات",
       "maps": "الخرائط",
       "leaderboards": "لوحات الصدارة",
@@ -74,11 +77,84 @@
       "missions": "المهام",
       "settings": "الإعدادات"
     },
+    "gameModes": {
+      "title": "اختر وضع اللعب",
+      "searchLabel": "البحث في أوضاع اللعب",
+      "searchPlaceholder": "ابحث عن وضع",
+      "empty": "لا توجد أوضاع تطابق بحثك.",
+      "recommended": "موصى به",
+      "viewAll": "عرض كل الأوضاع",
+      "escapeHint": "Esc للإغلاق",
+      "groups": {
+        "soloAdventures": "مغامرات فردية",
+        "quickMatch": "مباراة سريعة",
+        "competitive": "تنافسي",
+        "withFriends": "مع الأصدقاء"
+      },
+      "items": {
+        "classicSolo": {
+          "title": "فردي كلاسيكي",
+          "description": "استكشف العالم بالوتيرة التي تناسبك"
+        },
+        "practice": {
+          "title": "التدريب",
+          "description": "طوّر مهاراتك عبر جولات مفتوحة"
+        },
+        "dailyChallenge": {
+          "title": "التحدي اليومي",
+          "description": "تحدٍ مشترك جديد كل يوم"
+        },
+        "quickPlay": {
+          "title": "اللعب السريع",
+          "description": "انضم إلى مباراة فوراً"
+        },
+        "casualSolo": {
+          "title": "فردي عادي",
+          "description": "مباراة فردية بلا ضغط"
+        },
+        "casualDuos": {
+          "title": "ثنائي عادي",
+          "description": "كوّن فريقاً مع شريك واحد"
+        },
+        "casualSquads": {
+          "title": "فريق عادي",
+          "description": "انضم بفريق من أربعة لاعبين"
+        },
+        "rankedSolo": {
+          "title": "فردي مصنّف",
+          "description": "نافس منفرداً وارتقِ في التصنيف"
+        },
+        "rankedDuos": {
+          "title": "ثنائي مصنّف",
+          "description": "نافس ضمن ثنائي متعاون"
+        },
+        "rankedSquads": {
+          "title": "فريق مصنّف",
+          "description": "نافس ضمن فريق في التصنيف"
+        },
+        "partyLobby": {
+          "title": "ردهة الحفلة",
+          "description": "أنشئ حفلة خاصة أو انضم إليها"
+        }
+      }
+    },
     "play": {
-      "singleplayer": { "title": "فردي", "description": "استكشف العالم بالوتيرة التي تناسبك" },
-      "multiplayer": { "title": "متعدد اللاعبين", "description": "نافس لاعبين آخرين" },
-      "party": { "title": "حفلة", "description": "ادعُ أصدقاءك وابدأ حفلة" },
-      "quiz": { "title": "اختبار", "description": "تحدَّ نفسك بالاختبارات" },
+      "singleplayer": {
+        "title": "فردي",
+        "description": "استكشف العالم بالوتيرة التي تناسبك"
+      },
+      "multiplayer": {
+        "title": "متعدد اللاعبين",
+        "description": "نافس لاعبين آخرين"
+      },
+      "party": {
+        "title": "حفلة",
+        "description": "ادعُ أصدقاءك وابدأ حفلة"
+      },
+      "quiz": {
+        "title": "اختبار",
+        "description": "تحدَّ نفسك بالاختبارات"
+      },
       "cta": "العب"
     },
     "premium": {
@@ -97,10 +173,26 @@
     "recommended": "موصى به لك",
     "seeAll": "عرض الكل",
     "maps": {
-      "world": { "title": "العالم", "difficulty": "سهل", "players": "12,456 يلعبون" },
-      "famous": { "title": "أماكن مشهورة", "difficulty": "متوسط", "players": "4,211 يلعبون" },
-      "usa": { "title": "الولايات المتحدة", "difficulty": "سهل", "players": "7,291 يلعبون" },
-      "europe": { "title": "أوروبا", "difficulty": "متوسط", "players": "4,210 يلعبون" }
+      "world": {
+        "title": "العالم",
+        "difficulty": "سهل",
+        "players": "12,456 يلعبون"
+      },
+      "famous": {
+        "title": "أماكن مشهورة",
+        "difficulty": "متوسط",
+        "players": "4,211 يلعبون"
+      },
+      "usa": {
+        "title": "الولايات المتحدة",
+        "difficulty": "سهل",
+        "players": "7,291 يلعبون"
+      },
+      "europe": {
+        "title": "أوروبا",
+        "difficulty": "متوسط",
+        "players": "4,210 يلعبون"
+      }
     },
     "modes": {
       "title": "أوضاع اللعب",
@@ -319,7 +411,6 @@
       "mapUnavailable": "صور الخريطة غير متاحة.",
       "retryMap": "تحميل موقع آخر",
       "selectLocation": "اختر موقعاً على الخريطة قبل الإرسال.",
-      "total": "الإجمالي",
       "zoomIn": "تكبير الخريطة",
       "zoomOut": "تصغير الخريطة",
       "recenter": "إعادة توسيط العرض",
@@ -458,6 +549,177 @@
       "backToLogin": "المتابعة لتسجيل الدخول",
       "showPassword": "إظهار كلمة المرور",
       "hidePassword": "إخفاء كلمة المرور"
+    }
+  },
+  "Play": {
+    "modes": {
+      "solo": "كلاسيكي فردي",
+      "soloDescription": "اضبط الخريطة والجولات والمؤقت لجولة فردية كلاسيكية.",
+      "quick_play": "لعب سريع",
+      "quick_playDescription": "ادخل مباشرة في خمس جولات موقوتة بإعدادات الخادم.",
+      "practice": "تدريب",
+      "practiceDescription": "تدريب بلا مؤقت مع سجل وإنهاء صريح.",
+      "daily": "تحدي يومي",
+      "dailyDescription": "خمسة مواقع يومية مشتركة مع تقدم من خمس ألعاب.",
+      "party_lobby": "ردهة الحفلة",
+      "party_lobbyDescription": "أنشئ أو انضم إلى ردهة خاصة مع الأصدقاء.",
+      "casual_solo": "عادي فردي",
+      "casual_soloDescription": "مطابقة عادية فردية دون تصنيف.",
+      "casual_duo": "عادي ثنائي",
+      "casual_duoDescription": "مطابقة عادية ثنائية.",
+      "casual_squad": "عادي رباعي",
+      "casual_squadDescription": "مطابقة عادية رباعية.",
+      "ranked_solo": "ترتيب فردي",
+      "ranked_soloDescription": "ترتيب فردي مع مؤقت وتصنيف.",
+      "ranked_duo": "ترتيب ثنائي",
+      "ranked_duoDescription": "ترتيب ثنائي مع مؤقت وتصنيف.",
+      "ranked_squad": "ترتيب رباعي",
+      "ranked_squadDescription": "ترتيب رباعي مع مؤقت وتصنيف."
+    },
+    "descriptions": {
+      "solo": "اختر خريطة وعدد جولات ومؤقتاً ثم ضع الدبوس في كل جولة.",
+      "quick_play": "نقرة واحدة تبدأ خمس جولات بـ 60 ثانية على خريطة الخادم الافتراضية.",
+      "practice": "تدرّب بلا مؤقت. تابع الجولات حتى تنهي الجلسة."
+    },
+    "setup": {
+      "title": "ابدأ اللعب",
+      "subtitle": "اختر إعداداتك وابدأ.",
+      "mapLabel": "الخريطة",
+      "mapPlaceholder": "اختر خريطة",
+      "noMaps": "لا توجد خرائط قابلة للعب الآن.",
+      "roundsLabel": "الجولات",
+      "timerLabel": "المؤقت",
+      "timerOff": "إيقاف",
+      "start": "ابدأ اللعبة",
+      "starting": "جارٍ البدء…",
+      "quickPlayDefaults": "اللعب السريع يستخدم خمس جولات ومؤقت 60 ثانية وخريطة الخادم الافتراضية.",
+      "practiceRules": "التدريب بلا مؤقت ومفتوح. أنهِ الجلسة عند الانتهاء.",
+      "back": "رجوع"
+    },
+    "game": {
+      "title": "اللعبة",
+      "round": "جولة",
+      "of": "من",
+      "score": "النتيجة",
+      "distance": "المسافة",
+      "placePin": "ضع دبوساً على الخريطة",
+      "submitGuess": "أرسل التخمين",
+      "submitting": "جارٍ التحقق…",
+      "next": "التالي",
+      "finalScore": "نتيجتك",
+      "breakdown": "التفصيل",
+      "backToPlay": "العودة إلى اللعب",
+      "loadingMap": "جارٍ تحميل الخريطة…",
+      "mapUnavailable": "الخريطة غير متاحة",
+      "retryMap": "إعادة محاولة الخريطة",
+      "selectLocation": "اختر موقعاً على الخريطة أولاً.",
+      "total": "المجموع",
+      "zoomIn": "تكبير",
+      "zoomOut": "تصغير",
+      "recenter": "إعادة التمركز",
+      "settings": "الإعدادات",
+      "openReactions": "فتح التفاعلات",
+      "reactionsTitle": "التفاعلات",
+      "closeReactions": "إغلاق التفاعلات",
+      "reactionsPrompt": "أرسل تفاعلاً",
+      "reactionSent": "أُرسل",
+      "expandMap": "توسيع الخريطة",
+      "closeMap": "إغلاق الخريطة",
+      "mapLabel": "خريطة التخمين",
+      "timeExpired": "انتهى الوقت",
+      "correctLocation": "الموقع الصحيح",
+      "endPractice": "إنهاء التدريب",
+      "nextPracticeRound": "جولة تدريب تالية",
+      "errors": {
+        "invalidGuess": "تعذر إرسال هذا التخمين.",
+        "unavailable": "هذه الجولة غير متاحة مؤقتاً."
+      }
+    },
+    "results": {
+      "title": "النتائج",
+      "finalScore": "النتيجة النهائية",
+      "breakdown": "تفصيل الجولات",
+      "round": "جولة",
+      "score": "النتيجة",
+      "distance": "المسافة",
+      "total": "المجموع",
+      "next": "التالي",
+      "backToPlay": "العودة إلى اللعب",
+      "playAgain": "العب مجدداً",
+      "yourGuess": "تخمينك",
+      "correctPosition": "الموقع الصحيح",
+      "mapUnavailable": "تعذر تحميل خريطة النتائج.",
+      "resultMap": "خريطة تخميناتك والمواقع الصحيحة",
+      "overview": "نظرة عامة",
+      "pointsOf": "نقاط"
+    },
+    "errors": {
+      "validation": "تحقق من الإعدادات وحاول مجدداً.",
+      "unavailable": "هذا الوضع غير متاح مؤقتاً.",
+      "rateLimited": "طلبات كثيرة. انتظر قليلاً ثم أعد المحاولة.",
+      "unauthenticated": "سجّل الدخول أو ابدأ جلسة ضيف للمتابعة.",
+      "generic": "حدث خطأ. حاول مجدداً.",
+      "notEnoughLocations": "هذه الخريطة لا تحتوي على مواقع كافية لعدد الجولات المحدد. جرّب جولات أقل أو خريطة أخرى."
+    }
+  },
+  "Rooms": {
+    "title": "ردهة الحفلة",
+    "subtitle": "أنشئ ردهة خاصة أو انضم برمز الغرفة.",
+    "createTitle": "إنشاء ردهة",
+    "joinTitle": "انضم برمز",
+    "mapLabel": "الخريطة",
+    "codeLabel": "رمز الغرفة",
+    "codePlaceholder": "ABCD12",
+    "create": "إنشاء ردهة",
+    "creating": "جارٍ الإنشاء…",
+    "join": "انضم إلى الردهة",
+    "joining": "جارٍ الانضمام…",
+    "back": "رجوع",
+    "noMaps": "لا توجد خرائط قابلة للعب الآن.",
+    "errors": {
+      "validation": "تحقق من الإعدادات وحاول مجدداً.",
+      "unavailable": "ردهة الحفلة غير متاحة مؤقتاً.",
+      "notFound": "لم يتم العثور على هذه الغرفة.",
+      "hostActionRequired": "كمضيف يجب إلغاء الردهة بدل المغادرة.",
+      "generic": "حدث خطأ. حاول مجدداً."
+    },
+    "lobby": {
+      "title": "ردهة الحفلة",
+      "codeLabel": "رمز الغرفة",
+      "statusLabel": "الحالة",
+      "playersLabel": "اللاعبون",
+      "host": "المضيف",
+      "you": "أنت",
+      "leave": "مغادرة الردهة",
+      "cancel": "إلغاء الردهة",
+      "copyCode": "نسخ الرمز",
+      "copied": "تم النسخ",
+      "waiting": "شارك الرمز لينضم الأصدقاء. يمكن للمضيف البدء عند وجود لاعبين على الأقل.",
+      "start": "بدء اللعبة",
+      "starting": "جارٍ البدء…",
+      "needPlayers": "يجب انضمام لاعبين على الأقل قبل أن يبدأ المضيف.",
+      "activeHint": "اللعبة نشطة في الردهة. يستمر اللعب لجميع الأعضاء.",
+      "submitted": "تم إرسال التخمين",
+      "waitingOthers": "بانتظار باقي اللاعبين…",
+      "placePin": "ضع دبوساً على الخريطة",
+      "submitGuess": "أرسل التخمين",
+      "submitting": "جارٍ التحقق…",
+      "next": "التالي",
+      "distance": "المسافة",
+      "correctLocation": "الموقع الصحيح",
+      "timeExpired": "انتهى الوقت",
+      "mapLabel": "خريطة التخمين",
+      "total": "المجموع",
+      "zoomIn": "تكبير",
+      "zoomOut": "تصغير",
+      "recenter": "إعادة التمركز",
+      "expandMap": "توسيع الخريطة",
+      "mapUnavailable": "الخريطة غير متاحة",
+      "retryMap": "إعادة محاولة الخريطة",
+      "selectLocation": "اختر موقعاً أولاً.",
+      "live": "مباشر",
+      "polling": "مزامنة",
+      "invalidGuess": "تعذر إرسال هذا التخمين."
     }
   }
 }

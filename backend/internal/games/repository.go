@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -127,6 +128,93 @@ func (r *Repository) StartGame(ctx context.Context, gameID uuid.UUID, now time.T
 	current := 1
 	game.CurrentRoundNumber = &current
 	return &game, nil
+}
+
+// GetGameByCreationIdempotencyKey returns the game persisted with the given
+// actor-qualified creation idempotency key, or nil when no such game exists.
+func (r *Repository) GetGameByCreationIdempotencyKey(ctx context.Context, key string) (*Game, error) {
+	if key == "" {
+		return nil, nil
+	}
+	var game Game
+	if err := r.db.WithContext(ctx).First(&game, "creation_idempotency_key = ?", key).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get game by creation idempotency key: %w", err)
+	}
+	return &game, nil
+}
+
+// CreateAndStartGameBundle inserts a game with its player and rounds and
+// activates the game plus round 1 in a single transaction, so a partial
+// failure can never strand an orphaned pending game. Callers should treat a
+// unique violation (IsCreationIdempotencyConflict) as a concurrent duplicate
+// of the same creation key and replay via GetGameByCreationIdempotencyKey.
+func (r *Repository) CreateAndStartGameBundle(ctx context.Context, game *Game, player *GamePlayer, rounds []Round, now time.Time) (*Game, error) {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(game).Error; err != nil {
+			return fmt.Errorf("create game: %w", err)
+		}
+		player.GameID = game.ID
+		if err := tx.Create(player).Error; err != nil {
+			return fmt.Errorf("create game player: %w", err)
+		}
+		for i := range rounds {
+			rounds[i].GameID = game.ID
+		}
+		if len(rounds) > 0 {
+			if err := tx.Create(&rounds).Error; err != nil {
+				return fmt.Errorf("create rounds: %w", err)
+			}
+		}
+		var endsAt *time.Time
+		if game.TimerSeconds != nil {
+			v := now.Add(time.Duration(*game.TimerSeconds) * time.Second)
+			endsAt = &v
+		}
+		if err := tx.Model(&Game{}).Where("id = ?", game.ID).Updates(map[string]any{
+			"status":     GameStatusActive,
+			"started_at": now,
+			"updated_at": now,
+		}).Error; err != nil {
+			return fmt.Errorf("activate game: %w", err)
+		}
+		if err := tx.Model(&Round{}).Where("game_id = ? AND round_number = ?", game.ID, 1).Updates(map[string]any{
+			"status":    RoundStatusActive,
+			"starts_at": now,
+			"ends_at":   endsAt,
+		}).Error; err != nil {
+			return fmt.Errorf("activate first round: %w", err)
+		}
+		return tx.First(game, "id = ?", game.ID).Error
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create and start game bundle: %w", err)
+	}
+	current := 1
+	game.CurrentRoundNumber = &current
+	return game, nil
+}
+
+// IsCreationIdempotencyConflict reports whether err is the unique violation
+// raised when a second insert reuses an existing creation idempotency key.
+func IsCreationIdempotencyConflict(err error) bool {
+	return isUniqueViolation(err)
+}
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Avoid a hard dependency on pgconn; match common driver messages / codes.
+	msg := err.Error()
+	for _, part := range []string{"duplicate key", "unique constraint", "SQLSTATE 23505", "23505"} {
+		if strings.Contains(msg, part) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Repository) StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID, rounds []Round, now time.Time, timerSeconds *int, hooks MultiplayerTxHooks) (*MultiplayerStart, error) {
@@ -645,8 +733,13 @@ func (r *Repository) GetMultiplayerRoundState(ctx context.Context, gameID uuid.U
 	if row.RoundID == uuid.Nil {
 		return nil, nil
 	}
+	// Same active-player scoping as multiplayerProgress: departed players'
+	// guesses must not inflate submitted progress shown to clients.
 	var submittedIDs []uuid.UUID
-	if err := r.db.WithContext(ctx).Model(&Guess{}).Where("round_id = ?", row.RoundID).Pluck("game_player_id", &submittedIDs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&Guess{}).
+		Joins("JOIN game_players ON game_players.id = guesses.game_player_id").
+		Where("guesses.round_id = ? AND game_players.game_id = ? AND game_players.status = ?", row.RoundID, gameID, PlayerStatusActive).
+		Pluck("guesses.game_player_id", &submittedIDs).Error; err != nil {
 		return nil, fmt.Errorf("get submitted player ids: %w", err)
 	}
 	var eligible int64
@@ -746,6 +839,49 @@ func (r *Repository) CloseExpiredMultiplayerRound(ctx context.Context, gameID uu
 	}
 	if err != nil {
 		return nil, fmt.Errorf("close expired multiplayer round: %w", err)
+	}
+	return out, nil
+}
+
+// CompleteMultiplayerRoundIfAllSubmitted closes the active multiplayer round
+// when every remaining eligible (active) player has already submitted. It is
+// used after a departure shrinks the eligible set, so a round never waits out
+// its timer on a player who left. Returns nil when there is nothing to close.
+func (r *Repository) CompleteMultiplayerRoundIfAllSubmitted(ctx context.Context, gameID uuid.UUID, now time.Time, hooks MultiplayerTxHooks) (*MultiplayerGuessOutcome, error) {
+	out := &MultiplayerGuessOutcome{}
+	closed := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var game Game
+		if err := tx.Clauses(lockingClause()).First(&game, "id = ?", gameID).Error; err != nil {
+			return err
+		}
+		if !IsMultiplayerMode(game.Mode) || game.Status != GameStatusActive {
+			return ErrGameNotActive
+		}
+		var round Round
+		if err := tx.Clauses(lockingClause()).First(&round, "game_id = ? AND status = ?", gameID, RoundStatusActive).Error; err != nil {
+			return err
+		}
+		submitted, eligible, err := multiplayerProgress(tx, gameID, round.ID)
+		if err != nil {
+			return err
+		}
+		out.SubmittedCount = submitted
+		out.EligibleCount = eligible
+		if eligible == 0 || submitted < eligible {
+			return nil
+		}
+		closed = true
+		return completeMultiplayerRound(ctx, tx, game, round.ID, now, out, hooks)
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, ErrGameNotActive) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("complete multiplayer round if all submitted: %w", err)
+	}
+	if !closed {
+		return nil, nil
 	}
 	return out, nil
 }
@@ -1129,8 +1265,16 @@ func (r *Repository) LoadResults(ctx context.Context, gameID uuid.UUID) (*Game, 
 }
 
 func multiplayerProgress(tx *gorm.DB, gameID, roundID uuid.UUID) (int, int, error) {
+	// submitted counts only guesses from currently-active players so it stays
+	// a subset of eligible. A player who guesses and then leaves (rooms
+	// mirrors terminal departures onto game_players.status) must not keep
+	// counting toward the all-submitted close, or the round would end early
+	// and zero-fill still-active players who had time left.
 	var submitted int64
-	if err := tx.Model(&Guess{}).Where("round_id = ?", roundID).Count(&submitted).Error; err != nil {
+	if err := tx.Model(&Guess{}).
+		Joins("JOIN game_players ON game_players.id = guesses.game_player_id").
+		Where("guesses.round_id = ? AND game_players.game_id = ? AND game_players.status = ?", roundID, gameID, PlayerStatusActive).
+		Count(&submitted).Error; err != nil {
 		return 0, 0, err
 	}
 	var eligible int64

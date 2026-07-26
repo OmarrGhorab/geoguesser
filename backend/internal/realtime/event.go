@@ -6,29 +6,32 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/raven/geoguess/backend/internal/realtime/roomevents"
 )
 
 // ChannelKindRoom is the legacy private-room transport kind.
 // ChannelKindParty and ChannelKindMatch are defined in contracts.go.
 const ChannelKindRoom = "room"
 
+// Room-channel event names are aliased from the shared roomevents leaf
+// package so the rooms publisher and this allowlist cannot drift.
 const (
-	EventRoomSnapshot           = "room.snapshot"
-	EventRoomPlayerJoined       = "room.player_joined"
-	EventRoomPlayerLeft         = "room.player_left"
-	EventRoomPlayerDisconnected = "room.player_disconnected"
-	EventRoomPlayerReconnected  = "room.player_reconnected"
-	EventRoomPlayerRemoved      = "room.player_removed"
-	EventRoomSettingsUpdated    = "room.settings_updated"
-	EventRoomReadyUpdated       = "room.ready_updated"
-	EventRoomReadyReset         = "room.ready_reset"
-	EventRoomStarted            = "room.started"
-	EventRoundStarted           = "round.started"
-	EventRoundGuessCountChanged = "round.guess_count_changed"
-	EventRoundEnded             = "round.ended"
-	EventRoundResultsRevealed   = "round.results_revealed"
-	EventGameCompleted          = "game.completed"
-	EventRoomError              = "room.error"
+	EventRoomSnapshot           = roomevents.EventRoomSnapshot
+	EventRoomPlayerJoined       = roomevents.EventRoomPlayerJoined
+	EventRoomPlayerLeft         = roomevents.EventRoomPlayerLeft
+	EventRoomPlayerDisconnected = roomevents.EventRoomPlayerDisconnected
+	EventRoomPlayerReconnected  = roomevents.EventRoomPlayerReconnected
+	EventRoomPlayerRemoved      = roomevents.EventRoomPlayerRemoved
+	EventRoomSettingsUpdated    = roomevents.EventRoomSettingsUpdated
+	EventRoomReadyUpdated       = roomevents.EventRoomReadyUpdated
+	EventRoomReadyReset         = roomevents.EventRoomReadyReset
+	EventRoomStarted            = roomevents.EventRoomStarted
+	EventRoundStarted           = roomevents.EventRoundStarted
+	EventRoundGuessCountChanged = roomevents.EventRoundGuessCountChanged
+	EventRoundEnded             = roomevents.EventRoundEnded
+	EventRoundResultsRevealed   = roomevents.EventRoundResultsRevealed
+	EventGameCompleted          = roomevents.EventGameCompleted
+	EventRoomError              = roomevents.EventRoomError
 
 	// Party channel event types (payload shapes filled in later stories).
 	EventPartySnapshot         = "party.snapshot"

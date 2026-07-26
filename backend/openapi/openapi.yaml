@@ -588,6 +588,61 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
+  /games/quick-play:
+    post:
+      tags: [Games]
+      summary: Start a Quick Play game
+      description: |
+        Atomically creates and starts a solo-compatible Quick Play game using
+        server-owned defaults (mode quick_play, configured map, five rounds,
+        60-second timer) in a single transaction. Clients must not supply map
+        or timer settings. Requires a guest or registered session and a stable
+        Idempotency-Key: the key is persisted with the game, so retrying with
+        the same key replays the original game (201 with the same game id)
+        instead of creating a duplicate; 409 is returned only while an
+        identical request is still in flight.
+      operationId: startQuickPlay
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        # Inline (not the shared ref) because Quick Play REQUIRES the key.
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Stable retry key (16-128 chars). Identical retries replay the originally created game.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+      responses:
+        '201':
+          description: Active Quick Play game (round 1 running, current_round_number = 1). Replayed retries return the original game.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Quick Play is not configured on this server (code quick_play_unavailable).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /games/{gameId}:
     get:
       tags: [Games]
@@ -1011,6 +1066,32 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Rooms]
+      summary: Cancel a lobby room
+      description: >
+        Host-only cancellation while the room is still in lobby status.
+        Idempotent 204 when the room is already cancelled for the host.
+        Returns 409 room_not_cancellable after the hosted game has started.
+      operationId: cancelRoom
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RoomCode'
+      responses:
+        '204':
+          description: Lobby cancelled (or already cancelled).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /rooms/{roomCode}/settings:
     patch:
@@ -1105,6 +1186,36 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+
+  /rooms/{roomCode}/players/me:
+    delete:
+      tags: [Rooms]
+      summary: Leave a room as the current player
+      description: >
+        Non-host members leave the room. Idempotent 204 when already left.
+        Hosts must cancel the lobby instead and receive 409 host_action_required.
+        Missing or unauthorized rooms return a privacy-safe 404.
+      operationId: leaveRoomSelf
+      security:
+        - accessCookie: []
+          csrfHeader: []
+        - guestSession: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RoomCode'
+      responses:
+        '204':
+          description: Left the room (or already left).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Host must cancel the lobby instead of self-leave.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /rooms/{roomCode}/players/{playerId}:
     delete:
@@ -4772,7 +4883,7 @@ components:
 
     CreateRoomRequest:
       type: object
-      required: [map_id, visibility]
+      required: [map_id]
       additionalProperties: false
       properties:
         map_id:
@@ -4781,6 +4892,8 @@ components:
         visibility:
           type: string
           enum: [private]
+          default: private
+          description: Optional; the server defaults omitted/blank visibility to private.
         round_count:
           type: integer
           minimum: 1

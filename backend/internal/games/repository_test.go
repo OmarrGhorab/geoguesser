@@ -406,6 +406,103 @@ func TestSubmitMultiplayerGuessRequiresActiveMultiplayerGame(t *testing.T) {
 	}
 }
 
+// Regression: a player who guesses and then departs (rooms mirrors terminal
+// statuses onto game_players) must not keep counting toward the all-submitted
+// close — otherwise the round ends early and zero-fills still-active players.
+func TestDepartedPlayerGuessDoesNotCloseRound(t *testing.T) {
+	repo, db := setupGamesRepositoryTest(t)
+	ctx := context.Background()
+	mapID, locationIDs := seedGameMap(t, db, 2)
+	now := time.Now().UTC()
+
+	timer := 180
+	game := &games.Game{
+		Mode:           games.GameModePartyLobby,
+		Status:         games.GameStatusActive,
+		MapID:          mapID,
+		RoundCount:     2,
+		TimerSeconds:   &timer,
+		ScoringVersion: games.ScoringVersionV1,
+		StartedAt:      &now,
+	}
+	if err := db.Create(game).Error; err != nil {
+		t.Fatalf("create party lobby game: %v", err)
+	}
+	guests := []string{"departed-host", "departed-leaver", "departed-active"}
+	players := make([]*games.GamePlayer, len(guests))
+	for i, guest := range guests {
+		g := guest
+		players[i] = &games.GamePlayer{GameID: game.ID, GuestIdentityHash: &g, DisplayName: g, Role: games.PlayerRolePlayer, Status: games.PlayerStatusActive}
+		if err := db.Create(players[i]).Error; err != nil {
+			t.Fatalf("create player %s: %v", g, err)
+		}
+	}
+	host, leaver, active := players[0], players[1], players[2]
+	starts := now.Add(-time.Second)
+	ends := now.Add(150 * time.Second)
+	round1 := games.Round{GameID: game.ID, LocationID: locationIDs[0], RoundNumber: 1, Status: games.RoundStatusActive, StartsAt: &starts, EndsAt: &ends}
+	round2 := games.Round{GameID: game.ID, LocationID: locationIDs[1], RoundNumber: 2, Status: games.RoundStatusPending}
+	if err := db.Create(&round1).Error; err != nil {
+		t.Fatalf("create round1: %v", err)
+	}
+	if err := db.Create(&round2).Error; err != nil {
+		t.Fatalf("create round2: %v", err)
+	}
+
+	// Host and leaver submit (2 of 3), then the leaver departs mid-round.
+	if _, _, err := repo.SubmitMultiplayerGuessTx(ctx, game.ID, round1.ID, host.ID, games.Guess{Latitude: 1, Longitude: 1}, now, games.MultiplayerTxHooks{}); err != nil {
+		t.Fatalf("host guess: %v", err)
+	}
+	if _, _, err := repo.SubmitMultiplayerGuessTx(ctx, game.ID, round1.ID, leaver.ID, games.Guess{Latitude: 2, Longitude: 2}, now.Add(time.Second), games.MultiplayerTxHooks{}); err != nil {
+		t.Fatalf("leaver guess: %v", err)
+	}
+	leftAt := now.Add(2 * time.Second)
+	if err := db.Model(&games.GamePlayer{}).Where("id = ?", leaver.ID).Updates(map[string]any{"status": games.PlayerStatusLeft, "left_at": leftAt}).Error; err != nil {
+		t.Fatalf("mark leaver left: %v", err)
+	}
+
+	// The departure nudge must NOT close the round: the departed player's
+	// guess no longer counts, and the remaining active player has not guessed.
+	out, err := repo.CompleteMultiplayerRoundIfAllSubmitted(ctx, game.ID, now.Add(3*time.Second), games.MultiplayerTxHooks{})
+	if err != nil {
+		t.Fatalf("nudge: %v", err)
+	}
+	if out != nil {
+		t.Fatalf("round closed early with an active player still guessing: %+v", out)
+	}
+	var status string
+	if err := db.Model(&games.Round{}).Where("id = ?", round1.ID).Pluck("status", &status).Error; err != nil {
+		t.Fatalf("read round status: %v", err)
+	}
+	if status != games.RoundStatusActive {
+		t.Fatalf("round status = %s, want still active", status)
+	}
+
+	// Once the remaining active player submits, the round completes and no
+	// zero-fill is written for anyone (departed player keeps their real guess).
+	closeOut, _, err := repo.SubmitMultiplayerGuessTx(ctx, game.ID, round1.ID, active.ID, games.Guess{Latitude: 3, Longitude: 3}, now.Add(4*time.Second), games.MultiplayerTxHooks{})
+	if err != nil {
+		t.Fatalf("active guess: %v", err)
+	}
+	if closeOut == nil || !closeOut.RoundCompleted {
+		t.Fatalf("expected close after all remaining active players guessed, got %+v", closeOut)
+	}
+	var timedOut int64
+	if err := db.Model(&games.Guess{}).Where("round_id = ? AND timed_out = true", round1.ID).Count(&timedOut).Error; err != nil {
+		t.Fatalf("count zero fills: %v", err)
+	}
+	if timedOut != 0 {
+		t.Fatalf("zero-fill guesses written = %d, want 0", timedOut)
+	}
+	var total int64
+	if err := db.Model(&games.Guess{}).Where("round_id = ?", round1.ID).Count(&total).Error; err != nil {
+		t.Fatalf("count guesses: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("round guesses = %d, want 3 (departed player's real guess kept)", total)
+	}
+}
+
 func TestMultiplayerLifecycleHooks_CommitAndRollback(t *testing.T) {
 	repo, db := setupGamesRepositoryTest(t)
 	if !db.Migrator().HasTable("matches") {

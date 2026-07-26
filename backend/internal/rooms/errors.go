@@ -17,6 +17,12 @@ var (
 	ErrRoomCodeRateLimited  = errors.New("room code rate limited")
 	ErrInvalidRoomRequest   = errors.New("invalid room request")
 	ErrIdempotencyConflict  = errors.New("idempotency conflict")
+	// ErrHostActionRequired is returned when a lobby host must cancel instead of self-leave.
+	ErrHostActionRequired = errors.New("host action required")
+	// ErrRoomNotCancellable is returned when cancellation is requested after the
+	// room left lobby status. Scoped to cancel (409) so ErrRoomAlreadyStarted
+	// keeps its long-standing 422 mapping on ready/start endpoints.
+	ErrRoomNotCancellable = errors.New("room not cancellable")
 )
 
 const (
@@ -33,4 +39,6 @@ const (
 	CodeRoomIdentityMismatch = "room_identity_mismatch"
 	CodeRoomCodeRateLimited  = "room_code_rate_limited"
 	CodeIdempotencyConflict  = "idempotency_conflict"
+	CodeHostActionRequired   = "host_action_required"
+	CodeRoomNotCancellable   = "room_not_cancellable"
 )

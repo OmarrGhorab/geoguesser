@@ -37,40 +37,61 @@ function cookieValue(header: string, name: string): string | undefined {
 async function prepareBackendCookies(
   base: string,
   method: string,
+  options: { ensureGuest?: boolean } = {},
 ): Promise<{ cookieHeader: string; csrfToken?: string }> {
   let cookieHeader = await getBackendCookieHeader();
   let csrfToken = cookieValue(cookieHeader, "csrf_token");
 
-  if (!isUnsafeMethod(method) || csrfToken) {
-    return { cookieHeader, csrfToken };
+  // CSRF is only required for unsafe methods; skip health bootstrap otherwise.
+  if (isUnsafeMethod(method) && !csrfToken) {
+    const bootstrapHeaders = new Headers({ Accept: "application/json" });
+    if (cookieHeader) bootstrapHeaders.set("Cookie", cookieHeader);
+
+    const bootstrap = await fetch(`${base}/health`, {
+      method: "GET",
+      headers: bootstrapHeaders,
+      cache: "no-store",
+    });
+
+    if (!bootstrap.ok) {
+      throw new ApiError(bootstrap.status, {
+        code: "csrf_bootstrap_failed",
+        message: "Unable to establish CSRF protection.",
+      });
+    }
+
+    const issuedCookies = authCookiesFromResponse(bootstrap);
+    cookieHeader = mergeCookieHeader(cookieHeader, issuedCookies);
+    csrfToken = cookieValue(cookieHeader, "csrf_token");
+    await forwardAuthCookies(bootstrap);
+
+    if (!csrfToken) {
+      throw new ApiError(500, {
+        code: "csrf_bootstrap_failed",
+        message: "The backend did not issue a CSRF token.",
+      });
+    }
   }
 
-  const bootstrapHeaders = new Headers({ Accept: "application/json" });
-  if (cookieHeader) bootstrapHeaders.set("Cookie", cookieHeader);
-
-  const bootstrap = await fetch(`${base}/health`, {
-    method: "GET",
-    headers: bootstrapHeaders,
-    cache: "no-store",
-  });
-
-  if (!bootstrap.ok) {
-    throw new ApiError(bootstrap.status, {
-      code: "csrf_bootstrap_failed",
-      message: "Unable to establish CSRF protection.",
+  // Solo-family and other guest-capable endpoints need a guest_session when the
+  // browser has neither an access token nor an existing guest cookie.
+  const hasIdentity =
+    Boolean(cookieValue(cookieHeader, "access_token")) ||
+    Boolean(cookieValue(cookieHeader, "guest_session"));
+  if (options.ensureGuest && !hasIdentity) {
+    const guestHeaders = new Headers({ Accept: "application/json" });
+    if (cookieHeader) guestHeaders.set("Cookie", cookieHeader);
+    const me = await fetch(`${base}/auth/me`, {
+      method: "GET",
+      headers: guestHeaders,
+      cache: "no-store",
     });
-  }
-
-  const issuedCookies = authCookiesFromResponse(bootstrap);
-  cookieHeader = mergeCookieHeader(cookieHeader, issuedCookies);
-  csrfToken = cookieValue(cookieHeader, "csrf_token");
-  await forwardAuthCookies(bootstrap);
-
-  if (!csrfToken) {
-    throw new ApiError(500, {
-      code: "csrf_bootstrap_failed",
-      message: "The backend did not issue a CSRF token.",
-    });
+    if (me.ok) {
+      const issued = authCookiesFromResponse(me);
+      cookieHeader = mergeCookieHeader(cookieHeader, issued);
+      csrfToken = cookieValue(cookieHeader, "csrf_token") ?? csrfToken;
+      await forwardAuthCookies(me);
+    }
   }
 
   return { cookieHeader, csrfToken };
@@ -83,7 +104,11 @@ export async function apiFetch(
   const base = getBackendApiUrl();
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
   const method = options.method ?? "GET";
-  const prepared = await prepareBackendCookies(base, method);
+  // Guest-capable writes (games create, daily attempts, etc.) must obtain a
+  // guest_session before the first authorized call when the user is anonymous.
+  const prepared = await prepareBackendCookies(base, method, {
+    ensureGuest: Boolean(options.requiresAuth),
+  });
 
   let body: string | undefined;
   if (options.body !== undefined) {
@@ -104,16 +129,18 @@ export async function apiFetch(
   };
 
   let response = await send(prepared.cookieHeader, prepared.csrfToken);
+  let cookieHeader = prepared.cookieHeader;
+  let csrfToken = prepared.csrfToken;
 
   if (
     options.requiresAuth &&
     (response.status === 401 || response.status === 403) &&
-    cookieValue(prepared.cookieHeader, "refresh_token")
+    cookieValue(cookieHeader, "refresh_token")
   ) {
     const refreshHeaders = new Headers({ Accept: "application/json" });
-    refreshHeaders.set("Cookie", prepared.cookieHeader);
-    if (prepared.csrfToken) {
-      refreshHeaders.set("X-CSRF-Token", prepared.csrfToken);
+    refreshHeaders.set("Cookie", cookieHeader);
+    if (csrfToken) {
+      refreshHeaders.set("X-CSRF-Token", csrfToken);
     }
     const refreshResponse = await fetch(`${base}/auth/refresh`, {
       method: "POST",
@@ -123,20 +150,17 @@ export async function apiFetch(
     await forwardAuthCookies(refreshResponse);
 
     if (refreshResponse.ok) {
-      const refreshedCookieHeader = mergeCookieHeader(
-        prepared.cookieHeader,
+      cookieHeader = mergeCookieHeader(
+        cookieHeader,
         authCookiesFromResponse(refreshResponse),
       );
-      response = await send(
-        refreshedCookieHeader,
-        cookieValue(refreshedCookieHeader, "csrf_token"),
-      );
+      csrfToken = cookieValue(cookieHeader, "csrf_token") ?? csrfToken;
+      response = await send(cookieHeader, csrfToken);
     }
   }
 
-  if (options.forwardCookies) {
-    await forwardAuthCookies(response);
-  }
+  // Always persist session cookies issued by the backend (guest, access, csrf).
+  await forwardAuthCookies(response);
 
   return response;
 }

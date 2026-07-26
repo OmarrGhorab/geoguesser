@@ -60,6 +60,13 @@ type Config struct {
 	ChallengeResetHourUTC int
 	ChallengeDefaultMapID string
 
+	// Quick Play (solo-compatible, server-owned defaults).
+	// QuickPlayDefaultMapID is fully resolved at load time:
+	// QUICK_PLAY_DEFAULT_MAP_ID > CHALLENGE_DEFAULT_MAP_ID > MATCHMAKING_DEFAULT_MAP_ID.
+	QuickPlayDefaultMapID string
+	QuickPlayRoundCount   int
+	QuickPlayTimerSeconds int
+
 	RoomReconnectGrace      time.Duration
 	RoomHeartbeatInterval   time.Duration
 	RoomPresenceTTL         time.Duration
@@ -162,6 +169,10 @@ func Load() (Config, error) {
 
 		ChallengeResetHourUTC: intEnvAllowZero("CHALLENGE_RESET_HOUR_UTC", 0),
 		ChallengeDefaultMapID: strings.TrimSpace(os.Getenv("CHALLENGE_DEFAULT_MAP_ID")),
+		// Resolved chain: QUICK_PLAY > CHALLENGE > MATCHMAKING default map IDs.
+		QuickPlayDefaultMapID: quickPlayDefaultMapID(),
+		QuickPlayRoundCount:   intEnv("QUICK_PLAY_ROUND_COUNT", 5),
+		QuickPlayTimerSeconds: intEnv("QUICK_PLAY_TIMER_SECONDS", 60),
 
 		RoomReconnectGrace:      durationSeconds("ROOM_RECONNECT_GRACE_SECONDS", 30),
 		RoomHeartbeatInterval:   durationSeconds("ROOM_HEARTBEAT_INTERVAL_SECONDS", 10),
@@ -252,6 +263,17 @@ func (c Config) Validate() error {
 	}
 	if c.ChallengeResetHourUTC < 0 || c.ChallengeResetHourUTC > 23 {
 		return errors.New("CHALLENGE_RESET_HOUR_UTC must be between 0 and 23")
+	}
+	if c.QuickPlayRoundCount < 1 || c.QuickPlayRoundCount > 10 {
+		return errors.New("QUICK_PLAY_ROUND_COUNT must be between 1 and 10")
+	}
+	if c.QuickPlayTimerSeconds < 10 || c.QuickPlayTimerSeconds > 600 {
+		return errors.New("QUICK_PLAY_TIMER_SECONDS must be between 10 and 600")
+	}
+	if mapID := strings.TrimSpace(c.QuickPlayDefaultMapID); mapID != "" {
+		if _, err := parseUUID(mapID); err != nil {
+			return errors.New("QUICK_PLAY_DEFAULT_MAP_ID must be a valid UUID when set")
+		}
 	}
 	if c.RoomReconnectGrace <= 0 {
 		return errors.New("ROOM_RECONNECT_GRACE_SECONDS must be positive")
@@ -385,6 +407,19 @@ func getEnv(key, fallback string) string {
 	}
 
 	return value
+}
+
+// quickPlayDefaultMapID resolves the full Quick Play map fallback chain:
+// QUICK_PLAY_DEFAULT_MAP_ID, else CHALLENGE_DEFAULT_MAP_ID, else
+// MATCHMAKING_DEFAULT_MAP_ID. The chain is resolved (and UUID-validated via
+// Config.Validate) here so cmd/api consumes a single already-decided value.
+func quickPlayDefaultMapID() string {
+	for _, key := range []string{"QUICK_PLAY_DEFAULT_MAP_ID", "CHALLENGE_DEFAULT_MAP_ID", "MATCHMAKING_DEFAULT_MAP_ID"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func durationSeconds(key string, fallback int) time.Duration {

@@ -439,6 +439,8 @@ func validBaseConfigForFailure() config.Config {
 		MatchmakingRoundCount:         5,
 		MatchmakingTimerSeconds:       60,
 		MatchmakingCandidateScanLimit: 20,
+		QuickPlayRoundCount:           5,
+		QuickPlayTimerSeconds:         60,
 		CasualMatchmakingEnabled:      false,
 		RankedTeamModesEnabled:        false,
 		TeamChatImagesEnabled:         false,
