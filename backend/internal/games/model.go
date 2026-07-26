@@ -23,9 +23,9 @@ type Game struct {
 	// modes (Quick Play). Unique when set (games_creation_idempotency_uidx).
 	CreationIdempotencyKey *string    `gorm:"type:text"`
 	StartedAt              *time.Time `gorm:"type:timestamptz"`
-	CompletedAt        *time.Time `gorm:"type:timestamptz"`
-	CreatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
-	UpdatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+	CompletedAt            *time.Time `gorm:"type:timestamptz"`
+	CreatedAt              time.Time  `gorm:"type:timestamptz;not null;default:now()"`
+	UpdatedAt              time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 }
 
 // TableName returns the database table name.
