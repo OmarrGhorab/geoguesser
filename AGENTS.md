@@ -13,5 +13,5 @@ Before planning or implementing feature work, read `.specify/memory/constitution
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/013-party-lobby-practice-modes/plan.md
+at specs/014-game-mode-pages/plan.md
 <!-- SPECKIT END -->

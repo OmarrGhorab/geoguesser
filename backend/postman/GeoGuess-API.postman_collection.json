@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "513282ee-ed4e-412a-ad5e-64d77fbe396b",
     "name": "GeoGuess API",
-    "description": "Organized Postman collection for the GeoGuess Go backend (`/api/v1`).\n\n## Setup\n1. Import **GeoGuess-API.postman_collection.json** and **GeoGuess-Local.postman_environment.json**.\n2. Select the **GeoGuess Local** environment.\n3. Run **01 Auth → Get current session (bootstrap cookies)** first.\n4. Ensure `csrfToken` is filled (test script copies the `csrf_token` cookie when possible).\n5. **Register** or **Login** for protected routes (friends, matchmaking, profile mutations).\n\n## Auth model\n- Cookie-based sessions (`access_token`, `refresh_token`, optional `guest_session`)\n- Mutations require header `X-CSRF-Token` matching the `csrf_token` cookie\n- Enable **Postman → Settings → Automatically follow redirects** / cookie jar\n\n## Saved responses\nMany examples were captured live from `http://localhost:8080` on 2026-07-13.\nDomain errors (e.g. daily challenge not seeded → 422) are preserved as real samples.\nRaw capture files also live in `backend/postman/saved-responses/`.\n\nCasual/Ranked party and multiplayer match examples live under **14 Parties** and **15 Matches** folders; fixtures in `backend/postman/saved-responses/`.\n\nSources: `backend/openapi/openapi.yaml`, `backend/internal/app/routes.go`.",
+    "description": "Organized Postman collection for the GeoGuess Go backend (`/api/v1`).\n\n## Setup\n1. Import **GeoGuess-API.postman_collection.json** and **GeoGuess-Local.postman_environment.json**.\n2. Select the **GeoGuess Local** environment.\n3. Run **01 Auth → Get current session (bootstrap cookies)** first.\n4. Ensure `csrfToken` is filled (test script copies the `csrf_token` cookie when possible).\n5. **Register** or **Login** for protected routes (friends, matchmaking, profile mutations).\n\n## Auth model\n- Cookie-based sessions (`access_token`, `refresh_token`, optional `guest_session`)\n- Mutations require header `X-CSRF-Token` matching the `csrf_token` cookie\n- Enable **Postman → Settings → Automatically follow redirects** / cookie jar\n\n## Multiplayer modes\n- **17 Multiplayer Modes & Chat** contains runnable Practice, Party Lobby, canonical Ranked solo/duo/squad, and team-chat/moderation workflows.\n- Party Lobby uses the room APIs with the 180-second default timer and up to 50 players.\n- Practice is untimed and open-ended; complete a round before requesting the next one.\n\n## Saved responses\nMany examples were captured live from `http://localhost:8080` on 2026-07-13.\nDomain errors (e.g. daily challenge not seeded → 422) are preserved as real samples.\nRaw capture files also live in `backend/postman/saved-responses/`.\n\nSources: `backend/openapi/openapi.yaml`, `backend/internal/app/routes.go`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -71,12 +71,20 @@
       "value": "00000000-0000-4000-8000-0000000000c2"
     },
     {
+      "key": "messageId",
+      "value": ""
+    },
+    {
       "key": "inviteId",
       "value": ""
     },
     {
       "key": "partyFormat",
       "value": "duo"
+    },
+    {
+      "key": "realtimeBaseUrl",
+      "value": "http://localhost:8080"
     }
   ],
   "item": [
@@ -1537,6 +1545,36 @@
       ]
     },
     {
+      "name": "18 Home",
+      "description": "Authenticated home aggregate for registered sessions.",
+      "item": [
+        {
+          "name": "Get authenticated home",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/home",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "home"
+              ]
+            },
+            "description": "Authenticated home aggregate for a registered session. Returns viewer profile, completed-game stats, daily challenge metadata, and a small set of active public maps. Requires registered auth cookies (401 for guests)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "03 Uploads & Files",
       "description": "",
       "item": [
@@ -2213,6 +2251,55 @@
           ]
         },
         {
+          "name": "Quick Play",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/quick-play",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "quick-play"
+              ]
+            },
+            "description": "Server-owned Quick Play (5 rounds, 60s timer, default map). Returns active game. Requires session cookies and CSRF. Idempotency-Key recommended for create.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get game",
           "request": {
             "method": "GET",
@@ -2543,6 +2630,73 @@
               }
             }
           ]
+        },
+        {
+          "name": "Expire round (timeout)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/timeout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "rounds",
+                "{{roundId}}",
+                "timeout"
+              ]
+            },
+            "description": "Server-authoritative round timeout (Daily / solo timed modes). Records a zero-score timeout after the server deadline and advances or completes the game. Optional Idempotency-Key."
+          },
+          "response": []
+        },
+        {
+          "name": "Get shared round results",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "games",
+                "{{gameId}}",
+                "rounds",
+                "{{roundId}}",
+                "results"
+              ]
+            },
+            "description": "Shared multiplayer / Party Lobby revealed round results (participant-only). Available after shared round closure; 409 round_not_revealed while the round is still active."
+          },
+          "response": []
         },
         {
           "name": "Get game results",
@@ -4098,6 +4252,68 @@
               }
             }
           ]
+        },
+        {
+          "name": "Leave room (self)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}/players/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}",
+                "players",
+                "me"
+              ]
+            },
+            "description": "Self-leave for a non-host member. Idempotent leave when already left. Lobby hosts must cancel the room instead (409 host_action_required)."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel room (host)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomCode}}"
+              ]
+            },
+            "description": "Host cancels a lobby before the game starts. Idempotent once cancelled. Returns 409 after the hosted game has started."
+          },
+          "response": []
         }
       ]
     },
@@ -7744,18 +7960,17 @@
               }
             ],
             "url": {
-              "raw": "http://localhost:8080/realtime/rooms/{{roomCode}}",
+              "raw": "{{realtimeBaseUrl}}/realtime/rooms/{{roomCode}}",
               "host": [
-                "localhost"
+                "{{realtimeBaseUrl}}"
               ],
-              "port": "8080",
               "path": [
                 "realtime",
                 "rooms",
                 "{{roomCode}}"
               ]
             },
-            "description": "WebSocket endpoint (NOT under /api/v1).\n\nConnect with: `ws://localhost:8080/realtime/rooms/{{roomCode}}`\nSend session cookies from auth (Postman WebSocket or wscat)."
+            "description": "WebSocket endpoint (NOT under /api/v1).\n\nConnect with: `ws://localhost:8080/realtime/rooms/{{roomCode}}` (or swap scheme when using {{realtimeBaseUrl}}).\nSend session cookies from auth (Postman WebSocket or wscat)."
           },
           "response": [
             {
@@ -7787,6 +8002,591 @@
                     "rooms",
                     "{{roomCode}}"
                   ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue realtime ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/realtime/tickets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "realtime",
+                "tickets"
+              ]
+            },
+            "description": "Issue a short-lived one-time WebSocket ticket for an authorized party or match channel. Registered session + CSRF required. Offer `geoguess.v1` and `ticket.{opaque}` via Sec-WebSocket-Protocol; tickets never appear in URLs.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel_kind\": \"match\",\n  \"channel_id\": \"{{matchId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Match WebSocket URL (reference)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{realtimeBaseUrl}}/realtime/matches/{{matchId}}",
+              "host": [
+                "{{realtimeBaseUrl}}"
+              ],
+              "path": [
+                "realtime",
+                "matches",
+                "{{matchId}}"
+              ]
+            },
+            "description": "WebSocket endpoint (NOT under /api/v1).\n\nConnect with: `ws://localhost:8080/realtime/matches/{{matchId}}`.\nPrefer a one-time ticket from **Issue realtime ticket** (`channel_kind: match`). Offer `geoguess.v1` and `ticket.{opaque}` subprotocols; send session cookies when required."
+          },
+          "response": []
+        },
+        {
+          "name": "Party WebSocket URL (reference)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{realtimeBaseUrl}}/realtime/parties/{{partyId}}",
+              "host": [
+                "{{realtimeBaseUrl}}"
+              ],
+              "path": [
+                "realtime",
+                "parties",
+                "{{partyId}}"
+              ]
+            },
+            "description": "WebSocket endpoint (NOT under /api/v1).\n\nConnect with: `ws://localhost:8080/realtime/parties/{{partyId}}`.\nPrefer a one-time ticket from **Issue realtime ticket** (`channel_kind: party`). Offer `geoguess.v1` and `ticket.{opaque}` subprotocols; send session cookies when required."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "17 Multiplayer Modes & Chat",
+      "description": "Runnable requests for Practice, public Party Lobby, canonical Ranked queue formats, and team-only match chat. Select GeoGuess Local, bootstrap the cookie session, and set csrfToken before mutations.",
+      "item": [
+        {
+          "name": "Practice (untimed, infinite)",
+          "description": "Practice is an open-ended solo session. Complete the current round before creating the next one.",
+          "item": [
+            {
+              "name": "Create Practice session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/games",
+                "description": "Creates an untimed, open-ended Practice game with its first round.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"mode\":\"practice\",\"map_id\":\"{{mapId}}\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) { const json = pm.response.json(); if (json.game?.id) pm.collectionVariables.set('gameId', json.game.id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get current Practice round",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/games/{{gameId}}/rounds/current",
+                "description": "Current playable Practice round; hidden answer data is never returned."
+              }
+            },
+            {
+              "name": "Submit Practice guess",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/games/{{gameId}}/rounds/{{roundId}}/guesses",
+                "description": "Use the current round ID. Practice reveals and persists this personal result without realtime opponents.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"latitude\":48.8566,\"longitude\":2.3522}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Create next Practice round",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/games/{{gameId}}/rounds/next",
+                "description": "Returns 422 until the current round is completed; this endpoint is Practice-only."
+              }
+            },
+            {
+              "name": "List Practice history",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/games/{{gameId}}/rounds?limit=20",
+                "description": "Cursor-paginated, owner-only Practice history."
+              }
+            },
+            {
+              "name": "End Practice session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/games/{{gameId}}/end",
+                "description": "Ends the open-ended Practice session without deleting its round history."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Party Lobby (public room)",
+          "description": "A Party Lobby is a room for many individual competitors. The API defaults to a 180-second timer and allows up to 50 players.",
+          "item": [
+            {
+              "name": "Create Party Lobby (3-minute default)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/rooms",
+                "description": "Creates the many-player lobby. timer_seconds=180 is the Party Lobby default.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"map_id\":\"{{mapId}}\",\"visibility\":\"private\",\"round_count\":5,\"timer_seconds\":180,\"max_players\":50,\"display_name\":\"PostmanHost\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) { const json = pm.response.json(); if (json.room?.code) pm.collectionVariables.set('roomCode', json.room.code); if (json.room?.game_id) pm.collectionVariables.set('gameId', json.room.game_id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Join Party Lobby",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/rooms/join",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"code\":\"{{roomCode}}\",\"display_name\":\"LobbyPlayer\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Get Party Lobby standings",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/rooms/{{roomCode}}",
+                "description": "Returns current room state and player score standings."
+              }
+            },
+            {
+              "name": "Set Party Lobby ready",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/rooms/{{roomCode}}/ready",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"ready\":true}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Start Party Lobby",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/rooms/{{roomCode}}/start",
+                "description": "Host-only. Starts the shared, timed room game once ready conditions are met."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ranked Matchmaking (canonical)",
+          "description": "Use playlist and format for new clients. Duo and squad queues require the partyId created in 14 Parties.",
+          "item": [
+            {
+              "name": "Queue ranked solo (1v1)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matchmaking/queue",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"playlist\":\"ranked\",\"format\":\"solo\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Queue ranked duo (2v2)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matchmaking/queue",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"playlist\":\"ranked\",\"format\":\"duo\",\"party_id\":\"{{partyId}}\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Queue ranked squad (4v4)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matchmaking/queue",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"playlist\":\"ranked\",\"format\":\"squad\",\"party_id\":\"{{partyId}}\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Match Chat & Moderation",
+          "description": "Chat is team-private and available for Duo/Squad matches. Upload a ready file separately, then provide its file_id when sending an attachment message.",
+          "item": [
+            {
+              "name": "List team messages",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/matches/{{matchId}}/messages?after=0&limit=50",
+                "description": "Returns same-team messages, excluding authors muted by the viewer."
+              }
+            },
+            {
+              "name": "Send team text message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matches/{{matchId}}/messages",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"client_message_id\":\"{{$guid}}\",\"text\":\"Team marker is near the coast.\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) { const json = pm.response.json(); if (json.id) pm.collectionVariables.set('messageId', json.id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get message attachment URL",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/matches/{{matchId}}/messages/{{messageId}}/attachment",
+                "description": "Returns a short-lived signed URL only for an authorized teammate."
+              }
+            },
+            {
+              "name": "Mute teammate",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matches/{{matchId}}/mutes/{{userId}}"
+              }
+            },
+            {
+              "name": "Unmute teammate",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matches/{{matchId}}/mutes/{{userId}}"
+              }
+            },
+            {
+              "name": "Report team message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-CSRF-Token",
+                    "value": "{{csrfToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/matches/{{matchId}}/messages/{{messageId}}/report",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reason\":\"abusive_content\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
                 }
               }
             }

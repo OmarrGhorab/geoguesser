@@ -169,6 +169,18 @@ func main() {
 	}
 	gamesService := games.NewServiceWithHook(gamesRepo, mapsService, locations.StaticProvider{}, clock.NewSystem(), logger, games.NewRedisIdempotencyStore(redisClient), gamesMetrics, leaderboardsService).
 		WithPracticeCursorSigningSecret(cfg.GuestSessionSecret)
+	// Quick Play map: config.Load already resolved the fallback chain
+	// (QUICK_PLAY > CHALLENGE > MATCHMAKING) and Validate checked the UUID.
+	if cfg.QuickPlayDefaultMapID != "" {
+		parsed, parseErr := uuid.Parse(cfg.QuickPlayDefaultMapID)
+		if parseErr != nil {
+			logger.Error("failed to parse Quick Play default map id", slog.Any("error", parseErr))
+			os.Exit(1)
+		}
+		gamesService.WithQuickPlayDefaults(parsed, cfg.QuickPlayRoundCount, cfg.QuickPlayTimerSeconds)
+	} else {
+		logger.Warn("QUICK_PLAY_DEFAULT_MAP_ID unset; POST /games/quick-play returns 503 until configured")
+	}
 	// Ranked lifecycle adapter is wired after matchmakingRepo is constructed below.
 
 	var storageProvider storage.Provider

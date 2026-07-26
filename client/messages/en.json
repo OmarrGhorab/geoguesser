@@ -59,11 +59,14 @@
     "welcome": "Welcome back, {name}!",
     "question": "What would you like to play today?",
     "languageLabel": "Switch language",
-    "aria": { "primary": "Primary navigation", "dashboard": "Dashboard navigation", "search": "Search", "menu": "Open menu" },
+    "aria": {
+      "primary": "Primary navigation",
+      "dashboard": "Dashboard navigation",
+      "search": "Search",
+      "menu": "Open menu"
+    },
     "nav": {
-      "singleplayer": "Singleplayer",
-      "multiplayer": "Multiplayer",
-      "party": "Party",
+      "play": "Play",
       "challenges": "Challenges",
       "maps": "Maps",
       "leaderboards": "Leaderboards",
@@ -74,11 +77,84 @@
       "missions": "Missions",
       "settings": "Settings"
     },
+    "gameModes": {
+      "title": "Choose a game mode",
+      "searchLabel": "Search game modes",
+      "searchPlaceholder": "Find a mode",
+      "empty": "No game modes match your search.",
+      "recommended": "Recommended",
+      "viewAll": "View all modes",
+      "escapeHint": "Esc to close",
+      "groups": {
+        "soloAdventures": "Solo adventures",
+        "quickMatch": "Quick match",
+        "competitive": "Competitive",
+        "withFriends": "With friends"
+      },
+      "items": {
+        "classicSolo": {
+          "title": "Classic Solo",
+          "description": "Explore the world at your own pace"
+        },
+        "practice": {
+          "title": "Practice",
+          "description": "Hone your skills with open-ended rounds"
+        },
+        "dailyChallenge": {
+          "title": "Daily Challenge",
+          "description": "A new shared challenge every day"
+        },
+        "quickPlay": {
+          "title": "Quick Play",
+          "description": "Jump into a match right away"
+        },
+        "casualSolo": {
+          "title": "Casual Solo",
+          "description": "Relaxed matchmaking for one"
+        },
+        "casualDuos": {
+          "title": "Casual Duos",
+          "description": "Team up with one partner"
+        },
+        "casualSquads": {
+          "title": "Casual Squads",
+          "description": "Queue with a four-player squad"
+        },
+        "rankedSolo": {
+          "title": "Ranked Solo",
+          "description": "Compete alone and climb the ranks"
+        },
+        "rankedDuos": {
+          "title": "Ranked Duos",
+          "description": "Compete as a coordinated duo"
+        },
+        "rankedSquads": {
+          "title": "Ranked Squads",
+          "description": "Compete with a ranked squad"
+        },
+        "partyLobby": {
+          "title": "Party Lobby",
+          "description": "Create or join a private party"
+        }
+      }
+    },
     "play": {
-      "singleplayer": { "title": "Singleplayer", "description": "Explore the world at your own pace" },
-      "multiplayer": { "title": "Multiplayer", "description": "Compete with other players" },
-      "party": { "title": "Party", "description": "Invite friends and start a party" },
-      "quiz": { "title": "Quiz", "description": "Challenge yourself with quizzes" },
+      "singleplayer": {
+        "title": "Singleplayer",
+        "description": "Explore the world at your own pace"
+      },
+      "multiplayer": {
+        "title": "Multiplayer",
+        "description": "Compete with other players"
+      },
+      "party": {
+        "title": "Party",
+        "description": "Invite friends and start a party"
+      },
+      "quiz": {
+        "title": "Quiz",
+        "description": "Challenge yourself with quizzes"
+      },
       "cta": "PLAY"
     },
     "premium": {
@@ -97,10 +173,26 @@
     "recommended": "Recommended for you",
     "seeAll": "SEE ALL",
     "maps": {
-      "world": { "title": "World", "difficulty": "Easy", "players": "12,456 playing" },
-      "famous": { "title": "Famous Places", "difficulty": "Medium", "players": "4,211 playing" },
-      "usa": { "title": "United States", "difficulty": "Easy", "players": "7,291 playing" },
-      "europe": { "title": "Europe", "difficulty": "Medium", "players": "4,210 playing" }
+      "world": {
+        "title": "World",
+        "difficulty": "Easy",
+        "players": "12,456 playing"
+      },
+      "famous": {
+        "title": "Famous Places",
+        "difficulty": "Medium",
+        "players": "4,211 playing"
+      },
+      "usa": {
+        "title": "United States",
+        "difficulty": "Easy",
+        "players": "7,291 playing"
+      },
+      "europe": {
+        "title": "Europe",
+        "difficulty": "Medium",
+        "players": "4,210 playing"
+      }
     },
     "modes": {
       "title": "Game Modes",
@@ -319,7 +411,6 @@
       "mapUnavailable": "Map imagery is unavailable.",
       "retryMap": "Load another location",
       "selectLocation": "Select a location on the map before submitting.",
-      "total": "Total",
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "recenter": "Recenter view",
@@ -458,6 +549,177 @@
       "backToLogin": "Continue to log in",
       "showPassword": "Show password",
       "hidePassword": "Hide password"
+    }
+  },
+  "Play": {
+    "modes": {
+      "solo": "Classic Solo",
+      "soloDescription": "Configure map, rounds, and timer for a classic solo run.",
+      "quick_play": "Quick Play",
+      "quick_playDescription": "Jump into five timed rounds with server-chosen defaults.",
+      "practice": "Practice",
+      "practiceDescription": "Untimed open practice with history and an explicit end.",
+      "daily": "Daily Challenge",
+      "dailyDescription": "Five shared daily locations with progress out of five games.",
+      "party_lobby": "Party Lobby",
+      "party_lobbyDescription": "Host or join a private lobby with friends.",
+      "casual_solo": "Casual Solo",
+      "casual_soloDescription": "Casual 1v1 matchmaking without rating.",
+      "casual_duo": "Casual Duos",
+      "casual_duoDescription": "Casual 2v2 team matchmaking.",
+      "casual_squad": "Casual Squads",
+      "casual_squadDescription": "Casual 4v4 team matchmaking.",
+      "ranked_solo": "Ranked Solo",
+      "ranked_soloDescription": "Ranked 1v1 with timer and rating.",
+      "ranked_duo": "Ranked Duos",
+      "ranked_duoDescription": "Ranked 2v2 with timer and rating.",
+      "ranked_squad": "Ranked Squads",
+      "ranked_squadDescription": "Ranked 4v4 with timer and rating."
+    },
+    "descriptions": {
+      "solo": "Pick a map, round count, and timer, then place your pin each round.",
+      "quick_play": "One click starts a five-round, 60-second game on the default map.",
+      "practice": "Practice without a timer. Continue rounds until you end the session."
+    },
+    "setup": {
+      "title": "Start playing",
+      "subtitle": "Choose your settings and begin.",
+      "mapLabel": "Map",
+      "mapPlaceholder": "Select a map",
+      "noMaps": "No playable maps are available right now.",
+      "roundsLabel": "Rounds",
+      "timerLabel": "Timer",
+      "timerOff": "Off",
+      "start": "Start game",
+      "starting": "Starting…",
+      "quickPlayDefaults": "Quick Play uses five rounds, a 60-second timer, and the server default map.",
+      "practiceRules": "Practice is untimed and open-ended. End the session when you are done.",
+      "back": "Back"
+    },
+    "game": {
+      "title": "Game",
+      "round": "Round",
+      "of": "of",
+      "score": "Score",
+      "distance": "Distance",
+      "placePin": "Place a pin on the map",
+      "submitGuess": "Submit guess",
+      "submitting": "Checking…",
+      "next": "Next",
+      "finalScore": "Your score",
+      "breakdown": "Breakdown",
+      "backToPlay": "Back to play",
+      "loadingMap": "Loading map…",
+      "mapUnavailable": "Map unavailable",
+      "retryMap": "Retry map",
+      "selectLocation": "Select a location on the map first.",
+      "total": "Total",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "recenter": "Recenter",
+      "settings": "Settings",
+      "openReactions": "Open reactions",
+      "reactionsTitle": "Reactions",
+      "closeReactions": "Close reactions",
+      "reactionsPrompt": "Send a reaction",
+      "reactionSent": "sent",
+      "expandMap": "Expand map",
+      "closeMap": "Close map",
+      "mapLabel": "Guess map",
+      "timeExpired": "Time expired",
+      "correctLocation": "Correct location",
+      "endPractice": "End practice",
+      "nextPracticeRound": "Next practice round",
+      "errors": {
+        "invalidGuess": "That guess could not be submitted.",
+        "unavailable": "This round is temporarily unavailable."
+      }
+    },
+    "results": {
+      "title": "Results",
+      "finalScore": "Final score",
+      "breakdown": "Round breakdown",
+      "round": "Round",
+      "score": "Score",
+      "distance": "Distance",
+      "total": "Total",
+      "next": "Next",
+      "backToPlay": "Back to play",
+      "playAgain": "Play again",
+      "yourGuess": "Your guess",
+      "correctPosition": "Correct position",
+      "mapUnavailable": "The result map could not be loaded.",
+      "resultMap": "Map of your guesses and correct positions",
+      "overview": "Overview",
+      "pointsOf": "points"
+    },
+    "errors": {
+      "validation": "Check your settings and try again.",
+      "unavailable": "This mode is temporarily unavailable.",
+      "rateLimited": "Too many requests. Wait a moment and retry.",
+      "unauthenticated": "Sign in or start a guest session to continue.",
+      "generic": "Something went wrong. Try again.",
+      "notEnoughLocations": "This map does not have enough locations for the selected round count. Try fewer rounds or another map."
+    }
+  },
+  "Rooms": {
+    "title": "Party Lobby",
+    "subtitle": "Create a private lobby or join with a room code.",
+    "createTitle": "Create lobby",
+    "joinTitle": "Join with code",
+    "mapLabel": "Map",
+    "codeLabel": "Room code",
+    "codePlaceholder": "ABCD12",
+    "create": "Create lobby",
+    "creating": "Creating…",
+    "join": "Join lobby",
+    "joining": "Joining…",
+    "back": "Back",
+    "noMaps": "No playable maps are available right now.",
+    "errors": {
+      "validation": "Check your settings and try again.",
+      "unavailable": "Party Lobby is temporarily unavailable.",
+      "notFound": "That room was not found.",
+      "hostActionRequired": "As host you must cancel the lobby instead of leaving.",
+      "generic": "Something went wrong. Try again."
+    },
+    "lobby": {
+      "title": "Party Lobby",
+      "codeLabel": "Room code",
+      "statusLabel": "Status",
+      "playersLabel": "Players",
+      "host": "Host",
+      "you": "You",
+      "leave": "Leave lobby",
+      "cancel": "Cancel lobby",
+      "copyCode": "Copy code",
+      "copied": "Copied",
+      "waiting": "Share the code so friends can join. Host can start when at least 2 players are here.",
+      "start": "Start game",
+      "starting": "Starting…",
+      "needPlayers": "At least 2 players must join before the host can start.",
+      "activeHint": "Lobby game is active. Play continues for all members in this room.",
+      "submitted": "Guess submitted",
+      "waitingOthers": "Waiting for other players…",
+      "placePin": "Place a pin on the map",
+      "submitGuess": "Submit guess",
+      "submitting": "Checking…",
+      "next": "Next",
+      "distance": "Distance",
+      "correctLocation": "Correct location",
+      "timeExpired": "Time expired",
+      "mapLabel": "Guess map",
+      "total": "Total",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "recenter": "Recenter",
+      "expandMap": "Expand map",
+      "mapUnavailable": "Map unavailable",
+      "retryMap": "Retry map",
+      "selectLocation": "Select a location first.",
+      "live": "Live",
+      "polling": "Syncing",
+      "invalidGuess": "That guess could not be submitted."
     }
   }
 }

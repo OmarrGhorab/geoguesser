@@ -27,6 +27,7 @@ export function AuthenticatedHome({
         copy={{
           brand: copy.brand,
           nav: copy.nav,
+          gameModes: copy.gameModes,
           premium: copy.premium,
           languageLabel: copy.languageLabel,
           aria: copy.aria,

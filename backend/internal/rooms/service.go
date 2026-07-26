@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/raven/geoguess/backend/internal/games"
+	"github.com/raven/geoguess/backend/internal/locations"
+	"github.com/raven/geoguess/backend/internal/realtime/roomevents"
 	"github.com/raven/geoguess/backend/internal/session"
 )
 
@@ -23,6 +25,7 @@ type Store interface {
 	UpdateSettings(ctx context.Context, roomID uuid.UUID, req UpdateRoomSettingsRequest, now time.Time) (*Room, error)
 	SetPlayerStatus(ctx context.Context, roomID, playerID uuid.UUID, status string, leftAt *time.Time) (*Room, error)
 	StartRoom(ctx context.Context, roomID uuid.UUID, now time.Time) (*Room, error)
+	CancelRoom(ctx context.Context, roomID uuid.UUID, now time.Time) (*Room, error)
 }
 
 type standingStore interface {
@@ -50,6 +53,9 @@ type Coordinator interface {
 type GameService interface {
 	StartPrivateRoomGame(ctx context.Context, gameID uuid.UUID) (*games.MultiplayerStart, error)
 	GetPrivateRoomRoundState(ctx context.Context, gameID uuid.UUID) (*games.MultiplayerRoundState, error)
+	// CloseRoundIfAllSubmitted closes the current round when every remaining
+	// eligible player already guessed (called after departures shrink the set).
+	CloseRoundIfAllSubmitted(ctx context.Context, gameID uuid.UUID) error
 }
 
 type Service struct {
@@ -297,8 +303,20 @@ func (s *Service) RemovePlayer(ctx context.Context, sess *session.Context, roomC
 	if host != nil && host.GamePlayerID == playerID {
 		return nil, ErrInvalidRoomRequest
 	}
-	if _, ok := participantByID(participants, playerID); !ok {
+	target, ok := participantByID(participants, playerID)
+	if !ok {
 		return nil, ErrRoomPlayerNotFound
+	}
+	if target.Status == ParticipantStatusLeft || target.Status == ParticipantStatusKicked {
+		// Idempotent: the player already departed. Skipping the write also
+		// keeps the game_players mirror out of reach of a concurrent rejoin
+		// reactivation (JoinRoom locks rooms -> game_players; the mirror
+		// locks game_players -> rooms), which would otherwise deadlock.
+		dto, err := s.buildRoomDTO(ctx, *room, participants, nil)
+		if err != nil {
+			return nil, err
+		}
+		return &RoomResponse{Room: dto}, nil
 	}
 	now := s.clock().UTC()
 	updated, err := s.repo.SetPlayerStatus(ctx, room.ID, playerID, ParticipantStatusKicked, &now)
@@ -309,7 +327,121 @@ func (s *Service) RemovePlayer(ctx context.Context, sess *session.Context, roomC
 		_ = s.coordinator.SetReady(ctx, updated.Code, playerID, false)
 		_ = s.coordinator.SetPresence(ctx, updated.Code, playerID, PresenceDisconnected, s.presenceTTL)
 	}
+	s.nudgeRoundAfterDeparture(ctx, updated)
 	return s.loadAndPublish(ctx, *updated, EventRoomPlayerRemoved)
+}
+
+// LeaveSelf lets a non-host member leave the room. Hosts must cancel the lobby
+// instead (ErrHostActionRequired). Already-left membership is idempotent.
+func (s *Service) LeaveSelf(ctx context.Context, sess *session.Context, roomCode string) error {
+	owner, err := ownerFromSession(sess)
+	if err != nil {
+		return err
+	}
+	code := normalizeRoomCode(roomCode)
+	if code == "" {
+		return ErrRoomNotFound
+	}
+	room, err := s.repo.GetRoomByCode(ctx, code)
+	if err != nil {
+		return err
+	}
+	if room == nil {
+		return ErrRoomNotFound
+	}
+	participants, err := s.repo.ListParticipants(ctx, room.ID)
+	if err != nil {
+		return err
+	}
+	player, ok := participantForSession(participants, owner)
+	if !ok {
+		// Privacy-safe 404 (same envelope as missing rooms).
+		return ErrRoomPlayerNotFound
+	}
+	if player.Status == ParticipantStatusLeft || player.Status == ParticipantStatusKicked {
+		return nil
+	}
+	if player.Role == PlayerRoleHost {
+		return ErrHostActionRequired
+	}
+	now := s.clock().UTC()
+	updated, err := s.repo.SetPlayerStatus(ctx, room.ID, player.GamePlayerID, ParticipantStatusLeft, &now)
+	if err != nil {
+		return err
+	}
+	if s.coordinator != nil {
+		_ = s.coordinator.SetReady(ctx, updated.Code, player.GamePlayerID, false)
+		_ = s.coordinator.SetPresence(ctx, updated.Code, player.GamePlayerID, PresenceDisconnected, s.presenceTTL)
+	}
+	s.nudgeRoundAfterDeparture(ctx, updated)
+	_, err = s.loadAndPublish(ctx, *updated, EventRoomPlayerLeft)
+	return err
+}
+
+// nudgeRoundAfterDeparture asks the games service to close the current round
+// when a departure leaves every remaining eligible player already submitted;
+// otherwise the round would idle until its timer even though nobody is left
+// to guess. Best-effort: the deadline sweep remains the backstop.
+func (s *Service) nudgeRoundAfterDeparture(ctx context.Context, room *Room) {
+	if s.games == nil || room == nil || room.GameID == nil || room.Status != StatusActive {
+		return
+	}
+	if err := s.games.CloseRoundIfAllSubmitted(ctx, *room.GameID); err != nil {
+		s.logger.WarnContext(ctx, "round close after departure failed",
+			slog.String("room_code", room.Code), slog.String("game_id", room.GameID.String()), slog.Any("error", err))
+	}
+}
+
+// CancelRoom lets the host cancel a lobby before start. Already-cancelled rooms
+// are idempotent for the host; non-lobby states return ErrRoomNotCancellable (409).
+func (s *Service) CancelRoom(ctx context.Context, sess *session.Context, roomCode string) error {
+	owner, err := ownerFromSession(sess)
+	if err != nil {
+		return err
+	}
+	code := normalizeRoomCode(roomCode)
+	if code == "" {
+		return ErrRoomNotFound
+	}
+	room, err := s.repo.GetRoomByCode(ctx, code)
+	if err != nil {
+		return err
+	}
+	if room == nil {
+		return ErrRoomNotFound
+	}
+	participants, err := s.repo.ListParticipants(ctx, room.ID)
+	if err != nil {
+		return err
+	}
+	participant, ok := participantForSession(participants, owner)
+	if !ok {
+		return ErrRoomPlayerNotFound
+	}
+	if participant.Role != PlayerRoleHost {
+		return ErrRoomHostRequired
+	}
+	if room.Status == StatusCancelled {
+		return nil
+	}
+	if room.Status != StatusLobby {
+		return ErrRoomNotCancellable
+	}
+	now := s.clock().UTC()
+	updated, err := s.repo.CancelRoom(ctx, room.ID, now)
+	if err != nil {
+		return err
+	}
+	if s.coordinator != nil {
+		// Cancellation ends the lobby: drop shared ready state and mark every
+		// previously-active member disconnected so presence keys expire fast.
+		_ = s.coordinator.ClearReady(ctx, updated.Code)
+		for _, participant := range activeParticipants(participants) {
+			_ = s.coordinator.SetPresence(ctx, updated.Code, participant.GamePlayerID, PresenceDisconnected, s.presenceTTL)
+		}
+	}
+	_, err = s.loadAndPublish(ctx, *updated, EventRoomSnapshot)
+	return err
 }
 
 func (s *Service) StartRoom(ctx context.Context, sess *session.Context, roomCode, idempotencyKey string) (*RoomResponse, error) {
@@ -482,6 +614,9 @@ func (s *Service) buildRoomDTO(ctx context.Context, room Room, participants []Pa
 			return RoomDTO{}, err
 		}
 		if state != nil {
+			// Mirror solo current-round media: opaque panorama id + normalized type.
+			// Provider raw names (e.g. google_street_view) are not client-playable alone.
+			panoID, _ := locations.PanoramaID(state.Provider, state.ProviderRef)
 			currentRound = &RoomCurrentRoundDTO{
 				ID:          state.RoundID,
 				RoundNumber: state.RoundNumber,
@@ -489,8 +624,9 @@ func (s *Service) buildRoomDTO(ctx context.Context, room Room, participants []Pa
 				StartsAt:    state.StartsAt,
 				EndsAt:      state.EndsAt,
 				Media: &games.RoundMedia{
-					Type:        state.Provider,
+					Type:        locations.MediaType(state.Provider),
 					URL:         state.MediaURL,
+					PanoramaID:  panoID,
 					Attribution: state.Attribution,
 				},
 				Revealed: state.Status == games.RoundStatusCompleted || room.Status == StatusCompleted,
@@ -537,6 +673,9 @@ func (s *Service) buildRoomDTO(ctx context.Context, room Room, participants []Pa
 }
 
 func applyCreateRoomDefaults(req CreateRoomRequest) CreateRoomRequest {
+	if strings.TrimSpace(req.Visibility) == "" {
+		req.Visibility = VisibilityPrivate
+	}
 	if req.RoundCount == 0 {
 		req.RoundCount = 5
 	}
@@ -722,16 +861,19 @@ func generateRoomCode(length int) (string, error) {
 	return builder.String(), nil
 }
 
+// Event names are aliased from the shared roomevents leaf package so the
+// publisher and the realtime hub allowlist cannot drift (compile-time link).
 const (
-	EventRoomSnapshot           = "room.snapshot"
-	EventRoomPlayerJoined       = "room.player_joined"
-	EventRoomSettingsUpdated    = "room.settings_updated"
-	EventRoomReadyUpdated       = "room.ready_updated"
-	EventRoomReadyReset         = "room.ready_reset"
-	EventRoomPlayerRemoved      = "room.player_removed"
-	EventRoomStarted            = "room.started"
-	EventRoomPlayerDisconnected = "room.player_disconnected"
-	EventRoundStarted           = "round.started"
-	EventRoundEnded             = "round.ended"
-	EventGameCompleted          = "game.completed"
+	EventRoomSnapshot           = roomevents.EventRoomSnapshot
+	EventRoomPlayerJoined       = roomevents.EventRoomPlayerJoined
+	EventRoomPlayerLeft         = roomevents.EventRoomPlayerLeft
+	EventRoomSettingsUpdated    = roomevents.EventRoomSettingsUpdated
+	EventRoomReadyUpdated       = roomevents.EventRoomReadyUpdated
+	EventRoomReadyReset         = roomevents.EventRoomReadyReset
+	EventRoomPlayerRemoved      = roomevents.EventRoomPlayerRemoved
+	EventRoomStarted            = roomevents.EventRoomStarted
+	EventRoomPlayerDisconnected = roomevents.EventRoomPlayerDisconnected
+	EventRoundStarted           = roomevents.EventRoundStarted
+	EventRoundEnded             = roomevents.EventRoundEnded
+	EventGameCompleted          = roomevents.EventGameCompleted
 )

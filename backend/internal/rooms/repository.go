@@ -92,6 +92,19 @@ func (r *Repository) JoinRoom(ctx context.Context, roomID uuid.UUID, identity ow
 			}).Error; err != nil {
 				return err
 			}
+			// Reactivate the game player mirror for members who previously
+			// left (SetPlayerStatus mirrors terminal departures onto
+			// game_players so round eligibility tracks membership).
+			if existing.Status != games.PlayerStatusActive {
+				if err := tx.Model(&games.GamePlayer{}).Where("id = ?", existing.ID).Updates(map[string]any{
+					"status":  games.PlayerStatusActive,
+					"left_at": nil,
+				}).Error; err != nil {
+					return err
+				}
+				existing.Status = games.PlayerStatusActive
+				existing.LeftAt = nil
+			}
 			out.Player = &existing
 			return nil
 		}
@@ -316,9 +329,43 @@ func (r *Repository) UpdateSettings(ctx context.Context, roomID uuid.UUID, req U
 	return &room, nil
 }
 
+// gamePlayerStatusFor maps a room membership status to its game_players
+// mirror. Only terminal departures (left/kicked) are mirrored: a transient
+// disconnect must keep the player eligible through the reconnect grace window
+// (timeout close zero-fills them), so it never touches the game player row.
+// Empty string means "leave the game player row untouched".
+func gamePlayerStatusFor(participantStatus string) string {
+	switch participantStatus {
+	case ParticipantStatusLeft:
+		return games.PlayerStatusLeft
+	case ParticipantStatusKicked:
+		return games.PlayerStatusKicked
+	default:
+		return ""
+	}
+}
+
 func (r *Repository) SetPlayerStatus(ctx context.Context, roomID, playerID uuid.UUID, status string, leftAt *time.Time) (*Room, error) {
 	var room Room
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Mirror the membership status onto game_players in the same
+		// transaction: multiplayer round eligibility (all-submitted close,
+		// zero-score fill-ins) counts game_players.status = 'active', so a
+		// departed member must stop counting immediately.
+		//
+		// LOCK ORDER: the game_players row is taken BEFORE the rooms row.
+		// The multiplayer guess transaction acquires game_players (total
+		// score update) and then the rooms row (completion hook), so taking
+		// them in the opposite order here would be an AB-BA deadlock between
+		// a departing player and their own game-completing guess.
+		if gameStatus := gamePlayerStatusFor(status); gameStatus != "" {
+			if err := tx.Model(&games.GamePlayer{}).Where("id = ?", playerID).Updates(map[string]any{
+				"status":  gameStatus,
+				"left_at": leftAt,
+			}).Error; err != nil {
+				return err
+			}
+		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&room, "id = ?", roomID).Error; err != nil {
 			return err
 		}
@@ -366,6 +413,53 @@ func (r *Repository) StartRoom(ctx context.Context, roomID uuid.UUID, now time.T
 			}).Error; err != nil {
 				return err
 			}
+		}
+		return tx.First(&room, "id = ?", roomID).Error
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrRoomNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &room, nil
+}
+
+// CancelRoom marks a lobby room cancelled and leaves active memberships.
+// Already-cancelled rooms are returned as-is (idempotent at the store layer).
+func (r *Repository) CancelRoom(ctx context.Context, roomID uuid.UUID, now time.Time) (*Room, error) {
+	var room Room
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&room, "id = ?", roomID).Error; err != nil {
+			return err
+		}
+		if room.Status == StatusCancelled {
+			return nil
+		}
+		if room.Status != StatusLobby {
+			return ErrRoomNotCancellable
+		}
+		if err := tx.Model(&Room{}).Where("id = ?", roomID).Updates(map[string]any{
+			"status":     StatusCancelled,
+			"updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		if room.GameID != nil {
+			if err := tx.Model(&games.Game{}).Where("id = ? AND status = ?", *room.GameID, games.GameStatusPending).Updates(map[string]any{
+				"status":     games.GameStatusCancelled,
+				"updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&RoomPlayer{}).
+			Where("room_id = ? AND status IN ?", roomID, []string{ParticipantStatusJoined, ParticipantStatusDisconnected}).
+			Updates(map[string]any{
+				"status":  ParticipantStatusLeft,
+				"left_at": now,
+			}).Error; err != nil {
+			return err
 		}
 		return tx.First(&room, "id = ?", roomID).Error
 	})

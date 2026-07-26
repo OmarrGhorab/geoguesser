@@ -1,7 +1,10 @@
+import type {
+  AuthenticatedGameModeGroupId,
+  AuthenticatedGameModeId,
+} from "@/features/home/nav-config";
+
 export type AuthenticatedNavCopy = {
-  singleplayer: string;
-  multiplayer: string;
-  party: string;
+  play: string;
   challenges: string;
   maps: string;
   leaderboards: string;
@@ -11,6 +14,21 @@ export type AuthenticatedNavCopy = {
   stats: string;
   missions: string;
   settings: string;
+};
+
+export type AuthenticatedGameModesCopy = {
+  title: string;
+  searchLabel: string;
+  searchPlaceholder: string;
+  empty: string;
+  recommended: string;
+  viewAll: string;
+  escapeHint: string;
+  groups: Record<AuthenticatedGameModeGroupId, string>;
+  items: Record<
+    AuthenticatedGameModeId,
+    { title: string; description: string }
+  >;
 };
 
 export type AuthenticatedPremiumCopy = {
@@ -38,6 +56,7 @@ export type AuthenticatedHomeCopy = {
   question: string;
   languageLabel: string;
   nav: AuthenticatedNavCopy;
+  gameModes: AuthenticatedGameModesCopy;
   premium: AuthenticatedPremiumCopy;
   recommended: string;
   seeAll: string;
@@ -66,6 +85,7 @@ export type AuthenticatedHomeCopy = {
 export type AuthenticatedChromeCopy = {
   brand: string;
   nav: AuthenticatedNavCopy;
+  gameModes: AuthenticatedGameModesCopy;
   premium: Pick<
     AuthenticatedPremiumCopy,
     "title" | "body" | "cta" | "sidebarTitle" | "sidebarBody"
@@ -78,11 +98,6 @@ export type AuthenticatedChromeCopy = {
 };
 
 export type AuthenticatedSidebarItem =
-  | "home"
-  | "profile"
-  | "stats"
-  | "friends"
-  | "missions"
-  | "settings";
+  "home" | "profile" | "stats" | "friends" | "missions" | "settings";
 
 export type { AuthenticatedHomeData } from "@/features/home/schemas";

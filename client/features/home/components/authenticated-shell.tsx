@@ -40,6 +40,7 @@ export function AuthenticatedShell({
         locale={locale}
         brand={copy.brand}
         nav={copy.nav}
+        gameModes={copy.gameModes}
         viewerName={copy.viewerName}
         viewerAvatarUrl={copy.viewerAvatarUrl}
         aria={copy.aria}

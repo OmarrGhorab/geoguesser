@@ -26,7 +26,7 @@ func TestIsMultiplayerModeIncludesMatchmadeModes(t *testing.T) {
 			t.Fatalf("%q should be multiplayer", mode)
 		}
 	}
-	for _, mode := range []string{games.GameModeSolo, games.GameModePractice, games.GameModeDaily, ""} {
+	for _, mode := range []string{games.GameModeSolo, games.GameModePractice, games.GameModeDaily, games.GameModeQuickPlay, ""} {
 		if games.IsMultiplayerMode(mode) {
 			t.Fatalf("%q should not be multiplayer", mode)
 		}

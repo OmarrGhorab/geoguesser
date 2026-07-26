@@ -10,7 +10,12 @@ const (
 	GameModePartyLobby = "party_lobby"
 	// GameModePractice is an owner-only, untimed, open-ended solo session.
 	GameModePractice = "practice"
-	GameModeDaily    = "daily"
+	// GameModeQuickPlay is a server-owned five-round timed solo-compatible mode.
+	// Deliberately NOT progression-neutral: like solo, Quick Play games count
+	// toward profile stats, missions, and leaderboards (product decision —
+	// keep it out of IsProgressionNeutralMode).
+	GameModeQuickPlay = "quick_play"
+	GameModeDaily     = "daily"
 	// GameModeRanked is the legacy multiplayer ranked mode stored on games.mode.
 	GameModeRanked = "ranked"
 

@@ -22,6 +22,7 @@ type Handler struct {
 // ServiceAPI is the games service surface used by HTTP handlers.
 type ServiceAPI interface {
 	CreateGame(rctx context.Context, sess *session.Context, req CreateGameRequest) (*GameResponse, error)
+	StartQuickPlay(rctx context.Context, sess *session.Context, idempotencyKey string) (*GameResponse, error)
 	GetGame(rctx context.Context, sess *session.Context, gameID string) (*GameResponse, error)
 	StartGame(rctx context.Context, sess *session.Context, gameID string) (*GameResponse, error)
 	GetCurrentRound(rctx context.Context, sess *session.Context, gameID string) (*CurrentRoundResponse, error)
@@ -39,21 +40,67 @@ func NewHandler(service ServiceAPI, logger *slog.Logger) *Handler {
 	return &Handler{service: service, logger: logger}
 }
 
-// RegisterRoutes mounts game routes.
+// Route-class names passed to a RouteLimiterProvider. Production wiring keys
+// rate-limit buckets by these values.
+const (
+	RouteClassGameCreate   = "game-create"
+	RouteClassQuickPlay    = "quick-play"
+	RouteClassGuess        = "guess"
+	RouteClassGuessTimeout = "guess-timeout"
+	RouteClassPracticeNext = "practice-next"
+	RouteClassPracticeEnd  = "practice-end"
+)
+
+// RouteLimiterProvider returns per-route-class middleware (e.g. rate limits)
+// for the given route class; a nil return attaches none.
+type RouteLimiterProvider func(class string) func(http.Handler) http.Handler
+
+// RegisterRoutes mounts game routes without per-route middleware (tests).
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	h.RegisterRoutesWith(r, nil)
+}
+
+// RegisterRoutesWith is the single source of truth for /games routes; both
+// tests (RegisterRoutes) and production wiring (app.NewRouter with a limiter
+// provider) mount through it, so the two can never diverge.
+func (h *Handler) RegisterRoutesWith(r chi.Router, limiter RouteLimiterProvider) {
+	with := func(g chi.Router, class string) chi.Router {
+		if limiter != nil {
+			if mw := limiter(class); mw != nil {
+				return g.With(mw)
+			}
+		}
+		return g
+	}
 	r.Route("/games", func(g chi.Router) {
-		g.Post("/", h.CreateGame)
+		with(g, RouteClassGameCreate).Post("/", h.CreateGame)
+		with(g, RouteClassQuickPlay).Post("/quick-play", h.StartQuickPlay)
 		g.Get("/{gameId}", h.GetGame)
 		g.Post("/{gameId}/start", h.StartGame)
 		g.Get("/{gameId}/rounds/current", h.GetCurrentRound)
-		g.Post("/{gameId}/rounds/{roundId}/guesses", h.SubmitGuess)
-		g.Post("/{gameId}/rounds/{roundId}/timeout", h.ExpireRound)
+		with(g, RouteClassGuess).Post("/{gameId}/rounds/{roundId}/guesses", h.SubmitGuess)
+		with(g, RouteClassGuessTimeout).Post("/{gameId}/rounds/{roundId}/timeout", h.ExpireRound)
+		// Party Lobby / multiplayer shared reveal recovery (participant-only).
 		g.Get("/{gameId}/rounds/{roundId}/results", h.GetSharedRoundResults)
 		g.Get("/{gameId}/results", h.GetResults)
-		g.Post("/{gameId}/rounds/next", h.NextPracticeRound)
+		with(g, RouteClassPracticeNext).Post("/{gameId}/rounds/next", h.NextPracticeRound)
 		g.Get("/{gameId}/rounds", h.GetPracticeHistory)
-		g.Post("/{gameId}/end", h.EndPractice)
+		with(g, RouteClassPracticeEnd).Post("/{gameId}/end", h.EndPractice)
 	})
+}
+
+// StartQuickPlay handles POST /games/quick-play.
+func (h *Handler) StartQuickPlay(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.service.StartQuickPlay(
+		r.Context(),
+		appmiddleware.SessionFromContext(r.Context()),
+		r.Header.Get("Idempotency-Key"),
+	)
+	if err != nil {
+		h.mapError(w, r, err)
+		return
+	}
+	apphttp.Created(w, r, resp)
 }
 
 func (h *Handler) NextPracticeRound(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +252,8 @@ func (h *Handler) mapError(w http.ResponseWriter, r *http.Request, err error) {
 		apphttp.Error(w, r, h.logger, apphttp.ErrNotFound.WithCause(err))
 	case errors.Is(err, ErrAlreadyGuessed), errors.Is(err, ErrIdempotencyConflict):
 		apphttp.Error(w, r, h.logger, apphttp.ErrConflict.WithCause(err))
+	case errors.Is(err, ErrQuickPlayUnavailable):
+		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(http.StatusServiceUnavailable, CodeQuickPlayUnavailable, MsgQuickPlayUnavailable).WithCause(err))
 	case errors.Is(err, ErrWrongGameMode):
 		apphttp.Error(w, r, h.logger, apphttp.NewAPIError(http.StatusUnprocessableEntity, CodeWrongGameMode, MsgWrongGameMode).WithCause(err))
 	case errors.Is(err, ErrCurrentRoundIncomplete):

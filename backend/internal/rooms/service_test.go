@@ -166,6 +166,12 @@ type memoryStore struct {
 type memoryGameService struct {
 	store  *memoryStore
 	starts int
+	nudged []uuid.UUID
+}
+
+func (s *memoryGameService) CloseRoundIfAllSubmitted(_ context.Context, gameID uuid.UUID) error {
+	s.nudged = append(s.nudged, gameID)
+	return nil
 }
 
 func (s *memoryGameService) StartPrivateRoomGame(_ context.Context, gameID uuid.UUID) (*games.MultiplayerStart, error) {
@@ -299,6 +305,30 @@ func (s *memoryStore) StartRoom(_ context.Context, roomID uuid.UUID, now time.Ti
 	return nil, ErrRoomNotFound
 }
 
+func (s *memoryStore) CancelRoom(_ context.Context, roomID uuid.UUID, now time.Time) (*Room, error) {
+	for _, room := range s.rooms {
+		if room.ID != roomID {
+			continue
+		}
+		if room.Status == StatusCancelled {
+			return room, nil
+		}
+		if room.Status != StatusLobby {
+			return nil, ErrRoomNotCancellable
+		}
+		room.Status = StatusCancelled
+		room.UpdatedAt = now
+		for i := range s.participants[roomID] {
+			if IsActiveParticipant(s.participants[roomID][i].Status) {
+				s.participants[roomID][i].Status = ParticipantStatusLeft
+				s.participants[roomID][i].LeftAt = &now
+			}
+		}
+		return room, nil
+	}
+	return nil, ErrRoomNotFound
+}
+
 func (s *memoryStore) ApplyGameOutcome(_ context.Context, gameID uuid.UUID, completed bool, now time.Time) (*Room, error) {
 	for _, room := range s.rooms {
 		if room.GameID != nil && *room.GameID == gameID {
@@ -366,3 +396,161 @@ func (c *memoryCoordinator) StoreSnapshot(context.Context, string, any, time.Dur
 func (c *memoryCoordinator) Publish(context.Context, string, any) error { return nil }
 
 func ptr(value string) *string { return &value }
+
+func TestServiceLeaveSelfMemberAndHostActionRequired(t *testing.T) {
+	store := newMemoryStore()
+	coord := newMemoryCoordinator()
+	service := NewService(store, coord, nil, nil)
+	service.clock = func() time.Time { return time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC) }
+
+	hostGuest := "leave-host"
+	created, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate, MaxPlayers: 4,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	memberGuest := "leave-member"
+	if _, err := service.JoinRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &memberGuest}, JoinRoomRequest{Code: created.Room.Code}); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, created.Room.Code); err != ErrHostActionRequired {
+		t.Fatalf("host leave err = %v, want ErrHostActionRequired", err)
+	}
+
+	versionBefore := coord.version
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &memberGuest}, created.Room.Code); err != nil {
+		t.Fatalf("member leave: %v", err)
+	}
+	if coord.version <= versionBefore {
+		t.Fatalf("expected version bump after leave, version=%d before=%d", coord.version, versionBefore)
+	}
+	memberID := store.playersByGuest[memberGuest]
+	for _, p := range store.participants[store.rooms[created.Room.Code].ID] {
+		if p.GamePlayerID == memberID && p.Status != ParticipantStatusLeft {
+			t.Fatalf("member status = %s, want left", p.Status)
+		}
+	}
+
+	// Idempotent already-left.
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &memberGuest}, created.Room.Code); err != nil {
+		t.Fatalf("idempotent leave: %v", err)
+	}
+
+	// Privacy-safe outsider.
+	outsider := "leave-outsider"
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &outsider}, created.Room.Code); err != ErrRoomPlayerNotFound {
+		t.Fatalf("outsider leave err = %v, want ErrRoomPlayerNotFound", err)
+	}
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, "ZZZZZZ"); err != ErrRoomNotFound {
+		t.Fatalf("missing room err = %v, want ErrRoomNotFound", err)
+	}
+}
+
+func TestServiceLeaveNudgesRoundCloseOnActiveGame(t *testing.T) {
+	store := newMemoryStore()
+	coord := newMemoryCoordinator()
+	gameService := &memoryGameService{store: store}
+	service := NewServiceWithGames(store, coord, gameService, nil, nil)
+	service.clock = func() time.Time { return time.Date(2026, 7, 19, 14, 0, 0, 0, time.UTC) }
+
+	hostGuest := "nudge-host"
+	created, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate, MaxPlayers: 4,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for _, guest := range []string{"nudge-m1", "nudge-m2", "nudge-m3"} {
+		g := guest
+		if _, err := service.JoinRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &g}, JoinRoomRequest{Code: created.Room.Code}); err != nil {
+			t.Fatalf("join %s: %v", g, err)
+		}
+	}
+
+	// Lobby leave must NOT nudge (no active round to close).
+	m1 := "nudge-m1"
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &m1}, created.Room.Code); err != nil {
+		t.Fatalf("lobby leave: %v", err)
+	}
+	if len(gameService.nudged) != 0 {
+		t.Fatalf("lobby leave should not nudge, got %v", gameService.nudged)
+	}
+
+	// Mid-game leave → nudge with the hosted game id.
+	room := store.rooms[created.Room.Code]
+	room.Status = StatusActive
+	m2 := "nudge-m2"
+	if err := service.LeaveSelf(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &m2}, created.Room.Code); err != nil {
+		t.Fatalf("active leave: %v", err)
+	}
+	if len(gameService.nudged) != 1 || room.GameID == nil || gameService.nudged[0] != *room.GameID {
+		t.Fatalf("nudged = %v, want [%v]", gameService.nudged, room.GameID)
+	}
+
+	// Mid-game kick must nudge too.
+	if _, err := service.RemovePlayer(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, created.Room.Code, store.playersByGuest["nudge-m3"]); err != nil {
+		t.Fatalf("kick: %v", err)
+	}
+	if len(gameService.nudged) != 2 {
+		t.Fatalf("kick should nudge, nudged = %v", gameService.nudged)
+	}
+}
+
+func TestServiceCancelRoomHostLobbyAndConflicts(t *testing.T) {
+	store := newMemoryStore()
+	coord := newMemoryCoordinator()
+	service := NewService(store, coord, nil, nil)
+	service.clock = func() time.Time { return time.Date(2026, 7, 19, 13, 0, 0, 0, time.UTC) }
+
+	hostGuest := "cancel-host"
+	created, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate, MaxPlayers: 4,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	memberGuest := "cancel-member"
+	if _, err := service.JoinRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &memberGuest}, JoinRoomRequest{Code: created.Room.Code}); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+
+	if err := service.CancelRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &memberGuest}, created.Room.Code); err != ErrRoomHostRequired {
+		t.Fatalf("member cancel err = %v, want ErrRoomHostRequired", err)
+	}
+
+	versionBefore := coord.version
+	if err := service.CancelRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, created.Room.Code); err != nil {
+		t.Fatalf("host cancel: %v", err)
+	}
+	if store.rooms[created.Room.Code].Status != StatusCancelled {
+		t.Fatalf("status = %s, want cancelled", store.rooms[created.Room.Code].Status)
+	}
+	if coord.version <= versionBefore {
+		t.Fatalf("expected version bump after cancel")
+	}
+
+	// Idempotent already-cancelled.
+	if err := service.CancelRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &hostGuest}, created.Room.Code); err != nil {
+		t.Fatalf("idempotent cancel: %v", err)
+	}
+
+	// Active room cannot be cancelled.
+	activeHost := "active-host"
+	active, err := service.CreateRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &activeHost}, CreateRoomRequest{
+		MapID: uuid.New(), Visibility: VisibilityPrivate, MaxPlayers: 2,
+	})
+	if err != nil {
+		t.Fatalf("create active: %v", err)
+	}
+	store.rooms[active.Room.Code].Status = StatusActive
+	if err := service.CancelRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &activeHost}, active.Room.Code); err != ErrRoomNotCancellable {
+		t.Fatalf("active cancel err = %v, want ErrRoomNotCancellable", err)
+	}
+
+	outsider := "cancel-outsider"
+	if err := service.CancelRoom(context.Background(), &session.Context{Kind: session.KindGuest, GuestID: &outsider}, active.Room.Code); err != ErrRoomPlayerNotFound {
+		t.Fatalf("outsider cancel err = %v, want ErrRoomPlayerNotFound", err)
+	}
+}

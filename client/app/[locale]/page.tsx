@@ -9,6 +9,7 @@ import {
   type AuthenticatedHomeCopy,
 } from "@/features/home/components/authenticated-home";
 import { getAuthenticatedHome } from "@/features/home/data";
+import { getAuthenticatedGameModesCopy } from "@/features/home/game-mode-copy";
 import { loadHomeDecision } from "@/features/home/resolve-home";
 import type { AppLocale } from "@/lib/i18n/routing";
 
@@ -74,6 +75,7 @@ async function buildLandingCopy(
 
 async function buildDashboardCopy(
   dashboard: Awaited<ReturnType<typeof getTranslations>>,
+  gameModes: AuthenticatedHomeCopy["gameModes"],
 ): Promise<AuthenticatedHomeCopy> {
   return {
     brand: dashboard("brand"),
@@ -82,9 +84,7 @@ async function buildDashboardCopy(
     question: dashboard("question"),
     languageLabel: dashboard("languageLabel"),
     nav: {
-      singleplayer: dashboard("nav.singleplayer"),
-      multiplayer: dashboard("nav.multiplayer"),
-      party: dashboard("nav.party"),
+      play: dashboard("nav.play"),
       challenges: dashboard("nav.challenges"),
       maps: dashboard("nav.maps"),
       leaderboards: dashboard("nav.leaderboards"),
@@ -95,6 +95,7 @@ async function buildDashboardCopy(
       missions: dashboard("nav.missions"),
       settings: dashboard("nav.settings"),
     },
+    gameModes,
     play: Object.fromEntries(
       ["singleplayer", "multiplayer", "party", "quiz"].map((key) => [
         key,
@@ -185,7 +186,7 @@ export default async function HomePage({ params }: HomePageProps) {
   const cookieStore = await cookies();
   const hasAuthCookie = Boolean(
     cookieStore.get("access_token")?.value ||
-      cookieStore.get("refresh_token")?.value,
+    cookieStore.get("refresh_token")?.value,
   );
 
   const decision = await loadHomeDecision(hasAuthCookie, getAuthenticatedHome);
@@ -210,8 +211,11 @@ export default async function HomePage({ params }: HomePageProps) {
     );
   }
 
-  const dashboard = await getTranslations("AuthenticatedHome");
-  const dashboardCopy = await buildDashboardCopy(dashboard);
+  const [dashboard, gameModes] = await Promise.all([
+    getTranslations("AuthenticatedHome"),
+    getAuthenticatedGameModesCopy(appLocale),
+  ]);
+  const dashboardCopy = await buildDashboardCopy(dashboard, gameModes);
   return (
     <AuthenticatedHome
       locale={appLocale}

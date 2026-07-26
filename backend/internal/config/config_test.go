@@ -107,6 +107,62 @@ func TestLoadMatchmakingDefaults(t *testing.T) {
 	if cfg.MatchmakingCandidateScanLimit != 20 {
 		t.Errorf("MatchmakingCandidateScanLimit = %d, want 20", cfg.MatchmakingCandidateScanLimit)
 	}
+	if cfg.QuickPlayRoundCount != 5 {
+		t.Errorf("QuickPlayRoundCount = %d, want 5", cfg.QuickPlayRoundCount)
+	}
+	if cfg.QuickPlayTimerSeconds != 60 {
+		t.Errorf("QuickPlayTimerSeconds = %d, want 60", cfg.QuickPlayTimerSeconds)
+	}
+}
+
+func TestQuickPlayMapFallbackToChallenge(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("VERSION", "0.0.0")
+	t.Setenv("ACCESS_TOKEN_SECRET", "test-access-token-secret-at-least-32-bytes-long")
+	t.Setenv("REFRESH_TOKEN_SECRET", "test-refresh-token-secret-at-least-32-bytes-long")
+	t.Setenv("CSRF_SECRET", "test-csrf-secret-at-least-32-bytes-long")
+	t.Setenv("GUEST_SESSION_SECRET", "test-guest-secret-at-least-32-bytes-long")
+	t.Setenv("QUICK_PLAY_DEFAULT_MAP_ID", "")
+	t.Setenv("CHALLENGE_DEFAULT_MAP_ID", "00000000-0000-0000-0000-000000000042")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+	if cfg.QuickPlayDefaultMapID != "00000000-0000-0000-0000-000000000042" {
+		t.Fatalf("QuickPlayDefaultMapID = %q, want challenge fallback", cfg.QuickPlayDefaultMapID)
+	}
+}
+
+func TestQuickPlayMapFallbackChainToMatchmaking(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("VERSION", "0.0.0")
+	t.Setenv("ACCESS_TOKEN_SECRET", "test-access-token-secret-at-least-32-bytes-long")
+	t.Setenv("REFRESH_TOKEN_SECRET", "test-refresh-token-secret-at-least-32-bytes-long")
+	t.Setenv("CSRF_SECRET", "test-csrf-secret-at-least-32-bytes-long")
+	t.Setenv("GUEST_SESSION_SECRET", "test-guest-secret-at-least-32-bytes-long")
+	t.Setenv("QUICK_PLAY_DEFAULT_MAP_ID", "")
+	t.Setenv("CHALLENGE_DEFAULT_MAP_ID", "")
+	t.Setenv("MATCHMAKING_DEFAULT_MAP_ID", "00000000-0000-0000-0000-000000000043")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+	if cfg.QuickPlayDefaultMapID != "00000000-0000-0000-0000-000000000043" {
+		t.Fatalf("QuickPlayDefaultMapID = %q, want matchmaking fallback", cfg.QuickPlayDefaultMapID)
+	}
+
+	// Explicit quick play value must win over both fallbacks.
+	t.Setenv("QUICK_PLAY_DEFAULT_MAP_ID", "00000000-0000-0000-0000-000000000044")
+	t.Setenv("CHALLENGE_DEFAULT_MAP_ID", "00000000-0000-0000-0000-000000000042")
+	cfg, err = config.Load()
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+	if cfg.QuickPlayDefaultMapID != "00000000-0000-0000-0000-000000000044" {
+		t.Fatalf("QuickPlayDefaultMapID = %q, want explicit value", cfg.QuickPlayDefaultMapID)
+	}
 }
 
 func TestLoadMatchmakingOverridesAndMapID(t *testing.T) {
@@ -291,6 +347,8 @@ func validBaseConfig() config.Config {
 		MatchmakingRoundCount:         5,
 		MatchmakingTimerSeconds:       60,
 		MatchmakingCandidateScanLimit: 20,
+		QuickPlayRoundCount:           5,
+		QuickPlayTimerSeconds:         60,
 		// Casual / Ranked team modes — safe disabled defaults.
 		CasualMatchmakingEnabled:      false,
 		RankedTeamModesEnabled:        false,

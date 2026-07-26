@@ -18,7 +18,11 @@ type Game struct {
 	ScoringVersion     int        `gorm:"type:int;not null;default:1"`
 	TotalScore         int        `gorm:"type:int;not null;default:0"`
 	CurrentRoundNumber *int       `gorm:"-"`
-	StartedAt          *time.Time `gorm:"type:timestamptz"`
+	// CreationIdempotencyKey is the actor-qualified creation retry key
+	// ("user:<uuid>:<key>" / "guest:<hash>:<key>") for atomically-created
+	// modes (Quick Play). Unique when set (games_creation_idempotency_uidx).
+	CreationIdempotencyKey *string    `gorm:"type:text"`
+	StartedAt              *time.Time `gorm:"type:timestamptz"`
 	CompletedAt        *time.Time `gorm:"type:timestamptz"`
 	CreatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 	UpdatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
